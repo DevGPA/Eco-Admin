@@ -688,7 +688,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
         </svg>
       </div>
       <div class="login-title">Motor de Fletes</div>
-      <div class="login-subtitle">General de Productos para el Agua · Acceso vía AWS Cognito</div>
+      <div class="login-subtitle" id="loginMode">General de Productos para el Agua · Ecosistema Administrativo</div>
     </div>
 
     <!-- Formulario -->
@@ -718,7 +718,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     <!-- Footer -->
     <div class="login-footer">
       <div class="login-footer-text">
-        <span>spec v2.4</span> · Autenticación AWS Cognito · Acceso seguro
+        <span>spec v2.4</span> · <span id="loginModeTag">Modo prueba · Cognito se activa al configurar API_CONFIG</span>
       </div>
     </div>
   </div>
@@ -1503,11 +1503,40 @@ async function doLogin() {
   btn.disabled = true;
   btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">Conectando<span class="lvd" style="width:6px;height:6px;"></span></span>';
 
-  // Verificar que Cognito esté configurado
-  if (!API_CONFIG.clientId) {
-    errEl.textContent = 'API no configurada. Ingresa los datos de Cognito en API_CONFIG (UserPoolClientId, apiUrl).';
-    errEl.classList.add('show');
-    resetBtn();
+  // ── MODO 1: Cognito real (cuando API_CONFIG está configurada) ──
+  if (API_CONFIG.clientId) {
+    // Autenticación vía AWS Cognito → continúa abajo
+  }
+  // ── MODO 2: Acceso de prueba (pre-deploy) ─────────────────────
+  //    Se desactiva automáticamente cuando se configura Cognito
+  else {
+    const TEST_USERS = {
+      'admin@gpa.com.mx':   { pass: 'GPA2026admin', rol: 'aprobador1', nombre: 'Oscar Cabrera' },
+      'auditor@gpa.com.mx': { pass: 'GPA2026audit', rol: 'auditor',    nombre: 'Auditor GPA' },
+      'motor@gpa.com.mx':   { pass: 'GPA2026motor', rol: 'motor',      nombre: 'Motor v2.4' },
+    };
+    
+    setTimeout(() => {
+      const user = TEST_USERS[email];
+      if (user && pass === user.pass) {
+        _session = {
+          token:  'test_' + user.rol + '_' + Date.now(),
+          email:  email,
+          exp:    Date.now() + 8 * 3600000,
+          rol:    user.rol,
+          nombre: user.nombre,
+        };
+        saveSession();
+        onLoginSuccess(email, false);
+      } else {
+        errEl.innerHTML = '<strong>Credenciales de prueba:</strong><br>' +
+          'admin@gpa.com.mx / GPA2026admin<br>' +
+          '<span style="font-size:10px;color:var(--ink3);margin-top:4px;display:block;">' +
+          'Este acceso es temporal. Se reemplaza automáticamente por Cognito al configurar API_CONFIG.</span>';
+        errEl.classList.add('show');
+        resetBtn();
+      }
+    }, 600);
     return;
   }
 
@@ -1845,6 +1874,20 @@ function renderEvalResults(results) {
 function closeEvalResults() {
   document.getElementById('evalResults').classList.remove('show');
 }
+
+
+// Detectar modo y actualizar UI del login
+document.addEventListener('DOMContentLoaded', () => {
+  const modeTag = document.getElementById('loginModeTag');
+  const modeSub = document.getElementById('loginMode');
+  if (API_CONFIG.clientId) {
+    if (modeTag) modeTag.textContent = 'Autenticación AWS Cognito · Acceso seguro';
+    if (modeSub) modeSub.textContent = 'General de Productos para el Agua · Acceso vía AWS Cognito';
+  } else {
+    if (modeTag) modeTag.innerHTML = '<span style="color:#D4AA30">⚠ Modo prueba</span> · Cognito se activa al configurar API_CONFIG';
+    if (modeSub) modeSub.textContent = 'General de Productos para el Agua · Modo de prueba';
+  }
+});
 
 </script>
 </body>
