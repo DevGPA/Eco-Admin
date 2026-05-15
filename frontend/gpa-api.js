@@ -14,11 +14,9 @@ class GpaApi {
 
   // ── Constructor ────────────────────────────────────────────────
   constructor(config = {}) {
-    this.env         = config.env       || 'dev';
-    this.region      = config.region    || 'us-east-1';
-    this.apiUrl      = config.apiUrl    || '';  // se obtiene de CloudFormation
-    this.poolId      = config.poolId    || '';
-    this.clientId    = config.clientId  || '';
+    // Guardar referencia (no copia) para que cambios posteriores a
+    // GPA_CONFIG se reflejen sin tener que re-asignar la instancia.
+    this._config = config;
 
     this._token      = null;
     this._tokenExp   = 0;
@@ -28,6 +26,18 @@ class GpaApi {
     // Intentar recuperar sesión guardada
     this._loadSession();
   }
+
+  // ── Config (lectura dinámica desde GPA_CONFIG) ─────────────────
+  get env()      { return this._config.env      || 'dev'; }
+  set env(v)     { this._config.env = v; }
+  get region()   { return this._config.region   || 'us-east-1'; }
+  set region(v)  { this._config.region = v; }
+  get apiUrl()   { return this._config.apiUrl   || ''; }
+  set apiUrl(v)  { this._config.apiUrl = v; }
+  get poolId()   { return this._config.poolId   || ''; }
+  set poolId(v)  { this._config.poolId = v; }
+  get clientId() { return this._config.clientId || ''; }
+  set clientId(v){ this._config.clientId = v; }
 
   // ═══════════════════════════════════════════════════════════════
   // AUTH — Cognito JWT
