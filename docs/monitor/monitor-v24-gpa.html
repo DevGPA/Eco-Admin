@@ -594,6 +594,72 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 .user-badge .ub-dot{width:5px;height:5px;border-radius:50%;background:var(--teal);}
 .user-badge.show{display:flex;}
 
+
+/* ═══ EVALUADOR DE DOCUMENTOS ════════════════════════════════════ */
+.eval-bar{display:flex;align-items:center;gap:12px;padding:10px 22px;background:var(--p);
+  border-bottom:1px solid var(--ln);}
+.eval-bar-label{font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;color:var(--navy);flex-shrink:0;}
+.eval-upload-zone{flex:1;display:flex;align-items:center;gap:8px;padding:8px 14px;
+  border:2px dashed var(--ln2);border-radius:10px;cursor:pointer;transition:all .15s;min-height:44px;}
+.eval-upload-zone:hover{border-color:var(--teal);background:var(--teal-bg);}
+.eval-upload-zone.dragging{border-color:var(--teal);background:rgba(58,173,173,.08);
+  box-shadow:0 0 0 4px rgba(58,173,173,.08);}
+.eval-upload-zone.has-files{border-color:var(--teal);border-style:solid;background:var(--teal-bg);}
+.euz-icon{color:var(--ink3);flex-shrink:0;transition:color .12s;}
+.eval-upload-zone:hover .euz-icon{color:var(--teal);}
+.euz-text{font-size:12px;color:var(--ink3);font-weight:600;}
+.eval-upload-zone:hover .euz-text{color:var(--teal-d);}
+.euz-files{display:flex;gap:4px;flex-wrap:wrap;flex:1;}
+.euz-file{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:3px 7px;border-radius:4px;
+  background:var(--p);border:1px solid var(--ln);color:var(--ink2);display:flex;align-items:center;gap:4px;}
+.euz-file .ef-type{font-weight:700;font-size:8px;padding:1px 4px;border-radius:2px;}
+.ef-type.fv{background:var(--go-bg);color:var(--go);}
+.ef-type.cp{background:var(--navy-bg);color:var(--navy-m);}
+.ef-type.ptx{background:var(--teal-bg);color:var(--teal-d);}
+.ef-type.unk{background:var(--p3);color:var(--ink3);}
+.euz-clear{border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:13px;
+  padding:2px 4px;border-radius:3px;transition:all .11s;flex-shrink:0;}
+.euz-clear:hover{background:var(--stop-bg);color:var(--stop);}
+.eval-count{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--teal-d);
+  background:var(--teal-bg);padding:3px 8px;border-radius:5px;font-weight:700;flex-shrink:0;
+  border:1px solid rgba(58,173,173,.2);display:none;}
+.eval-count.show{display:block;}
+.eval-go-btn{background:var(--navy);color:#fff;border:none;padding:10px 20px;border-radius:8px;
+  font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;
+  transition:all .15s;display:none;align-items:center;gap:7px;flex-shrink:0;white-space:nowrap;}
+.eval-go-btn.show{display:flex;}
+.eval-go-btn:hover{background:#243045;box-shadow:0 4px 16px rgba(28,37,53,.25);}
+.eval-go-btn:disabled{opacity:.5;cursor:not-allowed;}
+.eval-go-btn .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none;}
+.eval-go-btn.loading .spinner{display:block;}
+.eval-go-btn.loading span{display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Resultados de evaluación */
+.eval-results{display:none;padding:8px 22px;background:var(--p2);border-bottom:1px solid var(--ln);}
+.eval-results.show{display:block;}
+.er-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.er-title{font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:var(--navy);}
+.er-close{border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:15px;
+  padding:2px 6px;border-radius:4px;}
+.er-close:hover{background:var(--p3);}
+.er-grid{display:flex;gap:6px;flex-wrap:wrap;}
+.er-item{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:5px 9px;border-radius:6px;
+  border:1px solid var(--ln);background:var(--p);display:flex;align-items:center;gap:6px;
+  transition:all .12s;cursor:pointer;}
+.er-item:hover{box-shadow:0 2px 8px rgba(28,37,53,.1);}
+.er-folio{font-weight:700;color:var(--navy);}
+.er-code{font-weight:700;font-size:9px;padding:2px 5px;border-radius:3px;}
+.er-code.go{background:var(--go-bg);color:var(--go);}
+.er-code.warn{background:var(--warn-bg);color:var(--warn);}
+.er-code.stop{background:var(--stop-bg);color:var(--stop);}
+.er-code.blue{background:var(--navy-bg);color:var(--navy-m);}
+.er-concept{font-size:9.5px;color:var(--ink3);}
+.er-summary{display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--ln);}
+.er-stat{font-family:'IBM Plex Mono',monospace;font-size:9.5px;display:flex;align-items:center;gap:4px;}
+.er-dot{width:6px;height:6px;border-radius:50%;}
+
 </style>
 </head>
 <body>
@@ -622,7 +688,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
         </svg>
       </div>
       <div class="login-title">Motor de Fletes</div>
-      <div class="login-subtitle">General de Productos para el Agua · Ecosistema Administrativo</div>
+      <div class="login-subtitle">General de Productos para el Agua · Acceso vía AWS Cognito</div>
     </div>
 
     <!-- Formulario -->
@@ -652,7 +718,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     <!-- Footer -->
     <div class="login-footer">
       <div class="login-footer-text">
-        <span>spec v2.4</span> · API Gateway · Cognito JWT · DynamoDB
+        <span>spec v2.4</span> · Autenticación AWS Cognito · Acceso seguro
       </div>
     </div>
   </div>
@@ -742,6 +808,48 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     <button class="df-preset" onclick="setPreset('todo',this)">Todo</button>
   </div>
   <span class="df-status" id="dfStatus">22/04 – 30/04/2026 · 8 docs</span>
+</div>
+
+
+<!-- ══ EVALUADOR DE DOCUMENTOS ══ -->
+<div class="eval-bar" id="evalBar">
+  <div class="eval-bar-label">Evaluar documentos</div>
+  
+  <div class="eval-upload-zone" id="evalZone" 
+       onclick="document.getElementById('evalFileInput').click()"
+       ondragover="event.preventDefault();this.classList.add('dragging')"
+       ondragleave="this.classList.remove('dragging')"
+       ondrop="event.preventDefault();this.classList.remove('dragging');handleEvalDrop(event)">
+    <svg class="euz-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <span class="euz-text" id="euzText">Arrastra archivos PDF o haz clic para seleccionar</span>
+    <div class="euz-files" id="euzFiles"></div>
+  </div>
+  
+  <input type="file" id="evalFileInput" multiple accept=".pdf,.xml" style="display:none" onchange="handleEvalFiles(this.files)">
+  
+  <span class="eval-count" id="evalCount">0 docs</span>
+  
+  <button class="euz-clear" id="evalClear" onclick="clearEvalFiles()" title="Limpiar archivos" style="display:none">✕</button>
+  
+  <button class="eval-go-btn" id="evalGoBtn" onclick="runEvaluation()">
+    <div class="spinner"></div>
+    <span>▶ Evaluar</span>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  </button>
+</div>
+
+<!-- Resultados de evaluación -->
+<div class="eval-results" id="evalResults">
+  <div class="er-header">
+    <div class="er-title">Resultados de evaluación</div>
+    <button class="er-close" onclick="closeEvalResults()">✕</button>
+  </div>
+  <div class="er-grid" id="erGrid"></div>
+  <div class="er-summary" id="erSummary"></div>
 </div>
 
 <!-- ══ POST-EJECUCIÓN ══ -->
@@ -1395,19 +1503,11 @@ async function doLogin() {
   btn.disabled = true;
   btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">Conectando<span class="lvd" style="width:6px;height:6px;"></span></span>';
 
-  // Si no hay API configurada → modo demo
-  if (!API_CONFIG.apiUrl || !API_CONFIG.clientId) {
-    setTimeout(() => {
-      if (email.includes('@') && pass.length >= 4) {
-        _session = { token: 'demo', email: email, exp: Date.now() + 8*3600000 };
-        saveSession();
-        onLoginSuccess(email, false);
-      } else {
-        errEl.textContent = 'Credenciales inválidas';
-        errEl.classList.add('show');
-        resetBtn();
-      }
-    }, 800);
+  // Verificar que Cognito esté configurado
+  if (!API_CONFIG.clientId) {
+    errEl.textContent = 'API no configurada. Ingresa los datos de Cognito en API_CONFIG (UserPoolClientId, apiUrl).';
+    errEl.classList.add('show');
+    resetBtn();
     return;
   }
 
@@ -1530,6 +1630,221 @@ document.addEventListener('DOMContentLoaded', () => {
   const em = document.getElementById('loginEmail');
   if (em) em.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass')?.focus(); });
 });
+
+
+// ── EVALUADOR DE DOCUMENTOS ──────────────────────────────────────
+let evalFiles = [];
+
+function classifyEvalFile(name) {
+  const u = name.toUpperCase();
+  if (/^(FA|FC|FV|FM|FLC)/.test(u)) return 'fv';
+  if (/^(GCCR|GCR)/.test(u)) return 'ptx';
+  if (/^(FAC|GDL|ACRED)/.test(u)) return 'cfdi';
+  if (/^\d{9,}/.test(u)) return 'cp';
+  return 'unk';
+}
+
+function handleEvalDrop(event) {
+  const files = Array.from(event.dataTransfer.files).filter(f => /\.(pdf|xml)$/i.test(f.name));
+  addEvalFiles(files);
+}
+
+function handleEvalFiles(fileList) {
+  const files = Array.from(fileList).filter(f => /\.(pdf|xml)$/i.test(f.name));
+  addEvalFiles(files);
+}
+
+function addEvalFiles(newFiles) {
+  evalFiles = [...evalFiles, ...newFiles];
+  renderEvalFiles();
+}
+
+function clearEvalFiles() {
+  evalFiles = [];
+  document.getElementById('evalFileInput').value = '';
+  renderEvalFiles();
+  closeEvalResults();
+}
+
+function renderEvalFiles() {
+  const container = document.getElementById('euzFiles');
+  const textEl    = document.getElementById('euzText');
+  const countEl   = document.getElementById('evalCount');
+  const clearEl   = document.getElementById('evalClear');
+  const goBtn     = document.getElementById('evalGoBtn');
+  const zone      = document.getElementById('evalZone');
+  
+  if (!evalFiles.length) {
+    container.innerHTML = '';
+    textEl.style.display = '';
+    countEl.classList.remove('show');
+    clearEl.style.display = 'none';
+    goBtn.classList.remove('show');
+    zone.classList.remove('has-files');
+    return;
+  }
+  
+  textEl.style.display = 'none';
+  zone.classList.add('has-files');
+  
+  const fvCount  = evalFiles.filter(f => classifyEvalFile(f.name) === 'fv').length;
+  const cpCount  = evalFiles.filter(f => ['cp','cfdi','ptx'].includes(classifyEvalFile(f.name))).length;
+  
+  container.innerHTML = evalFiles.map(f => {
+    const tipo = classifyEvalFile(f.name);
+    const label = tipo === 'fv' ? 'FV' : tipo === 'cp' ? 'CP' : tipo === 'ptx' ? 'PTX' : tipo === 'cfdi' ? 'CFDI' : '?';
+    return `<div class="euz-file"><span class="ef-type ${tipo}">${label}</span>${f.name.replace('.pdf','').replace('.PDF','')}</div>`;
+  }).join('');
+  
+  countEl.textContent = `${evalFiles.length} docs · ${fvCount} FV · ${cpCount} CP`;
+  countEl.classList.add('show');
+  clearEl.style.display = '';
+  goBtn.classList.add('show');
+}
+
+async function runEvaluation() {
+  const btn = document.getElementById('evalGoBtn');
+  if (!evalFiles.length) return;
+  
+  // Verificar autenticación
+  if (!_session.token) {
+    alert('Inicia sesión para evaluar documentos.');
+    return;
+  }
+  
+  btn.classList.add('loading');
+  btn.disabled = true;
+  
+  // Agrupar archivos: CPs como ancla, FVs se asocian
+  const cps = evalFiles.filter(f => ['cp','cfdi','ptx'].includes(classifyEvalFile(f.name)));
+  const fvs = evalFiles.filter(f => classifyEvalFile(f.name) === 'fv');
+  const fvFolios = fvs.map(f => f.name.replace(/\.(pdf|xml)$/i, ''));
+  
+  const results = [];
+  
+  for (const cpFile of cps) {
+    const folioCP = cpFile.name.replace(/\.(pdf|xml)$/i, '');
+    const tipo    = classifyEvalFile(cpFile.name);
+    
+    try {
+      // Construir solicitud
+      const solicitud = {
+        folioCP:        folioCP,
+        foliosFV:       fvFolios,
+        origenSucursal: 'GDL',         // Default — el API extraerá del doc
+        destinoEstado:  '',
+        fletaRFC:       '',
+        codigoSAP:      '',
+        partidas:       [],
+        fleteBaseMXN:   0,
+        tipoCambioRef:  17.35,
+        fechaEmision:   new Date().toISOString().slice(0, 10),
+        esCFDI4:        tipo === 'cfdi',
+      };
+      
+      // Si hay API configurada → llamar al endpoint real
+      if (API_CONFIG.apiUrl) {
+        const res = await fetch(`${API_CONFIG.apiUrl}/evaluar`, {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${_session.token}`,
+            'X-GPA-UserId':  _session.email || '',
+          },
+          body: JSON.stringify(solicitud),
+        });
+        const data = await res.json();
+        results.push({
+          folioCP,
+          status:      res.status,
+          codigoMotor: data.codigoMotor || '—',
+          concepto:    data.concepto    || data.error || '—',
+          estado:      data.estado      || (res.ok ? 'OK' : 'ERROR'),
+          pctFlete:    data.pctFlete,
+        });
+      } else {
+        // Sin API → subir a S3 para trigger automático
+        results.push({
+          folioCP,
+          status:      0,
+          codigoMotor: 'PENDIENTE',
+          concepto:    'Subir a S3 pendientes/ para trigger Lambda',
+          estado:      'PENDIENTE_S3',
+        });
+      }
+    } catch (err) {
+      results.push({
+        folioCP,
+        status:      500,
+        codigoMotor: 'ERROR',
+        concepto:    err.message || 'Error de conexión',
+        estado:      'ERROR',
+      });
+    }
+  }
+  
+  // Si no hay CPs, mostrar advertencia
+  if (!cps.length && fvs.length) {
+    results.push({
+      folioCP:     '—',
+      status:      400,
+      codigoMotor: 'SIN_CP',
+      concepto:    'Se cargaron FVs pero ninguna CP. La carta porte es el documento ancla.',
+      estado:      'ERROR',
+    });
+  }
+  
+  btn.classList.remove('loading');
+  btn.disabled = false;
+  
+  renderEvalResults(results);
+}
+
+function renderEvalResults(results) {
+  const panel   = document.getElementById('evalResults');
+  const grid    = document.getElementById('erGrid');
+  const summary = document.getElementById('erSummary');
+  
+  // Render tarjetas de resultado
+  grid.innerHTML = results.map(r => {
+    let codeClass = 'go';
+    if (r.codigoMotor.startsWith('R-1') || r.codigoMotor.startsWith('R-2') || 
+        r.codigoMotor.startsWith('R-3') || r.codigoMotor === 'ERROR' || r.codigoMotor === 'SIN_CP')
+      codeClass = 'stop';
+    else if (r.codigoMotor.startsWith('R-5') || r.codigoMotor.startsWith('R-8') || 
+             r.codigoMotor === 'PENDIENTE')
+      codeClass = 'warn';
+    else if (r.codigoMotor === 'R-800' || r.codigoMotor === 'R-050')
+      codeClass = 'blue';
+    
+    return `<div class="er-item" title="${r.concepto}">
+      <span class="er-folio">${r.folioCP}</span>
+      <span class="er-code ${codeClass}">${r.codigoMotor}</span>
+      <span class="er-concept">${r.concepto}</span>
+    </div>`;
+  }).join('');
+  
+  // Resumen
+  const total = results.length;
+  const ok    = results.filter(r => r.estado === 'AUTO_APROBADA' || r.codigoMotor === 'R-000' || r.codigoMotor === 'R-050' || r.codigoMotor === 'R-060' || r.codigoMotor === 'R-800').length;
+  const rev   = results.filter(r => r.estado === 'EN_REVISION').length;
+  const rech  = results.filter(r => r.estado === 'AUTO_RECHAZADA' || r.codigoMotor.startsWith('R-1') || r.codigoMotor.startsWith('R-2')).length;
+  const err   = results.filter(r => r.estado === 'ERROR' || r.codigoMotor === 'ERROR').length;
+  
+  summary.innerHTML = `
+    <div class="er-stat"><div class="er-dot" style="background:var(--navy)"></div>${total} evaluados</div>
+    <div class="er-stat"><div class="er-dot" style="background:var(--go-m)"></div>${ok} aprobados</div>
+    <div class="er-stat"><div class="er-dot" style="background:var(--warn-m)"></div>${rev} en revisión</div>
+    <div class="er-stat"><div class="er-dot" style="background:var(--stop-m)"></div>${rech} rechazados</div>
+    ${err ? `<div class="er-stat"><div class="er-dot" style="background:var(--ink3)"></div>${err} errores</div>` : ''}
+  `;
+  
+  panel.classList.add('show');
+}
+
+function closeEvalResults() {
+  document.getElementById('evalResults').classList.remove('show');
+}
 
 </script>
 </body>
