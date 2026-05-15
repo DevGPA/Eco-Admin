@@ -813,41 +813,22 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 
 <!-- ══ EVALUADOR DE DOCUMENTOS ══ -->
 <div class="eval-bar" id="evalBar">
-  <div class="eval-bar-label">Evaluar documentos</div>
-  
-  <div class="eval-upload-zone" id="evalZone" 
-       onclick="document.getElementById('evalFileInput').click()"
-       ondragover="event.preventDefault();this.classList.add('dragging')"
-       ondragleave="this.classList.remove('dragging')"
-       ondrop="event.preventDefault();this.classList.remove('dragging');handleEvalDrop(event)">
-    <svg class="euz-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/>
-      <line x1="12" y1="3" x2="12" y2="15"/>
-    </svg>
-    <span class="euz-text" id="euzText">Arrastra archivos PDF o haz clic para seleccionar</span>
-    <div class="euz-files" id="euzFiles"></div>
+  <div class="eval-bar-label">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Evaluar
   </div>
-  
-  <input type="file" id="evalFileInput" multiple accept=".pdf,.xml" style="display:none" onchange="handleEvalFiles(this.files)">
-  
-  <span class="eval-count" id="evalCount">0 docs</span>
-  
-  <button class="euz-clear" id="evalClear" onclick="clearEvalFiles()" title="Limpiar archivos" style="display:none">✕</button>
-  
-  <button class="eval-go-btn" id="evalGoBtn" onclick="runEvaluation()">
-    <div class="spinner"></div>
-    <span>▶ Evaluar</span>
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-  </button>
+  <label for="evalFileInput" class="eval-select-btn" id="evalSelectBtn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    Seleccionar archivos PDF
+  </label>
+  <input type="file" id="evalFileInput" multiple accept=".pdf,.xml,.PDF,.XML" style="display:none">
+  <div class="euz-files-wrap" id="euzFilesWrap" style="display:none"><div class="euz-files" id="euzFiles"></div></div>
+  <span class="eval-count" id="evalCount" style="display:none">0</span>
+  <button class="euz-clear" id="evalClear" style="display:none" title="Limpiar">&#x2715;</button>
+  <button class="eval-go-btn" id="evalGoBtn" style="display:none"><div class="spinner"></div><span>&#x25B6; Evaluar motor v2.4</span></button>
 </div>
-
-<!-- Resultados de evaluación -->
-<div class="eval-results" id="evalResults">
-  <div class="er-header">
-    <div class="er-title">Resultados de evaluación</div>
-    <button class="er-close" onclick="closeEvalResults()">✕</button>
-  </div>
+<div class="eval-results" id="evalResults" style="display:none">
+  <div class="er-header"><div class="er-title">Resultados de evaluaci&oacute;n &middot; Motor v2.4</div><button class="er-close" id="erClose">&#x2715;</button></div>
   <div class="er-grid" id="erGrid"></div>
   <div class="er-summary" id="erSummary"></div>
 </div>
@@ -1662,218 +1643,202 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ── EVALUADOR DE DOCUMENTOS ──────────────────────────────────────
-let evalFiles = [];
+(function() {
+  var evalFiles = [];
 
-function classifyEvalFile(name) {
-  const u = name.toUpperCase();
-  if (/^(FA|FC|FV|FM|FLC)/.test(u)) return 'fv';
-  if (/^(GCCR|GCR)/.test(u)) return 'ptx';
-  if (/^(FAC|GDL|ACRED)/.test(u)) return 'cfdi';
-  if (/^\d{9,}/.test(u)) return 'cp';
-  return 'unk';
-}
-
-function handleEvalDrop(event) {
-  const files = Array.from(event.dataTransfer.files).filter(f => /\.(pdf|xml)$/i.test(f.name));
-  addEvalFiles(files);
-}
-
-function handleEvalFiles(fileList) {
-  const files = Array.from(fileList).filter(f => /\.(pdf|xml)$/i.test(f.name));
-  addEvalFiles(files);
-}
-
-function addEvalFiles(newFiles) {
-  evalFiles = [...evalFiles, ...newFiles];
-  renderEvalFiles();
-}
-
-function clearEvalFiles() {
-  evalFiles = [];
-  document.getElementById('evalFileInput').value = '';
-  renderEvalFiles();
-  closeEvalResults();
-}
-
-function renderEvalFiles() {
-  const container = document.getElementById('euzFiles');
-  const textEl    = document.getElementById('euzText');
-  const countEl   = document.getElementById('evalCount');
-  const clearEl   = document.getElementById('evalClear');
-  const goBtn     = document.getElementById('evalGoBtn');
-  const zone      = document.getElementById('evalZone');
-  
-  if (!evalFiles.length) {
-    container.innerHTML = '';
-    textEl.style.display = '';
-    countEl.classList.remove('show');
-    clearEl.style.display = 'none';
-    goBtn.classList.remove('show');
-    zone.classList.remove('has-files');
-    return;
+  function classify(name) {
+    var u = name.toUpperCase().replace(/\.(PDF|XML)$/i, '');
+    if (/^(FA|FC|FV|FM|FLC|FMT)/.test(u)) return 'fv';
+    if (/^(GCCR|GCR)/.test(u)) return 'ptx';
+    if (/^(FAC|GDL|ACRED)/.test(u)) return 'cfdi';
+    if (/^\d{8,}/.test(u)) return 'cp';
+    if (/^(JD|JC|HP|VP|M8)/.test(u)) return 'cp';
+    return 'unk';
   }
-  
-  textEl.style.display = 'none';
-  zone.classList.add('has-files');
-  
-  const fvCount  = evalFiles.filter(f => classifyEvalFile(f.name) === 'fv').length;
-  const cpCount  = evalFiles.filter(f => ['cp','cfdi','ptx'].includes(classifyEvalFile(f.name))).length;
-  
-  container.innerHTML = evalFiles.map(f => {
-    const tipo = classifyEvalFile(f.name);
-    const label = tipo === 'fv' ? 'FV' : tipo === 'cp' ? 'CP' : tipo === 'ptx' ? 'PTX' : tipo === 'cfdi' ? 'CFDI' : '?';
-    return `<div class="euz-file"><span class="ef-type ${tipo}">${label}</span>${f.name.replace('.pdf','').replace('.PDF','')}</div>`;
-  }).join('');
-  
-  countEl.textContent = `${evalFiles.length} docs · ${fvCount} FV · ${cpCount} CP`;
-  countEl.classList.add('show');
-  clearEl.style.display = '';
-  goBtn.classList.add('show');
-}
 
-async function runEvaluation() {
-  const btn = document.getElementById('evalGoBtn');
-  if (!evalFiles.length) return;
-  
-  // Verificar autenticación
-  if (!_session.token) {
-    alert('Inicia sesión para evaluar documentos.');
-    return;
+  function typeLabel(t) {
+    return {fv:'FV',cp:'CP',ptx:'PTX',cfdi:'CFDI',unk:'?'}[t]||'?';
   }
-  
-  btn.classList.add('loading');
-  btn.disabled = true;
-  
-  // Agrupar archivos: CPs como ancla, FVs se asocian
-  const cps = evalFiles.filter(f => ['cp','cfdi','ptx'].includes(classifyEvalFile(f.name)));
-  const fvs = evalFiles.filter(f => classifyEvalFile(f.name) === 'fv');
-  const fvFolios = fvs.map(f => f.name.replace(/\.(pdf|xml)$/i, ''));
-  
-  const results = [];
-  
-  for (const cpFile of cps) {
-    const folioCP = cpFile.name.replace(/\.(pdf|xml)$/i, '');
-    const tipo    = classifyEvalFile(cpFile.name);
-    
-    try {
-      // Construir solicitud
-      const solicitud = {
-        folioCP:        folioCP,
-        foliosFV:       fvFolios,
-        origenSucursal: 'GDL',         // Default — el API extraerá del doc
-        destinoEstado:  '',
-        fletaRFC:       '',
-        codigoSAP:      '',
-        partidas:       [],
-        fleteBaseMXN:   0,
-        tipoCambioRef:  17.35,
-        fechaEmision:   new Date().toISOString().slice(0, 10),
-        esCFDI4:        tipo === 'cfdi',
-      };
-      
-      // Si hay API configurada → llamar al endpoint real
-      if (API_CONFIG.apiUrl) {
-        const res = await fetch(`${API_CONFIG.apiUrl}/evaluar`, {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${_session.token}`,
-            'X-GPA-UserId':  _session.email || '',
-          },
-          body: JSON.stringify(solicitud),
-        });
-        const data = await res.json();
-        results.push({
-          folioCP,
-          status:      res.status,
-          codigoMotor: data.codigoMotor || '—',
-          concepto:    data.concepto    || data.error || '—',
-          estado:      data.estado      || (res.ok ? 'OK' : 'ERROR'),
-          pctFlete:    data.pctFlete,
-        });
-      } else {
-        // Sin API → subir a S3 para trigger automático
-        results.push({
-          folioCP,
-          status:      0,
-          codigoMotor: 'PENDIENTE',
-          concepto:    'Subir a S3 pendientes/ para trigger Lambda',
-          estado:      'PENDIENTE_S3',
-        });
-      }
-    } catch (err) {
-      results.push({
-        folioCP,
-        status:      500,
-        codigoMotor: 'ERROR',
-        concepto:    err.message || 'Error de conexión',
-        estado:      'ERROR',
-      });
+
+  function render() {
+    var filesEl = document.getElementById('euzFiles');
+    var wrapEl  = document.getElementById('euzFilesWrap');
+    var countEl = document.getElementById('evalCount');
+    var clearEl = document.getElementById('evalClear');
+    var goBtn   = document.getElementById('evalGoBtn');
+    var selBtn  = document.getElementById('evalSelectBtn');
+    if (!filesEl) return;
+
+    if (!evalFiles.length) {
+      wrapEl.style.display = 'none';
+      countEl.style.display = 'none';
+      clearEl.style.display = 'none';
+      goBtn.style.display = 'none';
+      selBtn.classList.remove('has-files');
+      return;
+    }
+
+    var fvN = 0, cpN = 0;
+    var html = '';
+    for (var i = 0; i < evalFiles.length; i++) {
+      var f = evalFiles[i];
+      var t = classify(f.name);
+      if (t === 'fv') fvN++;
+      else cpN++;
+      var base = f.name.replace(/\.(pdf|xml)$/i, '');
+      html += '<div class="euz-file"><span class="ef-type ' + t + '">' + typeLabel(t) + '</span>' + base + '</div>';
+    }
+    filesEl.innerHTML = html;
+    wrapEl.style.display = 'flex';
+    countEl.style.display = '';
+    countEl.textContent = evalFiles.length + ' docs \u00B7 ' + fvN + ' FV \u00B7 ' + cpN + ' CP';
+    clearEl.style.display = '';
+    goBtn.style.display = 'inline-flex';
+    selBtn.classList.add('has-files');
+  }
+
+  function doEval() {
+    if (!evalFiles.length) return;
+    var btn = document.getElementById('evalGoBtn');
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    var cps = [], fvFolios = [];
+    for (var i = 0; i < evalFiles.length; i++) {
+      var t = classify(evalFiles[i].name);
+      var folio = evalFiles[i].name.replace(/\.(pdf|xml)$/i, '');
+      if (t === 'fv') fvFolios.push(folio);
+      else cps.push({file: evalFiles[i], folio: folio, tipo: t});
+    }
+
+    var results = [];
+
+    if (!cps.length && fvFolios.length) {
+      results.push({folioCP:'\u2014', codigoMotor:'SIN_CP',
+        concepto:'Se cargaron ' + fvFolios.length + ' FVs pero ninguna carta porte. La CP es el documento ancla.',
+        estado:'ERROR'});
+      btn.classList.remove('loading'); btn.disabled = false;
+      showResults(results);
+      return;
+    }
+
+    // Evaluar cada CP
+    var pending = cps.length;
+    if (!pending) { btn.classList.remove('loading'); btn.disabled = false; return; }
+
+    for (var j = 0; j < cps.length; j++) {
+      (function(cp) {
+        var solicitud = {
+          folioCP: cp.folio, foliosFV: fvFolios,
+          origenSucursal: 'GDL', destinoEstado: '', fletaRFC: '',
+          codigoSAP: '', partidas: [], fleteBaseMXN: 0,
+          tipoCambioRef: 17.35, ferryMXN: 0,
+          fechaEmision: new Date().toISOString().slice(0,10),
+          esCFDI4: cp.tipo === 'cfdi'
+        };
+
+        if (typeof API_CONFIG !== 'undefined' && API_CONFIG.apiUrl && _session && _session.token) {
+          fetch(API_CONFIG.apiUrl + '/evaluar', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json','Authorization':'Bearer '+_session.token},
+            body: JSON.stringify(solicitud)
+          }).then(function(r){ return r.json(); }).then(function(data){
+            results.push({
+              folioCP: cp.folio,
+              codigoMotor: data.codigoMotor || (data.error ? 'ERROR' : 'OK'),
+              concepto: data.concepto || data.error || '\u2014',
+              estado: data.estado || 'EVALUADO'
+            });
+          }).catch(function(err){
+            results.push({folioCP: cp.folio, codigoMotor:'CONN_ERR',
+              concepto:'Error de conexi\u00F3n: ' + err.message, estado:'ERROR'});
+          }).finally(function(){
+            pending--;
+            if (pending <= 0) { btn.classList.remove('loading'); btn.disabled = false; showResults(results); }
+          });
+        } else {
+          var tipoDesc = cp.tipo === 'cfdi' ? 'CFDI 4.0 + Complemento CP' :
+                         cp.tipo === 'ptx'  ? 'PTX / GCCR Consolidado' : 'Carta Porte';
+          results.push({
+            folioCP: cp.folio,
+            codigoMotor: 'REGISTRADO',
+            concepto: tipoDesc + ' \u00B7 ' + fvFolios.length + ' FVs asociadas \u00B7 Pendiente conexi\u00F3n API Gateway',
+            estado: 'PENDIENTE'
+          });
+          pending--;
+          if (pending <= 0) { btn.classList.remove('loading'); btn.disabled = false; showResults(results); }
+        }
+      })(cps[j]);
     }
   }
-  
-  // Si no hay CPs, mostrar advertencia
-  if (!cps.length && fvs.length) {
-    results.push({
-      folioCP:     '—',
-      status:      400,
-      codigoMotor: 'SIN_CP',
-      concepto:    'Se cargaron FVs pero ninguna CP. La carta porte es el documento ancla.',
-      estado:      'ERROR',
-    });
+
+  function showResults(results) {
+    var panel = document.getElementById('evalResults');
+    var grid  = document.getElementById('erGrid');
+    var summ  = document.getElementById('erSummary');
+
+    var h = '';
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var cc = 'pend';
+      if (r.codigoMotor==='R-000'||r.codigoMotor==='R-050'||r.codigoMotor==='R-060'||r.codigoMotor==='R-800') cc='go';
+      else if (r.codigoMotor==='SIN_CP'||r.codigoMotor==='ERROR'||r.codigoMotor==='CONN_ERR') cc='stop';
+      else if (r.codigoMotor.match && r.codigoMotor.match(/^R-(1|2|3)/)) cc='stop';
+      else if (r.codigoMotor.match && r.codigoMotor.match(/^R-(5|8)/)) cc='warn';
+      h += '<div class="er-item"><span class="er-folio">' + r.folioCP +
+           '</span><span class="er-code ' + cc + '">' + r.codigoMotor +
+           '</span><span class="er-concept">' + r.concepto + '</span></div>';
+    }
+    grid.innerHTML = h;
+
+    var total=results.length, ok=0, pend=0, rev=0, rech=0, err=0;
+    for (var k=0; k<results.length; k++) {
+      var e=results[k].estado, c=results[k].codigoMotor;
+      if (c==='R-000'||c==='R-050'||c==='R-060'||c==='R-800') ok++;
+      else if (e==='PENDIENTE'||c==='REGISTRADO') pend++;
+      else if (e==='EN_REVISION') rev++;
+      else if (c==='SIN_CP'||c==='ERROR'||c==='CONN_ERR') err++;
+      else if (c.match && c.match(/^R-(1|2|3)/)) rech++;
+      else if (c.match && c.match(/^R-5/)) rev++;
+    }
+    summ.innerHTML =
+      '<div class="er-stat"><div class="er-dot" style="background:var(--navy)"></div>' + total + ' evaluados</div>' +
+      (ok?'<div class="er-stat"><div class="er-dot" style="background:var(--go-m)"></div>'+ok+' aprobados</div>':'') +
+      (pend?'<div class="er-stat"><div class="er-dot" style="background:var(--teal)"></div>'+pend+' registrados</div>':'') +
+      (rev?'<div class="er-stat"><div class="er-dot" style="background:var(--warn-m)"></div>'+rev+' en revisi\u00F3n</div>':'') +
+      (rech?'<div class="er-stat"><div class="er-dot" style="background:var(--stop-m)"></div>'+rech+' rechazados</div>':'') +
+      (err?'<div class="er-stat"><div class="er-dot" style="background:var(--ink3)"></div>'+err+' errores</div>':'');
+
+    panel.style.display = 'block';
   }
-  
-  btn.classList.remove('loading');
-  btn.disabled = false;
-  
-  renderEvalResults(results);
-}
 
-function renderEvalResults(results) {
-  const panel   = document.getElementById('evalResults');
-  const grid    = document.getElementById('erGrid');
-  const summary = document.getElementById('erSummary');
-  
-  // Render tarjetas de resultado
-  grid.innerHTML = results.map(r => {
-    let codeClass = 'go';
-    if (r.codigoMotor.startsWith('R-1') || r.codigoMotor.startsWith('R-2') || 
-        r.codigoMotor.startsWith('R-3') || r.codigoMotor === 'ERROR' || r.codigoMotor === 'SIN_CP')
-      codeClass = 'stop';
-    else if (r.codigoMotor.startsWith('R-5') || r.codigoMotor.startsWith('R-8') || 
-             r.codigoMotor === 'PENDIENTE')
-      codeClass = 'warn';
-    else if (r.codigoMotor === 'R-800' || r.codigoMotor === 'R-050')
-      codeClass = 'blue';
-    
-    return `<div class="er-item" title="${r.concepto}">
-      <span class="er-folio">${r.folioCP}</span>
-      <span class="er-code ${codeClass}">${r.codigoMotor}</span>
-      <span class="er-concept">${r.concepto}</span>
-    </div>`;
-  }).join('');
-  
-  // Resumen
-  const total = results.length;
-  const ok    = results.filter(r => r.estado === 'AUTO_APROBADA' || r.codigoMotor === 'R-000' || r.codigoMotor === 'R-050' || r.codigoMotor === 'R-060' || r.codigoMotor === 'R-800').length;
-  const rev   = results.filter(r => r.estado === 'EN_REVISION').length;
-  const rech  = results.filter(r => r.estado === 'AUTO_RECHAZADA' || r.codigoMotor.startsWith('R-1') || r.codigoMotor.startsWith('R-2')).length;
-  const err   = results.filter(r => r.estado === 'ERROR' || r.codigoMotor === 'ERROR').length;
-  
-  summary.innerHTML = `
-    <div class="er-stat"><div class="er-dot" style="background:var(--navy)"></div>${total} evaluados</div>
-    <div class="er-stat"><div class="er-dot" style="background:var(--go-m)"></div>${ok} aprobados</div>
-    <div class="er-stat"><div class="er-dot" style="background:var(--warn-m)"></div>${rev} en revisión</div>
-    <div class="er-stat"><div class="er-dot" style="background:var(--stop-m)"></div>${rech} rechazados</div>
-    ${err ? `<div class="er-stat"><div class="er-dot" style="background:var(--ink3)"></div>${err} errores</div>` : ''}
-  `;
-  
-  panel.classList.add('show');
-}
+  // Conectar eventos cuando el DOM carga
+  document.addEventListener('DOMContentLoaded', function() {
+    var fileInput = document.getElementById('evalFileInput');
+    var clearBtn  = document.getElementById('evalClear');
+    var goBtn     = document.getElementById('evalGoBtn');
+    var closeBtn  = document.getElementById('erClose');
 
-function closeEvalResults() {
-  document.getElementById('evalResults').classList.remove('show');
-}
+    if (fileInput) fileInput.addEventListener('change', function() {
+      var arr = [];
+      for (var i = 0; i < this.files.length; i++) {
+        if (/\.(pdf|xml)$/i.test(this.files[i].name)) arr.push(this.files[i]);
+      }
+      if (arr.length) { evalFiles = evalFiles.concat(arr); render(); }
+    });
+    if (clearBtn) clearBtn.addEventListener('click', function() {
+      evalFiles = [];
+      if (fileInput) fileInput.value = '';
+      render();
+      document.getElementById('evalResults').style.display = 'none';
+    });
+    if (goBtn) goBtn.addEventListener('click', doEval);
+    if (closeBtn) closeBtn.addEventListener('click', function() {
+      document.getElementById('evalResults').style.display = 'none';
+    });
+  });
+})();
+
 
 
 // Detectar modo y actualizar UI del login
