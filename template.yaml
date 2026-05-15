@@ -45,7 +45,7 @@ Globals:
     Environment:
       Variables:
         DYNAMO_TABLE:             !Ref FletesTable
-        S3_BUCKET:                !Ref DocumentosBucket
+        S3_BUCKET:                !Sub gpa-documentos-${Env}-${AWS::AccountId}
         SQS_QUEUE_URL:            !Ref FletesQueue
         SNS_ALERTAS_ARN:          !Ref AlertasTopic
         ALLOWED_ORIGIN:           !Ref AllowedOrigin
@@ -280,20 +280,6 @@ Resources:
             Method: GET
             Path:   /health
 
-        # S3 — nuevo PDF en pendientes/
-        S3Documentos:
-          Type: S3
-          Properties:
-            Bucket: !Ref DocumentosBucket
-            Events: s3:ObjectCreated:*
-            Filter:
-              S3Key:
-                Rules:
-                  - Name:  prefix
-                    Value: pendientes/
-                  - Name:  suffix
-                    Value: .pdf
-
         # SQS — cola de procesamiento asíncrono
         SqsCola:
           Type: SQS
@@ -308,9 +294,9 @@ Resources:
         # DynamoDB — solo las acciones necesarias
         - DynamoDBCrudPolicy:
             TableName: !Ref FletesTable
-        # S3 — leer, escribir y mover documentos
+        # S3 — leer, escribir y mover documentos (nombre literal para romper ciclo)
         - S3CrudPolicy:
-            BucketName: !Ref DocumentosBucket
+            BucketName: !Sub gpa-documentos-${Env}-${AWS::AccountId}
         # SQS — consumir cola principal y DLQ
         - SQSSendMessagePolicy:
             QueueName: !GetAtt FletesQueue.QueueName
@@ -359,7 +345,7 @@ Resources:
         - python3.12
       CompatibleArchitectures:
         - arm64
-      RetentionPolicy: !If [IsProd, Retain, Delete]
+      RetentionPolicy: Retain
 
     Metadata:
       BuildMethod: python3.12
@@ -411,16 +397,7 @@ Resources:
       # Access Logs
       AccessLogSettings:
         DestinationArn: !GetAtt ApiLogGroup.Arn
-        Format: >-
-          {"requestId":"$context.requestId",
-           "ip":"$context.identity.sourceIp",
-           "method":"$context.httpMethod",
-           "path":"$context.path",
-           "status":"$context.status",
-           "latencyMs":"$context.responseLatency",
-           "integrationMs":"$context.integrationLatency",
-           "userAgent":"$context.identity.userAgent",
-           "userId":"$context.authorizer.claims.email"}
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latencyMs":"$context.responseLatency","integrationMs":"$context.integrationLatency","userAgent":"$context.identity.userAgent","userId":"$context.authorizer.claims.email"}'
 
       Tags:
         Proyecto: GPA-Admin
@@ -549,7 +526,8 @@ Resources:
   # ═══════════════════════════════════════════════════════════════
   DocumentosBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: !If [IsProd, Retain, Delete]
+    DeletionPolicy:       !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy:  !If [IsProd, Retain, Delete]
     Properties:
       BucketName: !Sub gpa-documentos-${Env}-${AWS::AccountId}
 
@@ -576,16 +554,14 @@ Resources:
           # Pendientes sin procesar → expirar a 30 días
           - Id:     ExpirarPendientes
             Status: Enabled
-            Filter:
-              Prefix: pendientes/
+            Prefix: pendientes/
             ExpirationInDays: 30
           # Procesados → mover a IA a 90 días, Glacier a 1 año
           - Id:     ArchivarProcesados
             Status: Enabled
-            Filter:
-              Prefix: procesados/
+            Prefix: procesados/
             Transitions:
-              - StoritionInDays: 90
+              - TransitionInDays: 90
                 StorageClass:   STANDARD_IA
               - TransitionInDays: 365
                 StorageClass:   GLACIER
@@ -598,11 +574,37 @@ Resources:
             AllowedOrigins: [!Ref AllowedOrigin]
             MaxAge:         3600
 
+      # Notificación a Lambda cuando llegue un PDF a pendientes/
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event:    s3:ObjectCreated:*
+            Function: !GetAtt MotorFletesFn.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name:  prefix
+                    Value: pendientes/
+                  - Name:  suffix
+                    Value: .pdf
+
       Tags:
         - Key:   Proyecto
           Value: GPA-Admin
         - Key:   Env
           Value: !Ref Env
+
+    # El permiso debe existir antes que el bucket lo invoque
+    DependsOn: MotorFletesFnS3Permission
+
+  # Permite a S3 invocar la Lambda (SourceArn literal para romper ciclo)
+  MotorFletesFnS3Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action:        lambda:InvokeFunction
+      FunctionName:  !Ref MotorFletesFn
+      Principal:     s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn:     !Sub arn:aws:s3:::gpa-documentos-${Env}-${AWS::AccountId}
 
   # Política del bucket: forzar HTTPS
   DocumentosBucketPolicy:
@@ -661,14 +663,15 @@ Resources:
         - email
       AutoVerifiedAttributes:
         - email
-      PasswordPolicy:
-        MinimumLength:    10
-        RequireUppercase: true
-        RequireLowercase: true
-        RequireNumbers:   true
-        RequireSymbols:   false
-        TemporaryPasswordValidityDays: 7
-      MfaConfiguration: !If [IsProd, OPTIONAL, OFF]
+      Policies:
+        PasswordPolicy:
+          MinimumLength:    10
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers:   true
+          RequireSymbols:   false
+          TemporaryPasswordValidityDays: 7
+      MfaConfiguration: !If [IsProd, "OPTIONAL", "OFF"]
       Schema:
         - Name:     email
           Required: true
@@ -868,6 +871,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "Lambda — Invocaciones y Errores",
+                "region": "${AWS::Region}",
                 "metrics": [
                   ["AWS/Lambda","Invocations","FunctionName","gpa-motor-fletes-${Env}"],
                   ["AWS/Lambda","Errors","FunctionName","gpa-motor-fletes-${Env}",{"color":"#d62728"}],
@@ -882,6 +886,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "Lambda — Latencia P50 / P99",
+                "region": "${AWS::Region}",
                 "metrics": [
                   [{"expression":"SELECT AVG(Duration) FROM SCHEMA(\"AWS/Lambda\",FunctionName) WHERE FunctionName='gpa-motor-fletes-${Env}'","label":"P50 (avg)"}],
                   ["AWS/Lambda","Duration","FunctionName","gpa-motor-fletes-${Env}",{"stat":"p99","label":"P99"}]
@@ -894,6 +899,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "API Gateway — Requests y 4xx/5xx",
+                "region": "${AWS::Region}",
                 "metrics": [
                   ["AWS/ApiGateway","Count","ApiId","${GpaHttpApi}"],
                   ["AWS/ApiGateway","4xx","ApiId","${GpaHttpApi}",{"color":"#ff7f0e"}],
@@ -907,6 +913,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "DynamoDB — Reads y Writes",
+                "region": "${AWS::Region}",
                 "metrics": [
                   ["AWS/DynamoDB","ConsumedReadCapacityUnits","TableName","gpa_fletes_${Env}"],
                   ["AWS/DynamoDB","ConsumedWriteCapacityUnits","TableName","gpa_fletes_${Env}"]
@@ -919,6 +926,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "title": "SQS — Cola principal y DLQ",
+                "region": "${AWS::Region}",
                 "metrics": [
                   ["AWS/SQS","NumberOfMessagesSent","QueueName","gpa-fletes-queue-${Env}"],
                   ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","gpa-fletes-dlq-${Env}",{"color":"#d62728","label":"DLQ (fallas)"}]
