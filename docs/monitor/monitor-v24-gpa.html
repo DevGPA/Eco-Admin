@@ -663,6 +663,108 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 .er-stat{font-family:'IBM Plex Mono',monospace;font-size:9.5px;display:flex;align-items:center;gap:4px;}
 .er-dot{width:6px;height:6px;border-radius:50%;}
 
+
+/* ═══ UPLOAD STEP — Pantalla de carga de documentos post-login ═══ */
+.upload-screen{position:fixed;inset:0;z-index:9998;background:var(--bg);display:flex;
+  flex-direction:column;transition:opacity .35s ease;overflow-y:auto;}
+.upload-screen.hidden{opacity:0;pointer-events:none;}
+
+.upload-top{background:var(--navy);padding:16px 28px;display:flex;align-items:center;gap:14px;border-bottom:2px solid var(--teal);}
+.upload-top .gpa-logo{display:flex;align-items:center;gap:10px;}
+.upload-top .gpa-w1{font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;color:#fff;}
+.upload-top .gpa-w2{font-family:'Nunito Sans',sans-serif;font-size:9px;color:rgba(255,255,255,.5);}
+.upload-top-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.upload-user{font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:5px;}
+.upload-user .ud{width:5px;height:5px;border-radius:50%;background:var(--teal);}
+.upload-skip{font-family:'Nunito Sans',sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);
+  background:transparent;border:1px solid rgba(255,255,255,.15);padding:5px 14px;border-radius:6px;cursor:pointer;transition:all .12s;}
+.upload-skip:hover{color:#fff;border-color:rgba(255,255,255,.3);}
+
+.upload-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 28px;gap:0;}
+
+.upload-hero{text-align:center;max-width:560px;margin-bottom:32px;}
+.upload-hero-step{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--teal);
+  letter-spacing:.15em;text-transform:uppercase;font-weight:700;margin-bottom:10px;}
+.upload-hero-title{font-family:'Nunito',sans-serif;font-size:28px;font-weight:800;
+  color:var(--navy);line-height:1.15;margin-bottom:8px;}
+.upload-hero-sub{font-size:13.5px;color:var(--ink3);line-height:1.6;}
+
+/* Drop zone */
+.upload-drop{width:100%;max-width:640px;border:2px dashed var(--teal-l);border-radius:16px;
+  padding:48px 32px;text-align:center;cursor:pointer;transition:all .2s;
+  background:var(--p);position:relative;}
+.upload-drop:hover,.upload-drop.dragover{border-color:var(--teal);background:var(--teal-bg);
+  box-shadow:0 0 0 6px rgba(58,173,173,.08);}
+.upload-drop-icon{width:56px;height:56px;margin:0 auto 14px;border-radius:14px;
+  background:linear-gradient(135deg,var(--teal-bg),rgba(58,173,173,.15));
+  display:grid;place-items:center;border:1px solid rgba(58,173,173,.2);}
+.upload-drop-icon svg{width:24px;height:24px;color:var(--teal);}
+.upload-drop-title{font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;
+  color:var(--navy);margin-bottom:6px;}
+.upload-drop-sub{font-size:12.5px;color:var(--ink3);margin-bottom:16px;line-height:1.5;}
+.upload-drop-btn{display:inline-flex;align-items:center;gap:6px;background:var(--navy);
+  color:#fff;border:none;padding:10px 22px;border-radius:8px;font-family:'Nunito',sans-serif;
+  font-size:13px;font-weight:800;cursor:pointer;transition:all .13s;}
+.upload-drop-btn:hover{background:#243045;box-shadow:0 4px 16px rgba(28,37,53,.25);}
+.upload-drop-or{font-size:11px;color:var(--ink3);margin:12px 0 0;font-family:'IBM Plex Mono',monospace;}
+
+/* Results after classification */
+.upload-results{width:100%;max-width:640px;margin-top:24px;display:none;}
+.upload-results.show{display:block;}
+
+.ur-stats{display:flex;gap:12px;justify-content:center;margin-bottom:16px;flex-wrap:wrap;}
+.ur-stat{background:var(--p);border:1px solid var(--ln);border-radius:10px;padding:12px 18px;
+  text-align:center;min-width:80px;}
+.ur-stat-n{font-family:'Nunito',sans-serif;font-size:22px;font-weight:800;line-height:1;}
+.ur-stat-n.teal{color:var(--teal);}
+.ur-stat-n.go{color:var(--go);}
+.ur-stat-n.navy{color:var(--navy);}
+.ur-stat-n.warn{color:var(--warn-m);}
+.ur-stat-l{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3);
+  letter-spacing:.06em;text-transform:uppercase;margin-top:4px;}
+
+.ur-files{background:var(--p);border:1px solid var(--ln);border-radius:12px;overflow:hidden;
+  max-height:240px;overflow-y:auto;}
+.ur-file{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--ln);
+  font-size:12px;transition:background .1s;}
+.ur-file:last-child{border:none;}
+.ur-file:hover{background:var(--p2);}
+.ur-file-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.ur-file-icon.fv{background:var(--go);}
+.ur-file-icon.cp{background:var(--navy);}
+.ur-file-icon.ptx{background:var(--teal);}
+.ur-file-icon.cfdi{background:#7030A0;}
+.ur-file-icon.xml{background:var(--warn-m);}
+.ur-file-icon.unk{background:var(--ink3);}
+.ur-file-name{flex:1;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ur-file-type{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;
+  padding:2px 6px;border-radius:3px;}
+.ur-file-type.fv{background:var(--go-bg);color:var(--go);}
+.ur-file-type.cp{background:var(--navy-bg);color:var(--navy);}
+.ur-file-type.ptx{background:var(--teal-bg);color:var(--teal);}
+.ur-file-type.cfdi{background:#F3EBFA;color:#561A70;}
+.ur-file-type.xml{background:var(--warn-bg);color:var(--warn-m);}
+.ur-file-type.unk{background:var(--p3);color:var(--ink3);}
+
+.ur-actions{display:flex;gap:10px;justify-content:center;margin-top:20px;}
+.ur-eval-btn{background:var(--navy);color:#fff;border:none;padding:12px 28px;border-radius:10px;
+  font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;
+  display:flex;align-items:center;gap:8px;transition:all .13s;letter-spacing:.01em;}
+.ur-eval-btn:hover{background:#243045;box-shadow:0 6px 20px rgba(28,37,53,.3);}
+.ur-eval-btn:disabled{opacity:.5;cursor:not-allowed;}
+.ur-back-btn{background:transparent;color:var(--ink3);border:1px solid var(--ln);
+  padding:12px 20px;border-radius:10px;font-family:'Nunito Sans',sans-serif;font-size:13px;
+  font-weight:700;cursor:pointer;transition:all .13s;}
+.ur-back-btn:hover{border-color:var(--ln2);color:var(--ink);}
+
+/* Progress bar */
+.upload-progress{width:100%;max-width:640px;margin-top:20px;display:none;}
+.upload-progress.show{display:block;}
+.up-bar-bg{height:6px;background:var(--p3);border-radius:4px;overflow:hidden;margin-bottom:8px;}
+.up-bar-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--go));border-radius:4px;
+  transition:width .3s ease;width:0%;}
+.up-status{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink3);text-align:center;}
+
 </style>
 </head>
 <body>
@@ -728,6 +830,77 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 </div>
 
 <div class="ovl" id="ovl" onclick="closeFolder()"></div>
+
+
+<!-- ══ UPLOAD SCREEN — Paso 2 después del login ══ -->
+<div class="upload-screen hidden" id="uploadScreen" style="display:none;">
+  <div class="upload-top">
+    <div class="gpa-logo">
+      <svg viewBox="0 0 36 36" width="32" height="32" fill="none">
+        <circle cx="18" cy="18" r="17" fill="#1C2535" stroke="rgba(58,173,173,.4)" stroke-width="1"/>
+        <path d="M4 22 Q9 17 14 22 Q19 27 24 22 Q29 17 34 22" stroke="#3AADAD" stroke-width="1.5" fill="none" opacity=".6"/>
+        <text x="18" y="19" text-anchor="middle" font-family="Nunito,Arial" font-weight="900" font-size="11" fill="white">GPA</text>
+      </svg>
+      <div>
+        <div class="gpa-w1">GPA Admin</div>
+        <div class="gpa-w2">Motor de Fletes v2.4</div>
+      </div>
+    </div>
+    <div class="upload-top-right">
+      <div class="upload-user"><span class="ud"></span><span id="uploadUserEmail">—</span></div>
+      <button class="upload-skip" onclick="skipToMonitor()">Ir al monitor →</button>
+    </div>
+  </div>
+
+  <div class="upload-body">
+    <div class="upload-hero">
+      <div class="upload-hero-step">Paso 1 de 2</div>
+      <div class="upload-hero-title">Selecciona los documentos<br>a evaluar</div>
+      <div class="upload-hero-sub">Selecciona la carpeta con los PDFs de cartas porte y facturas de venta del período. El motor los clasificará automáticamente y los evaluará contra las 6 capas de reglas.</div>
+    </div>
+
+    <!-- Drop zone -->
+    <div class="upload-drop" id="uploadDrop"
+         onclick="document.getElementById('uploadInput').click()"
+         ondragover="event.preventDefault();this.classList.add('dragover')"
+         ondragleave="this.classList.remove('dragover')"
+         ondrop="event.preventDefault();this.classList.remove('dragover');handleDrop(event)">
+      <div class="upload-drop-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="11" x2="12" y2="17"/>
+          <polyline points="9 14 12 11 15 14"/>
+        </svg>
+      </div>
+      <div class="upload-drop-title">Seleccionar carpeta de documentos</div>
+      <div class="upload-drop-sub">Arrastra la carpeta aquí o haz clic para buscar<br>Formatos: PDF · XML · CFDI 4.0</div>
+      <button class="upload-drop-btn" onclick="event.stopPropagation();triggerUpload()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Seleccionar carpeta
+      </button>
+      <div class="upload-drop-or">o arrastra archivos PDF directamente</div>
+    </div>
+    <input type="file" id="uploadInput" webkitdirectory multiple accept=".pdf,.xml" style="display:none" onchange="handleUploadInput(this)">
+    <input type="file" id="uploadFiles" multiple accept=".pdf,.xml" style="display:none" onchange="handleFileInput(this)">
+
+    <!-- Results after classification -->
+    <div class="upload-results" id="uploadResults">
+      <div class="ur-stats" id="urStats"></div>
+      <div class="ur-files" id="urFiles"></div>
+      <div class="upload-progress" id="uploadProgress">
+        <div class="up-bar-bg"><div class="up-bar-fill" id="upBarFill"></div></div>
+        <div class="up-status" id="upStatus">Preparando evaluación...</div>
+      </div>
+      <div class="ur-actions" id="urActions">
+        <button class="ur-back-btn" onclick="resetUpload()">← Cambiar carpeta</button>
+        <button class="ur-eval-btn" id="urEvalBtn" onclick="startEvaluation()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Evaluar documentos
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ══ TOPBAR GPA ══ -->
 <header class="tb">
@@ -1596,8 +1769,10 @@ function onLoginSuccess(email, silent) {
     document.getElementById('userEmail').textContent = email;
   }
 
+  // Mostrar pantalla de carga de documentos
   if (!silent) {
-    console.log('%c[GPA] %cSesión iniciada: ' + email,
+    showUploadScreen(email);
+    console.log('%c[GPA] %cSesión iniciada: ' + email + ' → Seleccionar documentos',
       'color:#3AADAD;font-weight:bold', 'color:#8A96B0');
   }
 }
@@ -1883,6 +2058,182 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modeSub) modeSub.textContent = 'General de Productos para el Agua · Modo de prueba';
   }
 });
+
+
+// ── UPLOAD SCREEN — Clasificación y evaluación de documentos ─────
+let uploadedFiles = [];
+let classifiedFiles = [];
+
+function showUploadScreen(email) {
+  const us = document.getElementById('uploadScreen');
+  us.style.display = '';
+  setTimeout(() => us.classList.remove('hidden'), 10);
+  document.getElementById('uploadUserEmail').textContent = email || '';
+}
+
+function skipToMonitor() {
+  const us = document.getElementById('uploadScreen');
+  us.classList.add('hidden');
+  setTimeout(() => us.style.display = 'none', 350);
+}
+
+function triggerUpload() {
+  if (window.showDirectoryPicker) {
+    (async () => {
+      try {
+        const dir = await window.showDirectoryPicker({ mode: 'read' });
+        const files = [];
+        for await (const entry of dir.values()) {
+          if (entry.kind === 'file') {
+            const file = await entry.getFile();
+            if (/\.(pdf|xml)$/i.test(file.name)) {
+              files.push({ name: file.name, size: file.size, file: file });
+            }
+          }
+        }
+        if (files.length) processUploadedFiles(files, dir.name);
+      } catch(e) { if (e.name !== 'AbortError') console.error(e); }
+    })();
+  } else {
+    document.getElementById('uploadInput').click();
+  }
+}
+
+function handleUploadInput(input) {
+  const files = Array.from(input.files)
+    .filter(f => /\.(pdf|xml)$/i.test(f.name))
+    .map(f => ({ name: f.name, size: f.size, file: f }));
+  if (files.length) {
+    const folder = files[0].file.webkitRelativePath?.split('/')[0] || 'Documentos';
+    processUploadedFiles(files, folder);
+  }
+}
+
+function handleFileInput(input) {
+  const files = Array.from(input.files)
+    .filter(f => /\.(pdf|xml)$/i.test(f.name))
+    .map(f => ({ name: f.name, size: f.size, file: f }));
+  if (files.length) processUploadedFiles(files, 'Archivos seleccionados');
+}
+
+function handleDrop(event) {
+  const items = event.dataTransfer.items || [];
+  const files = [];
+  Array.from(event.dataTransfer.files).forEach(f => {
+    if (/\.(pdf|xml)$/i.test(f.name)) files.push({ name: f.name, size: f.size, file: f });
+  });
+  if (files.length) processUploadedFiles(files, 'Archivos arrastrados');
+}
+
+function classifyFile(name) {
+  const n = name.toUpperCase();
+  if (/^(FA|FC|FV|FM|FLC)/.test(n)) return 'fv';
+  if (/^(GCCR|GCR)/.test(n)) return 'ptx';
+  if (/^(FAC|GDL|ACRED)/.test(n)) return 'cfdi';
+  if (/^(1[0-9]{8,}|CP|JC|HP|JD|M8|VP)/.test(n)) return 'cp';
+  if (n.endsWith('.XML')) return 'xml';
+  return 'unk';
+}
+
+function processUploadedFiles(files, folderName) {
+  uploadedFiles = files;
+  classifiedFiles = files.map(f => ({ ...f, type: classifyFile(f.name) }));
+
+  const counts = { fv: 0, cp: 0, ptx: 0, cfdi: 0, xml: 0, unk: 0 };
+  classifiedFiles.forEach(f => counts[f.type]++);
+
+  // Ocultar drop zone
+  document.getElementById('uploadDrop').style.display = 'none';
+
+  // Mostrar resultados
+  const results = document.getElementById('uploadResults');
+  results.classList.add('show');
+
+  // Stats
+  const labels = { fv:'FV',cp:'Carta Porte',ptx:'PTX/GCCR',cfdi:'CFDI 4.0',xml:'XML',unk:'Otros' };
+  const colors = { fv:'go',cp:'navy',ptx:'teal',cfdi:'navy',xml:'warn',unk:'navy' };
+  document.getElementById('urStats').innerHTML =
+    `<div class="ur-stat"><div class="ur-stat-n teal">${files.length}</div><div class="ur-stat-l">Total archivos</div></div>` +
+    Object.entries(counts).filter(([,n]) => n > 0).map(([t, n]) =>
+      `<div class="ur-stat"><div class="ur-stat-n ${colors[t]}">${n}</div><div class="ur-stat-l">${labels[t]}</div></div>`
+    ).join('');
+
+  // File list
+  document.getElementById('urFiles').innerHTML = classifiedFiles.map(f =>
+    `<div class="ur-file">` +
+    `<div class="ur-file-icon ${f.type}"></div>` +
+    `<div class="ur-file-name">${f.name}</div>` +
+    `<span class="ur-file-type ${f.type}">${labels[f.type]}</span>` +
+    `</div>`
+  ).join('');
+
+  // Actualizar hero
+  document.querySelector('.upload-hero-step').textContent = 'Paso 2 de 2';
+  document.querySelector('.upload-hero-title').innerHTML =
+    `${files.length} documentos clasificados<br><span style="color:var(--teal)">${folderName}</span>`;
+  document.querySelector('.upload-hero-sub').textContent =
+    `${counts.cp + counts.cfdi} cartas porte · ${counts.fv} facturas de venta · ` +
+    `${counts.ptx} PTX/GCCR · ${counts.xml} XML`;
+
+  document.getElementById('urActions').style.display = 'flex';
+  document.getElementById('uploadProgress').classList.remove('show');
+}
+
+function resetUpload() {
+  uploadedFiles = [];
+  classifiedFiles = [];
+  document.getElementById('uploadDrop').style.display = '';
+  document.getElementById('uploadResults').classList.remove('show');
+  document.querySelector('.upload-hero-step').textContent = 'Paso 1 de 2';
+  document.querySelector('.upload-hero-title').innerHTML = 'Selecciona los documentos<br>a evaluar';
+  document.querySelector('.upload-hero-sub').textContent =
+    'Selecciona la carpeta con los PDFs de cartas porte y facturas de venta del período. El motor los clasificará automáticamente y los evaluará contra las 6 capas de reglas.';
+}
+
+async function startEvaluation() {
+  const btn = document.getElementById('urEvalBtn');
+  btn.disabled = true;
+  btn.innerHTML = 'Evaluando...';
+  document.getElementById('urActions').style.display = 'none';
+
+  const progress = document.getElementById('uploadProgress');
+  progress.classList.add('show');
+  const bar = document.getElementById('upBarFill');
+  const status = document.getElementById('upStatus');
+
+  const cps  = classifiedFiles.filter(f => ['cp','cfdi','ptx'].includes(f.type));
+  const fvs  = classifiedFiles.filter(f => f.type === 'fv');
+  const total = cps.length || 1;
+  let processed = 0;
+
+  // Simular evaluación (en producción → POST /evaluar por cada CP+FVs)
+  for (const cp of cps) {
+    processed++;
+    const pct = Math.round(processed / total * 100);
+    bar.style.width = pct + '%';
+    status.textContent = `Evaluando ${processed}/${total} · ${cp.name}`;
+
+    // Delay simulado (en prod → await api.evaluar(...))
+    await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+  }
+
+  bar.style.width = '100%';
+  status.textContent = `✓ ${total} documentos evaluados · Cargando monitor...`;
+
+  // Pasar los archivos al folder panel del monitor
+  if (typeof procFiles === 'function') {
+    procFiles(classifiedFiles.map(f => ({ name: f.name, size: f.size || 0 })));
+    const fbtn = document.getElementById('fbtn');
+    if (fbtn) fbtn.classList.add('loaded');
+  }
+
+  // Transición al monitor
+  setTimeout(() => {
+    const us = document.getElementById('uploadScreen');
+    us.classList.add('hidden');
+    setTimeout(() => us.style.display = 'none', 350);
+  }, 800);
+}
 
 </script>
 </body>
