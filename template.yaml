@@ -1,0 +1,1012 @@
+# template.yaml
+# AWS SAM — Motor de Fletes GPA v2.4
+# ─────────────────────────────────────────────────────────────────
+# Recursos desplegados:
+#   - Lambda          gpa-motor-fletes-{env}
+#   - API Gateway     HTTP API v2 + JWT Authorizer
+#   - DynamoDB        gpa_fletes_{env}  (single-table, 4 GSIs)
+#   - S3              gpa-documentos-{env} (trigger → Lambda)
+#   - SQS + DLQ       gpa-fletes-queue-{env}
+#   - Cognito         UserPool + Client + 4 grupos
+#   - SNS             Alertas operativas
+#   - CloudWatch      Log Groups + Alarms
+#   - IAM             Rol con mínimo privilegio
+#
+# Deploy:
+#   sam build
+#   sam deploy --guided                  (primera vez)
+#   sam deploy --config-env prod         (siguientes)
+#
+# Ambientes:
+#   dev     → sam deploy --config-env dev
+#   staging → sam deploy --config-env staging
+#   prod    → sam deploy --config-env prod
+# ─────────────────────────────────────────────────────────────────
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GPA Admin · Motor de Fletes v2.4
+  Infraestructura completa: Lambda · API Gateway HTTP API ·
+  DynamoDB · S3 · SQS · Cognito · SNS · CloudWatch
+
+# ═══════════════════════════════════════════════════════════════════
+# GLOBALS — configuración compartida para todas las funciones SAM
+# ═══════════════════════════════════════════════════════════════════
+Globals:
+  Function:
+    Runtime:      python3.12
+    Architectures: [arm64]        # Graviton2 — 20% más barato, 20% más rápido
+    MemorySize:   512
+    Timeout:      30
+    Tracing:      Active          # AWS X-Ray habilitado
+    Layers:
+      - !Ref DependenciasLayer
+    Environment:
+      Variables:
+        DYNAMO_TABLE:             !Ref FletesTable
+        S3_BUCKET:                !Ref DocumentosBucket
+        SQS_QUEUE_URL:            !Ref FletesQueue
+        SNS_ALERTAS_ARN:          !Ref AlertasTopic
+        ALLOWED_ORIGIN:           !Ref AllowedOrigin
+        ENV:                      !Ref Env
+        POWERTOOLS_SERVICE_NAME:  gpa-motor-fletes
+        LOG_LEVEL:                !If [IsProd, WARNING, INFO]
+        # Parámetros del motor (sobreescribibles sin redespliegue)
+        MONTO_MIN_GENERAL:        !Ref MontoMinGeneral
+        MONTO_MIN_COSTAL:         !Ref MontoMinCostal
+        MONTO_MIN_EQUIPO_COSTAL:  !Ref MontoMinEquipoCostal
+        MONTO_MIN_ACCESORIOS:     !Ref MontoMinAccesorios
+        PROP_MIN_ELEGIBLE:        !Ref PropMinElegible
+        UMBRAL_FLETE_WARN:        !Ref UmbralFleteWarn
+        UMBRAL_FLETE_CRIT:        !Ref UmbralFleteCrit
+        UMBRAL_TARIFA_DISP:       !Ref UmbralTarifaDisp
+        UMBRAL_CARGO_ENVIO:       !Ref UmbralCargoEnvio
+        BACKORDER_ENABLED:        !Ref BackorderEnabled
+
+  Api:
+    Cors:
+      AllowOrigin:  !Sub "'${AllowedOrigin}'"
+      AllowHeaders: "'Content-Type,Authorization,X-GPA-UserId,X-GPA-Source'"
+      AllowMethods: "'GET,POST,OPTIONS'"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PARÁMETROS
+# ═══════════════════════════════════════════════════════════════════
+Parameters:
+
+  Env:
+    Type:          String
+    AllowedValues: [dev, staging, prod]
+    Default:       dev
+    Description:   Ambiente de despliegue
+
+  AllowedOrigin:
+    Type:    String
+    Default: '*'
+    Description: >
+      Origen CORS. En prod usar dominio específico:
+      https://admin.gpa.com.mx
+
+  NotificacionesEmail:
+    Type:    String
+    Default: ''
+    Description: Email para alertas SNS (opcional)
+
+  LambdaMemoryMB:
+    Type:          Number
+    Default:       512
+    AllowedValues: [256, 512, 1024, 2048]
+    Description:   Memoria asignada a la función Lambda
+
+  # ── Parámetros del motor ──────────────────────────────────────
+  MontoMinGeneral:
+    Type: String
+    Default: '350'
+    Description: Monto mínimo pedido limpio (USD)
+
+  MontoMinCostal:
+    Type: String
+    Default: '1000'
+    Description: Monto mínimo con EXCLUIDO_GRANDE (USD)
+
+  MontoMinEquipoCostal:
+    Type: String
+    Default: '500'
+    Description: Monto mínimo equipo con costal (USD)
+
+  MontoMinAccesorios:
+    Type: String
+    Default: '1000'
+    Description: Monto mínimo con accesorios (USD)
+
+  PropMinElegible:
+    Type: String
+    Default: '0.50'
+    Description: Proporción mínima elegible con accesorios (0.50 = 50%)
+
+  UmbralFleteWarn:
+    Type: String
+    Default: '0.15'
+    Description: Umbral % flete advertencia R-501
+
+  UmbralFleteCrit:
+    Type: String
+    Default: '0.30'
+    Description: Umbral % flete crítico R-502
+
+  UmbralTarifaDisp:
+    Type: String
+    Default: '0.10'
+    Description: Umbral variación tarifa dispersión R-802
+
+  UmbralCargoEnvio:
+    Type: String
+    Default: '0.01'
+    Description: Umbral delta FV vs CP cargo envío R-061
+
+  BackorderEnabled:
+    Type:          String
+    Default:       'true'
+    AllowedValues: ['true', 'false']
+    Description:   Habilitar procesamiento de Back Orders GS0229
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CONDICIONES
+# ═══════════════════════════════════════════════════════════════════
+Conditions:
+  IsProd:     !Equals [!Ref Env, prod]
+  IsNotProd:  !Not [!Equals [!Ref Env, prod]]
+  IsDev:      !Equals [!Ref Env, dev]
+  TieneEmail: !Not [!Equals [!Ref NotificacionesEmail, '']]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# RECURSOS
+# ═══════════════════════════════════════════════════════════════════
+Resources:
+
+  # ═══════════════════════════════════════════════════════════════
+  # 1. LAMBDA — función principal del motor
+  # ═══════════════════════════════════════════════════════════════
+  MotorFletesFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:  !Sub gpa-motor-fletes-${Env}
+      Description:   Motor de Fletes GPA v2.4 — evaluación, DynamoDB, S3, SQS
+      Handler:       handler.lambda_handler
+      CodeUri:       ./                         # raíz del proyecto
+      MemorySize:    !Ref LambdaMemoryMB
+      ReservedConcurrentExecutions: !If [IsProd, 50, 10]
+
+      # ── Eventos que disparan la Lambda ────────────────────────
+      Events:
+
+        # API Gateway — POST /evaluar
+        ApiEvaluar:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: POST
+            Path:   /evaluar
+
+        # API Gateway — POST /aprobar
+        ApiAprobar:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: POST
+            Path:   /aprobar
+
+        # API Gateway — POST /rechazar
+        ApiRechazar:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: POST
+            Path:   /rechazar
+
+        # API Gateway — POST /escalar
+        ApiEscalar:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: POST
+            Path:   /escalar
+
+        # API Gateway — GET /monitor
+        ApiMonitor:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /monitor
+
+        # API Gateway — GET /kpis
+        ApiKpis:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /kpis
+
+        # API Gateway — GET /solicitud/{id}
+        ApiSolicitud:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /solicitud/{id}
+
+        # API Gateway — GET /solicitudes
+        ApiSolicitudes:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /solicitudes
+
+        # API Gateway — GET /auditor/fletera
+        ApiAuditorFletera:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /auditor/fletera
+
+        # API Gateway — GET /auditor/sucursal
+        ApiAuditorSucursal:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /auditor/sucursal
+
+        # API Gateway — GET /auditor/destino
+        ApiAuditorDestino:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /auditor/destino
+
+        # API Gateway — GET /health (sin auth)
+        ApiHealth:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /health
+
+        # S3 — nuevo PDF en pendientes/
+        S3Documentos:
+          Type: S3
+          Properties:
+            Bucket: !Ref DocumentosBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name:  prefix
+                    Value: pendientes/
+                  - Name:  suffix
+                    Value: .pdf
+
+        # SQS — cola de procesamiento asíncrono
+        SqsCola:
+          Type: SQS
+          Properties:
+            Queue:             !GetAtt FletesQueue.Arn
+            BatchSize:         10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+      # ── Políticas IAM — mínimo privilegio ─────────────────────
+      Policies:
+        # DynamoDB — solo las acciones necesarias
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FletesTable
+        # S3 — leer, escribir y mover documentos
+        - S3CrudPolicy:
+            BucketName: !Ref DocumentosBucket
+        # SQS — consumir cola principal y DLQ
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt FletesQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource:
+                - !GetAtt FletesQueue.Arn
+                - !GetAtt FletesDLQ.Arn
+        # SNS — publicar alertas
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AlertasTopic.TopicName
+        # CloudWatch — métricas personalizadas
+        - CloudWatchPutMetricPolicy: {}
+        # X-Ray — trazabilidad distribuida
+        - Statement:
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+                - xray:GetSamplingRules
+              Resource: '*'
+
+      Tags:
+        Proyecto: GPA-Admin
+        Motor:    v2.4
+        Env:      !Ref Env
+
+    Metadata:
+      BuildMethod: python3.12      # SAM build empaqueta dependencias
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. LAMBDA LAYER — dependencias Python
+  # ═══════════════════════════════════════════════════════════════
+  DependenciasLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:          !Sub gpa-dependencias-${Env}
+      Description:        boto3 aws-lambda-powertools — Motor GPA v2.4
+      ContentUri:         ./layer/
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+      RetentionPolicy: !If [IsProd, Retain, Delete]
+
+    Metadata:
+      BuildMethod: python3.12
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. API GATEWAY — HTTP API v2
+  # ═══════════════════════════════════════════════════════════════
+  GpaHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Env
+      Description: GPA Motor de Fletes v2.4 — HTTP API
+
+      # JWT Authorizer con Cognito
+      Auth:
+        DefaultAuthorizer: CognitoJWT
+        Authorizers:
+          CognitoJWT:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              audience:
+                - !Ref CognitoUserPoolClient
+              issuer: !Sub
+                - https://cognito-idp.${AWS::Region}.amazonaws.com/${PoolId}
+                - PoolId: !Ref CognitoUserPool
+
+      # CORS — configurable por ambiente
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-GPA-UserId
+          - X-GPA-Source
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        MaxAge: 300
+
+      # Throttling
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: !If [IsProd, 100, 20]
+        ThrottlingRateLimit:  !If [IsProd, 50, 10]
+        DetailedMetricsEnabled: true
+
+      # Access Logs
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId",
+           "ip":"$context.identity.sourceIp",
+           "method":"$context.httpMethod",
+           "path":"$context.path",
+           "status":"$context.status",
+           "latencyMs":"$context.responseLatency",
+           "integrationMs":"$context.integrationLatency",
+           "userAgent":"$context.identity.userAgent",
+           "userId":"$context.authorizer.claims.email"}
+
+      Tags:
+        Proyecto: GPA-Admin
+        Env:      !Ref Env
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. DYNAMODB — tabla única single-table design
+  # ═══════════════════════════════════════════════════════════════
+  FletesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:    !Sub gpa_fletes_${Env}
+      BillingMode:  PAY_PER_REQUEST   # on-demand, sin capacidad reservada
+
+      # Cifrado en reposo y PITR en prod
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      DeletionProtectionEnabled: !If [IsProd, true, false]
+
+      # TTL — expiración automática a los 7 años
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled:       true
+
+      # Claves de la tabla
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: estado
+          AttributeType: S
+        - AttributeName: fechaEmision
+          AttributeType: S
+        - AttributeName: origenSucursal
+          AttributeType: S
+        - AttributeName: fletaRFC
+          AttributeType: S
+        - AttributeName: destinoEstado
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+      # ── 4 GSIs ────────────────────────────────────────────────
+      GlobalSecondaryIndexes:
+
+        # GSI-1: Kanban del monitor — filtro por estado y fecha
+        - IndexName: estado-fecha-idx
+          KeySchema:
+            - AttributeName: estado
+              KeyType: HASH
+            - AttributeName: fechaEmision
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL              # proyección completa para el kanban
+
+        # GSI-2: KPIs por sucursal de origen
+        - IndexName: origen-fecha-idx
+          KeySchema:
+            - AttributeName: origenSucursal
+              KeyType: HASH
+            - AttributeName: fechaEmision
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - folioCP
+              - codigoMotor
+              - conceptoMotor
+              - estado
+              - fleteBaseUSD
+              - montoBaseUSD
+              - fletaRFC
+
+        # GSI-3: Auditoría por fletera
+        - IndexName: fletera-fecha-idx
+          KeySchema:
+            - AttributeName: fletaRFC
+              KeyType: HASH
+            - AttributeName: fechaEmision
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - folioCP
+              - estado
+              - codigoMotor
+              - conceptoMotor
+              - destinoEstado
+              - origenSucursal
+              - pctFlete
+
+        # GSI-4: Análisis por destino
+        - IndexName: destino-fecha-idx
+          KeySchema:
+            - AttributeName: destinoEstado
+              KeyType: HASH
+            - AttributeName: fechaEmision
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - folioCP
+              - codigoMotor
+              - estado
+              - origenSucursal
+
+      Tags:
+        - Key:   Proyecto
+          Value: GPA-Admin
+        - Key:   Env
+          Value: !Ref Env
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 5. S3 — bucket de documentos PDF/XML
+  # ═══════════════════════════════════════════════════════════════
+  DocumentosBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      BucketName: !Sub gpa-documentos-${Env}-${AWS::AccountId}
+
+      # Versionado habilitado
+      VersioningConfiguration:
+        Status: Enabled
+
+      # Cifrado AES-256
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      # Bloquear acceso público
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:        true
+        BlockPublicPolicy:      true
+        IgnorePublicAcls:       true
+        RestrictPublicBuckets:  true
+
+      # Reglas de ciclo de vida
+      LifecycleConfiguration:
+        Rules:
+          # Pendientes sin procesar → expirar a 30 días
+          - Id:     ExpirarPendientes
+            Status: Enabled
+            Filter:
+              Prefix: pendientes/
+            ExpirationInDays: 30
+          # Procesados → mover a IA a 90 días, Glacier a 1 año
+          - Id:     ArchivarProcesados
+            Status: Enabled
+            Filter:
+              Prefix: procesados/
+            Transitions:
+              - StoritionInDays: 90
+                StorageClass:   STANDARD_IA
+              - TransitionInDays: 365
+                StorageClass:   GLACIER
+
+      # CORS para subir directamente desde el monitor
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: [!Ref AllowedOrigin]
+            MaxAge:         3600
+
+      Tags:
+        - Key:   Proyecto
+          Value: GPA-Admin
+        - Key:   Env
+          Value: !Ref Env
+
+  # Política del bucket: forzar HTTPS
+  DocumentosBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DocumentosBucket
+      PolicyDocument:
+        Statement:
+          - Sid:       DenyHTTP
+            Effect:    Deny
+            Principal: '*'
+            Action:    's3:*'
+            Resource:
+              - !GetAtt DocumentosBucket.Arn
+              - !Sub ${DocumentosBucket.Arn}/*
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 6. SQS — cola de procesamiento asíncrono
+  # ═══════════════════════════════════════════════════════════════
+  FletesQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:              !Sub gpa-fletes-queue-${Env}
+      VisibilityTimeout:      60       # > Lambda timeout
+      MessageRetentionPeriod: 86400    # 1 día
+      ReceiveMessageWaitTimeSeconds: 20 # long polling
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FletesDLQ.Arn
+        maxReceiveCount:     3         # 3 intentos antes de DLQ
+      Tags:
+        - Key:   Proyecto
+          Value: GPA-Admin
+
+  FletesDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:              !Sub gpa-fletes-dlq-${Env}
+      MessageRetentionPeriod: 1209600  # 14 días
+      Tags:
+        - Key:   Proyecto
+          Value: GPA-Admin
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 7. COGNITO — usuarios y grupos del motor
+  # ═══════════════════════════════════════════════════════════════
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub gpa-motor-users-${Env}
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      PasswordPolicy:
+        MinimumLength:    10
+        RequireUppercase: true
+        RequireLowercase: true
+        RequireNumbers:   true
+        RequireSymbols:   false
+        TemporaryPasswordValidityDays: 7
+      MfaConfiguration: !If [IsProd, OPTIONAL, OFF]
+      Schema:
+        - Name:     email
+          Required: true
+          Mutable:  true
+        - Name:     custom:rol
+          AttributeDataType: String
+          Mutable:  true
+          StringAttributeConstraints:
+            MinLength: '1'
+            MaxLength: '50'
+        - Name:     custom:sucursal
+          AttributeDataType: String
+          Mutable:  true
+          StringAttributeConstraints:
+            MinLength: '1'
+            MaxLength: '10'
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name:     verified_email
+            Priority: 1
+      UserPoolTags:
+        Proyecto: GPA-Admin
+        Env:      !Ref Env
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName:    !Sub gpa-motor-client-${Env}
+      UserPoolId:    !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+      AccessTokenValidity:  8        # horas
+      IdTokenValidity:      8
+      RefreshTokenValidity: 30       # días
+      TokenValidityUnits:
+        AccessToken:  hours
+        IdToken:      hours
+        RefreshToken: days
+      PreventUserExistenceErrors: ENABLED
+
+  # Grupos Cognito (roles del sistema)
+  GrupoMotor:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName:   motor
+      UserPoolId:  !Ref CognitoUserPool
+      Description: Evalúa solicitudes — POST /evaluar
+      Precedence:  10
+
+  GrupoAprobador1:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName:   aprobador1
+      UserPoolId:  !Ref CognitoUserPool
+      Description: Aprueba / rechaza / escala — Gerencia Administrativa
+      Precedence:  5
+
+  GrupoAprobador2:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName:   aprobador2
+      UserPoolId:  !Ref CognitoUserPool
+      Description: Aprueba escalamientos — Dirección General
+      Precedence:  1
+
+  GrupoAuditor:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName:   auditor
+      UserPoolId:  !Ref CognitoUserPool
+      Description: Solo lectura — Control Interno
+      Precedence:  20
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 8. SNS — alertas y notificaciones
+  # ═══════════════════════════════════════════════════════════════
+  AlertasTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:    !Sub gpa-alertas-${Env}
+      DisplayName:  GPA Motor Fletes — Alertas
+
+  AlertasEmailSub:
+    Type: AWS::SNS::Subscription
+    Condition: TieneEmail
+    Properties:
+      TopicArn:  !Ref AlertasTopic
+      Protocol:  email
+      Endpoint:  !Ref NotificacionesEmail
+
+
+  # ═══════════════════════════════════════════════════════════════
+  # 9. CLOUDWATCH — logs y alarmas
+  # ═══════════════════════════════════════════════════════════════
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:    !Sub /aws/apigateway/gpa-motor-${Env}
+      RetentionInDays: !If [IsProd, 90, 14]
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:    !Sub /aws/lambda/gpa-motor-fletes-${Env}
+      RetentionInDays: !If [IsProd, 90, 14]
+
+  # Alarma: errores en Lambda
+  AlarmLambdaErrors:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:          !Sub gpa-lambda-errors-${Env}
+      AlarmDescription:   Errores en la función Lambda del motor
+      MetricName:         Errors
+      Namespace:          AWS/Lambda
+      Dimensions:
+        - Name:  FunctionName
+          Value: !Ref MotorFletesFn
+      Statistic:          Sum
+      Period:             300
+      EvaluationPeriods:  1
+      Threshold:          3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData:   notBreaching
+      AlarmActions:
+        - !Ref AlertasTopic
+
+  # Alarma: latencia alta
+  AlarmLambdaLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:          !Sub gpa-lambda-latency-${Env}
+      AlarmDescription:   Latencia P99 de Lambda > 10 segundos
+      MetricName:         Duration
+      Namespace:          AWS/Lambda
+      Dimensions:
+        - Name:  FunctionName
+          Value: !Ref MotorFletesFn
+      ExtendedStatistic:  p99
+      Period:             60
+      EvaluationPeriods:  3
+      Threshold:          10000
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertasTopic
+
+  # Alarma: mensajes en DLQ
+  AlarmDLQ:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:          !Sub gpa-dlq-mensajes-${Env}
+      AlarmDescription:   Solicitudes fallidas en la cola DLQ
+      MetricName:         ApproximateNumberOfMessagesVisible
+      Namespace:          AWS/SQS
+      Dimensions:
+        - Name:  QueueName
+          Value: !GetAtt FletesDLQ.QueueName
+      Statistic:          Sum
+      Period:             300
+      EvaluationPeriods:  1
+      Threshold:          1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlertasTopic
+
+  # Alarma: errores 5xx en API Gateway
+  AlarmApi5xx:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:          !Sub gpa-api-5xx-${Env}
+      AlarmDescription:   Errores 5XX en API Gateway
+      MetricName:         5xx
+      Namespace:          AWS/ApiGateway
+      Dimensions:
+        - Name:  ApiId
+          Value: !Ref GpaHttpApi
+      Statistic:          Sum
+      Period:             300
+      EvaluationPeriods:  1
+      Threshold:          5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlertasTopic
+
+  # Dashboard CloudWatch
+  GpaDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub GPA-Motor-Fletes-${Env}
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda — Invocaciones y Errores",
+                "metrics": [
+                  ["AWS/Lambda","Invocations","FunctionName","gpa-motor-fletes-${Env}"],
+                  ["AWS/Lambda","Errors","FunctionName","gpa-motor-fletes-${Env}",{"color":"#d62728"}],
+                  ["AWS/Lambda","Throttles","FunctionName","gpa-motor-fletes-${Env}",{"color":"#ff7f0e"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda — Latencia P50 / P99",
+                "metrics": [
+                  [{"expression":"SELECT AVG(Duration) FROM SCHEMA(\"AWS/Lambda\",FunctionName) WHERE FunctionName='gpa-motor-fletes-${Env}'","label":"P50 (avg)"}],
+                  ["AWS/Lambda","Duration","FunctionName","gpa-motor-fletes-${Env}",{"stat":"p99","label":"P99"}]
+                ],
+                "period": 60,
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "API Gateway — Requests y 4xx/5xx",
+                "metrics": [
+                  ["AWS/ApiGateway","Count","ApiId","${GpaHttpApi}"],
+                  ["AWS/ApiGateway","4xx","ApiId","${GpaHttpApi}",{"color":"#ff7f0e"}],
+                  ["AWS/ApiGateway","5xx","ApiId","${GpaHttpApi}",{"color":"#d62728"}]
+                ],
+                "period": 300,
+                "stat": "Sum"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "DynamoDB — Reads y Writes",
+                "metrics": [
+                  ["AWS/DynamoDB","ConsumedReadCapacityUnits","TableName","gpa_fletes_${Env}"],
+                  ["AWS/DynamoDB","ConsumedWriteCapacityUnits","TableName","gpa_fletes_${Env}"]
+                ],
+                "period": 300,
+                "stat": "Sum"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "SQS — Cola principal y DLQ",
+                "metrics": [
+                  ["AWS/SQS","NumberOfMessagesSent","QueueName","gpa-fletes-queue-${Env}"],
+                  ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","gpa-fletes-dlq-${Env}",{"color":"#d62728","label":"DLQ (fallas)"}]
+                ],
+                "period": 300,
+                "stat": "Sum"
+              }
+            }
+          ]
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# OUTPUTS
+# ═══════════════════════════════════════════════════════════════════
+Outputs:
+
+  # API
+  ApiUrl:
+    Description: URL base de la API GPA Motor de Fletes
+    Value:        !Sub https://${GpaHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
+    Export:
+      Name: !Sub GpaApiUrl-${Env}
+
+  ApiId:
+    Value: !Ref GpaHttpApi
+    Export:
+      Name: !Sub GpaApiId-${Env}
+
+  # Lambda
+  LambdaArn:
+    Value: !GetAtt MotorFletesFn.Arn
+    Export:
+      Name: !Sub GpaLambdaArn-${Env}
+
+  LambdaName:
+    Value: !Ref MotorFletesFn
+    Export:
+      Name: !Sub GpaLambdaName-${Env}
+
+  # DynamoDB
+  TableName:
+    Description: Nombre de la tabla DynamoDB
+    Value:        !Ref FletesTable
+    Export:
+      Name: !Sub GpaTableName-${Env}
+
+  TableArn:
+    Value: !GetAtt FletesTable.Arn
+    Export:
+      Name: !Sub GpaTableArn-${Env}
+
+  # S3
+  BucketName:
+    Description: Bucket de documentos PDF/XML
+    Value:        !Ref DocumentosBucket
+    Export:
+      Name: !Sub GpaBucketName-${Env}
+
+  # SQS
+  QueueUrl:
+    Value: !Ref FletesQueue
+    Export:
+      Name: !Sub GpaQueueUrl-${Env}
+
+  DLQUrl:
+    Value: !Ref FletesDLQ
+    Export:
+      Name: !Sub GpaDLQUrl-${Env}
+
+  # Cognito
+  UserPoolId:
+    Value: !Ref CognitoUserPool
+    Export:
+      Name: !Sub GpaUserPoolId-${Env}
+
+  UserPoolClientId:
+    Value: !Ref CognitoUserPoolClient
+    Export:
+      Name: !Sub GpaUserPoolClientId-${Env}
+
+  CognitoIssuer:
+    Value: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}
+    Export:
+      Name: !Sub GpaCognitoIssuer-${Env}
+
+  # Dashboard
+  DashboardUrl:
+    Value: !Sub >-
+      https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home
+      #dashboards:name=GPA-Motor-Fletes-${Env}

@@ -1,0 +1,114 @@
+# samconfig.toml
+# Configuración de ambientes SAM — Motor de Fletes GPA v2.4
+# ─────────────────────────────────────────────────────────────────
+# Uso:
+#   sam build
+#   sam deploy --config-env dev
+#   sam deploy --config-env staging
+#   sam deploy --config-env prod
+#
+# Primera vez en un ambiente nuevo:
+#   sam deploy --config-env dev --guided
+# ─────────────────────────────────────────────────────────────────
+
+version = 0.1
+
+# ═══════════════════════════════════════════════════════════════════
+# BUILD — compartido para todos los ambientes
+# ═══════════════════════════════════════════════════════════════════
+[default.build.parameters]
+cached    = true
+parallel  = true
+use_container = false   # true si se necesita entorno Linux exacto
+
+
+# ═══════════════════════════════════════════════════════════════════
+# DEV
+# ═══════════════════════════════════════════════════════════════════
+[dev.deploy.parameters]
+stack_name     = "gpa-fletes-dev"
+region         = "us-east-1"
+confirm_changeset = false
+resolve_s3     = true
+capabilities   = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+
+# Parámetros específicos de dev
+parameter_overrides = [
+  "Env=dev",
+  "AllowedOrigin=*",
+  "LambdaMemoryMB=256",
+  "NotificacionesEmail=",
+  "MontoMinGeneral=350",
+  "MontoMinCostal=1000",
+  "MontoMinEquipoCostal=500",
+  "MontoMinAccesorios=1000",
+  "PropMinElegible=0.50",
+  "UmbralFleteWarn=0.15",
+  "UmbralFleteCrit=0.30",
+  "UmbralTarifaDisp=0.10",
+  "UmbralCargoEnvio=0.01",
+  "BackorderEnabled=true",
+]
+
+tags = "Proyecto=GPA-Admin Env=dev Motor=v2.4"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# STAGING
+# ═══════════════════════════════════════════════════════════════════
+[staging.deploy.parameters]
+stack_name     = "gpa-fletes-staging"
+region         = "us-east-1"
+confirm_changeset = true
+resolve_s3     = true
+capabilities   = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+
+parameter_overrides = [
+  "Env=staging",
+  "AllowedOrigin=https://admin-staging.gpa.com.mx",
+  "LambdaMemoryMB=512",
+  "NotificacionesEmail=",
+  "MontoMinGeneral=350",
+  "MontoMinCostal=1000",
+  "MontoMinEquipoCostal=500",
+  "MontoMinAccesorios=1000",
+  "PropMinElegible=0.50",
+  "UmbralFleteWarn=0.15",
+  "UmbralFleteCrit=0.30",
+  "UmbralTarifaDisp=0.10",
+  "UmbralCargoEnvio=0.01",
+  "BackorderEnabled=true",
+]
+
+tags = "Proyecto=GPA-Admin Env=staging Motor=v2.4"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# PROD
+# ═══════════════════════════════════════════════════════════════════
+[prod.deploy.parameters]
+stack_name     = "gpa-fletes-prod"
+region         = "us-east-1"
+confirm_changeset = true            # siempre confirmar en prod
+fail_on_empty_changeset = false
+resolve_s3     = true
+capabilities   = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+
+parameter_overrides = [
+  "Env=prod",
+  "AllowedOrigin=https://admin.gpa.com.mx",
+  "LambdaMemoryMB=512",
+  "NotificacionesEmail=oscar@gpa.com.mx",    # actualizar con email real
+  "MontoMinGeneral=350",
+  "MontoMinCostal=1000",
+  "MontoMinEquipoCostal=500",
+  "MontoMinAccesorios=1000",
+  "PropMinElegible=0.50",
+  "UmbralFleteWarn=0.15",
+  "UmbralFleteCrit=0.30",
+  "UmbralTarifaDisp=0.10",
+  "UmbralCargoEnvio=0.01",
+  "BackorderEnabled=true",
+]
+
+tags = "Proyecto=GPA-Admin Env=prod Motor=v2.4"

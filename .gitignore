@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+htmlcov/
+.coverage
+
+# SAM
+.aws-sam/
+dist/
+packaged.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencias
+layer/python/
+node_modules/
+
+# Env
+.env
+.env.*
