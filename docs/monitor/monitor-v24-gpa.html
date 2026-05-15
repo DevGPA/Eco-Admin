@@ -635,6 +635,9 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 .eval-go-btn.loading .spinner{display:block;}
 .eval-go-btn.loading span{display:none;}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* Toast notification */
+@keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
 
 /* Resultados de evaluación */
 .eval-results{display:none;padding:8px 22px;background:var(--p2);border-bottom:1px solid var(--ln);}
@@ -1777,6 +1780,10 @@ document.addEventListener('DOMContentLoaded', () => {
     var grid  = document.getElementById('erGrid');
     var summ  = document.getElementById('erSummary');
 
+    // Scroll al panel de resultados para que sea visible
+    panel.style.display = 'block';
+    setTimeout(function(){ panel.scrollIntoView({behavior:'smooth',block:'start'}); }, 100);
+
     var h = '';
     for (var i = 0; i < results.length; i++) {
       var r = results[i];
@@ -1810,6 +1817,29 @@ document.addEventListener('DOMContentLoaded', () => {
       (err?'<div class="er-stat"><div class="er-dot" style="background:var(--ink3)"></div>'+err+' errores</div>':'');
 
     panel.style.display = 'block';
+
+    // Toast de notificación
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;' +
+      'padding:14px 20px;border-radius:10px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;' +
+      'box-shadow:0 8px 32px rgba(28,37,53,.35);z-index:9990;display:flex;align-items:center;gap:10px;' +
+      'animation:slideUp .3s ease;border-left:4px solid var(--teal);max-width:400px;';
+    var okN = 0, errN = 0;
+    for (var m = 0; m < results.length; m++) {
+      var cm = results[m].codigoMotor;
+      if (cm==='R-000'||cm==='R-050'||cm==='R-060'||cm==='R-800'||cm==='REGISTRADO') okN++;
+      else errN++;
+    }
+    toast.innerHTML = '<div style="width:32px;height:32px;border-radius:8px;background:var(--teal-bg);' +
+      'display:grid;place-items:center;flex-shrink:0">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2.5">' +
+      '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' +
+      '</svg></div><div><div>Evaluaci\u00F3n completada</div>' +
+      '<div style="font-size:11px;font-weight:400;color:rgba(255,255,255,.6);margin-top:2px">' +
+      results.length + ' documentos \u00B7 ' + okN + ' OK \u00B7 ' + errN + ' pendientes</div></div>';
+    document.body.appendChild(toast);
+    setTimeout(function(){ toast.style.opacity = '0'; toast.style.transition = 'opacity .3s'; }, 4000);
+    setTimeout(function(){ toast.remove(); }, 4500);
   }
 
   // Conectar eventos cuando el DOM carga
