@@ -517,9 +517,147 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 .df-preset:hover{border-color:var(--teal-l);color:var(--teal-d);background:var(--teal-bg);}
 .df-preset.active{background:var(--teal-bg);border-color:var(--teal);color:var(--teal-d);}
 .card.filtered-out{display:none;}
+
+/* ═══ LOGIN SCREEN ═══════════════════════════════════════════════ */
+.login-screen{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0E1520 0%,#1C2535 40%,#0A1420 100%);transition:opacity .4s ease;}
+.login-screen.hidden{opacity:0;pointer-events:none;}
+.login-bg-pattern{position:absolute;inset:0;overflow:hidden;opacity:.06;}
+.login-diamond{position:absolute;width:120px;height:120px;border:2px solid var(--teal);transform:rotate(45deg);}
+.ld1{top:10%;left:5%;}
+.ld2{top:60%;left:75%;width:80px;height:80px;}
+.ld3{top:25%;right:10%;width:160px;height:160px;}
+.ld4{bottom:15%;left:30%;width:60px;height:60px;}
+.ld5{top:5%;right:35%;width:40px;height:40px;}
+.ld6{bottom:5%;right:15%;width:100px;height:100px;}
+
+.login-card{position:relative;z-index:1;width:400px;max-width:90vw;background:#fff;border-radius:20px;
+  overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.4);}
+
+.login-header{background:var(--navy);padding:32px 32px 28px;text-align:center;position:relative;overflow:hidden;}
+.login-header::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,transparent 0%,var(--teal) 50%,transparent 100%);}
+.login-logo-circle{width:64px;height:64px;margin:0 auto 16px;border-radius:50%;
+  background:linear-gradient(135deg,#1A3060,#0E1A30);border:2px solid rgba(58,173,173,.4);
+  display:grid;place-items:center;position:relative;}
+.login-logo-circle::before{content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:1px solid rgba(58,173,173,.15);}
+.login-logo-text{font-family:'Nunito',sans-serif;font-size:22px;font-weight:800;color:#fff;letter-spacing:.5px;}
+.login-logo-sub{font-family:'Nunito Sans',sans-serif;font-size:9px;color:var(--teal);
+  letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
+.login-title{font-family:'Nunito',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-top:14px;}
+.login-subtitle{font-family:'Nunito Sans',sans-serif;font-size:11px;color:rgba(255,255,255,.5);margin-top:4px;}
+
+.login-body{padding:28px 32px 32px;}
+.login-field{margin-bottom:16px;}
+.login-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;
+  text-transform:uppercase;color:#7A8A9A;margin-bottom:6px;display:block;font-weight:600;}
+.login-input{width:100%;padding:12px 14px;border:1.5px solid #D0D6E0;border-radius:10px;
+  font-family:'Nunito Sans',sans-serif;font-size:14px;color:#1C2535;background:#F5F6F8;
+  outline:none;transition:border-color .15s,box-shadow .15s;}
+.login-input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(58,173,173,.12);background:#fff;}
+.login-input::placeholder{color:#AAB4C0;}
+
+.login-error{display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;
+  background:#FAE8E8;border:1px solid rgba(176,40,40,.15);font-size:12px;color:#7A1A1A;
+  font-family:'Nunito Sans',sans-serif;font-weight:600;}
+.login-error.show{display:block;}
+
+.login-btn{width:100%;padding:13px;border:none;border-radius:10px;background:var(--navy);
+  color:#fff;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;
+  transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;
+  letter-spacing:.02em;}
+.login-btn:hover{background:#243045;box-shadow:0 4px 16px rgba(28,37,53,.3);}
+.login-btn:active{transform:scale(.98);}
+.login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.login-btn svg{transition:transform .15s;}
+.login-btn:hover svg{transform:translateX(2px);}
+
+.login-footer{padding:0 32px 24px;text-align:center;}
+.login-footer-text{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:#AAB4C0;
+  letter-spacing:.05em;}
+.login-footer-text span{color:var(--teal);}
+
+.login-remember{display:flex;align-items:center;gap:8px;margin-bottom:20px;}
+.login-check{width:16px;height:16px;border:1.5px solid #D0D6E0;border-radius:4px;cursor:pointer;
+  display:grid;place-items:center;background:#F5F6F8;transition:all .12s;flex-shrink:0;}
+.login-check.on{background:var(--navy);border-color:var(--navy);}
+.login-check.on::after{content:'';width:7px;height:4px;border-left:2px solid #fff;
+  border-bottom:2px solid #fff;transform:rotate(-45deg) translate(1px,-1px);}
+.login-check-label{font-size:12px;color:#7A8A9A;cursor:pointer;user-select:none;}
+
+/* User badge en topbar */
+.user-badge{display:none;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;
+  font-size:9px;color:rgba(255,255,255,.5);padding:3px 8px;border-radius:4px;
+  border:1px solid rgba(255,255,255,.1);cursor:pointer;transition:all .12s;}
+.user-badge:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.8);}
+.user-badge .ub-dot{width:5px;height:5px;border-radius:50%;background:var(--teal);}
+.user-badge.show{display:flex;}
+
 </style>
 </head>
 <body>
+
+<!-- ══ LOGIN SCREEN ══ -->
+<div class="login-screen" id="loginScreen">
+  <!-- Rombos decorativos GPA -->
+  <div class="login-bg-pattern">
+    <div class="login-diamond ld1"></div>
+    <div class="login-diamond ld2"></div>
+    <div class="login-diamond ld3"></div>
+    <div class="login-diamond ld4"></div>
+    <div class="login-diamond ld5"></div>
+    <div class="login-diamond ld6"></div>
+  </div>
+
+  <div class="login-card">
+    <!-- Header con logo GPA -->
+    <div class="login-header">
+      <div class="login-logo-circle">
+        <svg viewBox="0 0 36 36" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 22 Q9 17 14 22 Q19 27 24 22 Q29 17 34 22" stroke="#3AADAD" stroke-width="1.5" fill="none" opacity=".7"/>
+          <path d="M4 25 Q9 20 14 25 Q19 30 24 25 Q29 20 34 25" stroke="#3AADAD" stroke-width="1" fill="none" opacity=".4"/>
+          <text x="18" y="19" text-anchor="middle" font-family="Nunito,Arial" font-weight="900" font-size="11" fill="white" letter-spacing=".5">GPA</text>
+          <text x="18" y="27" text-anchor="middle" font-family="Nunito Sans,Arial" font-weight="400" font-size="5" fill="#3AADAD" letter-spacing="1.5">AGUA</text>
+        </svg>
+      </div>
+      <div class="login-title">Motor de Fletes</div>
+      <div class="login-subtitle">General de Productos para el Agua · Ecosistema Administrativo</div>
+    </div>
+
+    <!-- Formulario -->
+    <div class="login-body">
+      <div class="login-field">
+        <label class="login-label" for="loginEmail">Correo electrónico</label>
+        <input type="email" class="login-input" id="loginEmail" placeholder="usuario@gpa.com.mx" autocomplete="email">
+      </div>
+      <div class="login-field">
+        <label class="login-label" for="loginPass">Contraseña</label>
+        <input type="password" class="login-input" id="loginPass" placeholder="••••••••••" autocomplete="current-password">
+      </div>
+
+      <div id="loginError" class="login-error"></div>
+
+      <div class="login-remember">
+        <div class="login-check" id="loginRemember" onclick="this.classList.toggle('on')"></div>
+        <span class="login-check-label" onclick="document.getElementById('loginRemember').classList.toggle('on')">Mantener sesión activa</span>
+      </div>
+
+      <button class="login-btn" id="loginBtn" onclick="doLogin()">
+        Iniciar sesión
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <div class="login-footer">
+      <div class="login-footer-text">
+        <span>spec v2.4</span> · API Gateway · Cognito JWT · DynamoDB
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="ovl" id="ovl" onclick="closeFolder()"></div>
 
 <!-- ══ TOPBAR GPA ══ -->
@@ -567,7 +705,8 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 
   <div class="tbr">
     <span class="vc-chip">spec v2.4</span>
-    <div class="lv"><span class="lvd"></span>Motor activo · 10 fleteras ✓</div>
+    <div class="user-badge" id="userBadge" onclick="doLogout()"><span class="ub-dot"></span><span id="userEmail">—</span></div>
+    <div class="lv"><span class="lvd"></span>Motor activo</div>
     <button class="tbtn fbtn" id="fbtn" onclick="openFolder()">
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       Carpeta
@@ -1213,6 +1352,184 @@ function updateStatus(from, to, count) {
   const fmtDate = s => s ? s.split('-').reverse().join('/') : '—';
   el.textContent = fmtDate(from) + ' – ' + fmtDate(to) + ' · ' + (count||0) + ' docs';
 }
+
+
+// ── LOGIN FLOW ───────────────────────────────────────────────────
+// Configuración API — actualizar con outputs de sam deploy
+const API_CONFIG = {
+  apiUrl:   '',  // ← https://{id}.execute-api.us-east-1.amazonaws.com/prod
+  region:   'us-east-1',
+  poolId:   '',  // ← us-east-1_XXXXXXXXX
+  clientId: '',  // ← abc123def456...
+};
+
+// Estado de sesión
+let _session = { token: null, email: null, exp: 0, refresh: null };
+
+// Recuperar sesión guardada
+(function loadSession() {
+  try {
+    const s = JSON.parse(sessionStorage.getItem('gpa_auth') || 'null');
+    if (s && s.exp > Date.now()) {
+      _session = s;
+      onLoginSuccess(s.email, true);
+    }
+  } catch(e) {}
+})();
+
+// Login principal
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+
+  // Validar
+  if (!email || !pass) {
+    errEl.textContent = 'Ingresa correo y contraseña';
+    errEl.classList.add('show');
+    return;
+  }
+
+  errEl.classList.remove('show');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">Conectando<span class="lvd" style="width:6px;height:6px;"></span></span>';
+
+  // Si no hay API configurada → modo demo
+  if (!API_CONFIG.apiUrl || !API_CONFIG.clientId) {
+    setTimeout(() => {
+      if (email.includes('@') && pass.length >= 4) {
+        _session = { token: 'demo', email: email, exp: Date.now() + 8*3600000 };
+        saveSession();
+        onLoginSuccess(email, false);
+      } else {
+        errEl.textContent = 'Credenciales inválidas';
+        errEl.classList.add('show');
+        resetBtn();
+      }
+    }, 800);
+    return;
+  }
+
+  // Login real contra Cognito
+  try {
+    const res = await fetch(
+      `https://cognito-idp.${API_CONFIG.region}.amazonaws.com/`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+        },
+        body: JSON.stringify({
+          AuthFlow: 'USER_PASSWORD_AUTH',
+          ClientId: API_CONFIG.clientId,
+          AuthParameters: { USERNAME: email, PASSWORD: pass },
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+      errEl.textContent = 'Debes cambiar tu contraseña temporal. Contacta al administrador.';
+      errEl.classList.add('show');
+      resetBtn();
+      return;
+    }
+
+    if (!res.ok || !data.AuthenticationResult) {
+      errEl.textContent = data.message || 'Credenciales inválidas';
+      errEl.classList.add('show');
+      resetBtn();
+      return;
+    }
+
+    const auth = data.AuthenticationResult;
+    _session = {
+      token:   auth.IdToken,
+      email:   email,
+      exp:     Date.now() + (auth.ExpiresIn * 1000),
+      refresh: auth.RefreshToken,
+    };
+    saveSession();
+    onLoginSuccess(email, false);
+
+  } catch (err) {
+    errEl.textContent = 'Error de conexión: ' + (err.message || 'Intenta de nuevo');
+    errEl.classList.add('show');
+    resetBtn();
+  }
+}
+
+function resetBtn() {
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = false;
+  btn.innerHTML = 'Iniciar sesión <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+}
+
+function onLoginSuccess(email, silent) {
+  // Ocultar login screen
+  const ls = document.getElementById('loginScreen');
+  if (ls) {
+    ls.classList.add('hidden');
+    setTimeout(() => ls.style.display = 'none', 400);
+  }
+
+  // Mostrar badge de usuario en topbar
+  const badge = document.getElementById('userBadge');
+  if (badge) {
+    badge.classList.add('show');
+    document.getElementById('userEmail').textContent = email;
+  }
+
+  if (!silent) {
+    console.log('%c[GPA] %cSesión iniciada: ' + email,
+      'color:#3AADAD;font-weight:bold', 'color:#8A96B0');
+  }
+}
+
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  _session = { token: null, email: null, exp: 0 };
+  try { sessionStorage.removeItem('gpa_auth'); } catch(e) {}
+
+  // Mostrar login de nuevo
+  const ls = document.getElementById('loginScreen');
+  if (ls) {
+    ls.style.display = '';
+    ls.classList.remove('hidden');
+  }
+
+  // Ocultar badge
+  const badge = document.getElementById('userBadge');
+  if (badge) badge.classList.remove('show');
+
+  // Limpiar campos
+  const e = document.getElementById('loginEmail');
+  const p = document.getElementById('loginPass');
+  if (e) e.value = '';
+  if (p) p.value = '';
+}
+
+function saveSession() {
+  const remember = document.getElementById('loginRemember')?.classList.contains('on');
+  try {
+    const storage = remember ? localStorage : sessionStorage;
+    storage.setItem('gpa_auth', JSON.stringify(_session));
+  } catch(e) {}
+}
+
+function getToken() { return _session.token; }
+function getUserEmail() { return _session.email; }
+
+// Enter en campo password → login
+document.addEventListener('DOMContentLoaded', () => {
+  const p = document.getElementById('loginPass');
+  if (p) p.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  const em = document.getElementById('loginEmail');
+  if (em) em.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass')?.focus(); });
+});
 
 </script>
 </body>
