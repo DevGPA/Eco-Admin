@@ -76,6 +76,7 @@ Eco-Admin/
 ├── template.yaml                    ← SAM template (toda la infra)
 ├── samconfig.toml                   ← Config por ambiente
 ├── handler.py                       ← Lambda handler + router
+├── Makefile                         ← Build, deploy, logs, test
 ├── motor/
 │   ├── catalogos.py                 ← Parámetros + catálogos + R-xxx
 │   ├── evaluador.py                 ← Motor 6 capas
@@ -88,13 +89,27 @@ Eco-Admin/
 │   └── extractor.py                 ← Clasificar y agrupar docs PDF
 ├── frontend/
 │   └── gpa-api.js                   ← SDK JS — Cognito + API Gateway
+├── docs/
+│   ├── monitor/
+│   │   ├── monitor-v24-gpa.html     ← Monitor kanban con branding GPA
+│   │   └── simulador-v22.html       ← Simulador interactivo
+│   └── specs/
+│       ├── api-reference.html       ← Referencia API (12 endpoints)
+│       ├── dynamo-schema.html       ← Schema DynamoDB + código
+│       └── spec-motor-v2.3.html     ← Spec motor completa
+├── tests/
+│   ├── env.json                     ← Variables de entorno local
+│   └── events/                      ← Eventos de prueba SAM
+│       ├── evaluar_ok.json
+│       ├── evaluar_duplicada.json
+│       ├── health.json
+│       ├── monitor.json
+│       └── s3_trigger.json
 ├── infrastructure/
 │   ├── stack-gpa-fletes.yaml        ← CloudFormation alternativo
 │   └── api-gateway-gpa.yaml         ← API Gateway standalone
-├── layer/
-│   └── requirements.txt             ← Dependencias del Lambda Layer
-├── Makefile                         ← Build, deploy, logs, test
-└── .gitignore
+└── layer/
+    └── requirements.txt             ← Dependencias del Lambda Layer
 ```
 
 ## Deploy
@@ -180,6 +195,29 @@ make crear-usuario ENV=prod
 | CUN | Cancún | 77510 |
 | PVR | Puerto Vallarta | 46291 |
 | SJD | Los Cabos | 23473 |
+
+## Documentación Visual (abrir en navegador)
+
+| Archivo | Descripción |
+|---------|-------------|
+| [`docs/monitor/monitor-v24-gpa.html`](docs/monitor/monitor-v24-gpa.html) | Monitor kanban con imagen corporativa GPA · selector de fechas · simulador |
+| [`docs/specs/api-reference.html`](docs/specs/api-reference.html) | Referencia API Gateway — 12 endpoints, schemas, ejemplos curl |
+| [`docs/specs/dynamo-schema.html`](docs/specs/dynamo-schema.html) | Schema DynamoDB — entidades, GSIs, código boto3, CloudFormation |
+| [`docs/specs/spec-motor-v2.3.html`](docs/specs/spec-motor-v2.3.html) | Especificación del motor — reglas, categorías, destinos |
+| [`docs/monitor/simulador-v22.html`](docs/monitor/simulador-v22.html) | Simulador pre-ejecución interactivo |
+
+## Tests
+
+```bash
+# Invocar Lambda localmente con SAM
+sam local invoke MotorFletesFn --event tests/events/evaluar_ok.json --env-vars tests/env.json
+
+# Health check local
+sam local invoke MotorFletesFn --event tests/events/health.json
+
+# API local completa (http://localhost:3000)
+sam local start-api --env-vars tests/env.json
+```
 
 ---
 

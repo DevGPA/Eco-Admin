@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de elegibilidad · GPA Admin v2.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+[data-theme="light"]{
+  --bg:#F3F0E9;--p:#FFFFFF;--p2:#EDE9E0;--p3:#E3DDD2;
+  --ink:#1A1714;--ink2:#48443E;--ink3:#8A867C;
+  --ln:#D8D3C8;--ln2:#C6C0B3;
+  --go:#145C3C;--go-bg:#E5F4EC;--go-m:#1F8857;--go-l:#72C49A;
+  --warn:#6A3F08;--warn-bg:#FDF1DD;--warn-m:#AA6810;--warn-l:#E5A520;
+  --stop:#781A1A;--stop-bg:#F9EAEA;--stop-m:#B22828;--stop-l:#DC7878;
+  --hold:#30247C;--hold-bg:#ECEBFC;--hold-m:#4C40BC;--hold-l:#9880DC;
+  --blue:#1040A0;--blue-bg:#E6EEF8;--blue-l:#6898DC;
+  --orange:#7A3A00;--orange-bg:#FEF0E4;--orange-l:#D87830;
+  --sh:0 1px 3px rgba(26,23,20,.06);--shm:0 4px 16px rgba(26,23,20,.10);
+}
+[data-theme="dark"]{
+  --bg:#111008;--p:#1A1810;--p2:#222018;--p3:#2A2820;
+  --ink:#EEE9E0;--ink2:#AEA9A0;--ink3:#6E6A62;
+  --ln:#2A2820;--ln2:#383530;
+  --go:#40BC84;--go-bg:#0A2018;--go-m:#1F8857;--go-l:#145C3C;
+  --warn:#E0A020;--warn-bg:#261600;--warn-m:#AA6810;--warn-l:#6A3F08;
+  --stop:#EC7878;--stop-bg:#260808;--stop-m:#B22828;--stop-l:#781A1A;
+  --hold:#A090E8;--hold-bg:#120C28;--hold-m:#4C40BC;--hold-l:#30247C;
+  --blue:#7AAAE8;--blue-bg:#081020;--blue-l:#1040A0;
+  --orange:#FFA040;--orange-bg:#1A0A00;--orange-l:#7A3A00;
+  --sh:0 1px 3px rgba(0,0,0,.25);--shm:0 4px 16px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{background:var(--bg);color:var(--ink);font-family:'Syne',sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;}
+
+/* ── TOPBAR ── */
+.tb{display:flex;align-items:center;justify-content:space-between;padding:13px 28px;border-bottom:1px solid var(--ln);background:var(--p);position:sticky;top:0;z-index:50;}
+.brand{display:flex;align-items:center;gap:12px;}
+.bmark{width:30px;height:30px;background:var(--ink);color:var(--bg);border-radius:6px;display:grid;place-items:center;font-family:'Newsreader',serif;font-style:italic;font-size:16px;}
+.bname{font-family:'Newsreader',serif;font-size:17px;}
+.bname em{font-style:italic;color:var(--ink3);}
+.tbr{display:flex;align-items:center;gap:12px;}
+.v-chip{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-l);}
+.tbtn{border:1px solid var(--ln);background:transparent;padding:5px 10px;border-radius:5px;cursor:pointer;color:var(--ink3);font-family:'IBM Plex Mono',monospace;font-size:11px;transition:all .14s;}
+.tbtn:hover{background:var(--p2);color:var(--ink);}
+
+/* ── PAGE HEAD ── */
+.ph{padding:32px 28px 0;max-width:1100px;}
+.ph-ey{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;}
+.ph-title{font-family:'Newsreader',serif;font-size:42px;font-weight:300;line-height:1;letter-spacing:-.01em;margin-bottom:6px;}
+.ph-title em{font-style:italic;color:var(--ink3);}
+.ph-sub{font-size:13.5px;color:var(--ink2);max-width:640px;margin-bottom:28px;line-height:1.7;}
+
+/* ── MAIN LAYOUT ── */
+.layout{display:grid;grid-template-columns:1fr 380px;gap:20px;padding:0 28px 60px;max-width:1100px;align-items:start;}
+
+/* ── FORM PANEL ── */
+.form-panel{background:var(--p);border:1px solid var(--ln);border-radius:14px;overflow:hidden;}
+.fp-head{padding:18px 22px;border-bottom:1px solid var(--ln);background:var(--p2);}
+.fp-title{font-family:'Newsreader',serif;font-size:18px;font-weight:400;}
+.fp-title em{font-style:italic;color:var(--ink3);}
+.fp-body{padding:20px 22px;display:flex;flex-direction:column;gap:18px;}
+
+/* ── FIELD ── */
+.field{display:flex;flex-direction:column;gap:6px;}
+.field-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);font-weight:500;display:flex;align-items:center;gap:8px;}
+.field-label .req{color:var(--orange);font-size:12px;}
+.field-label .hint{font-size:9.5px;color:var(--ink3);letter-spacing:.04em;font-weight:400;text-transform:none;margin-left:auto;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* ── INPUTS ── */
+input,select{border:1px solid var(--ln);background:var(--p2);color:var(--ink);padding:9px 12px;border-radius:7px;font-family:'Syne',sans-serif;font-size:13px;outline:none;transition:border-color .13s;width:100%;}
+input:focus,select:focus{border-color:var(--ink3);}
+input::placeholder{color:var(--ink3);}
+select{cursor:pointer;}
+
+/* ── ORIGEN VISUAL ── */
+.origen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.suc-btn{border:1.5px solid var(--ln);background:var(--p2);border-radius:8px;padding:10px 8px;cursor:pointer;transition:all .14s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.suc-btn:hover{border-color:var(--ln2);background:var(--p3);}
+.suc-btn.sel{border-color:var(--ink);background:var(--p);}
+.suc-code{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--ink3);}
+.suc-btn.sel .suc-code{color:var(--ink);}
+.suc-name{font-size:12px;font-weight:600;color:var(--ink2);line-height:1.2;}
+.suc-btn.sel .suc-name{color:var(--ink);}
+.suc-dot{width:5px;height:5px;border-radius:50%;background:var(--ln2);}
+.suc-btn.sel .suc-dot{background:var(--go);}
+
+/* ── PRODUCTO LINES ── */
+.prod-lines{display:flex;flex-direction:column;gap:8px;}
+.prod-line{display:grid;grid-template-columns:1fr 150px 34px;gap:8px;align-items:center;background:var(--p2);border:1px solid var(--ln);border-radius:8px;padding:8px 10px;}
+.prod-line .cat-sel{border:none;background:transparent;padding:4px 6px;font-size:13px;font-family:'Syne',sans-serif;color:var(--ink);flex:1;}
+.prod-line .cat-sel:focus{outline:none;}
+.prod-line .amt-input{border:none;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);text-align:right;padding:4px 6px;}
+.prod-line .amt-input:focus{outline:none;}
+.prod-line .amt-input::placeholder{color:var(--ink3);}
+.prod-line-del{width:28px;height:28px;border:none;background:transparent;cursor:pointer;color:var(--ink3);border-radius:5px;display:grid;place-items:center;font-size:16px;transition:all .13s;}
+.prod-line-del:hover{background:var(--stop-bg);color:var(--stop);}
+.prod-line-cat{display:flex;align-items:center;gap:6px;}
+.cat-badge{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;}
+.cat-badge.eq{background:var(--go-bg);color:var(--go);}
+.cat-badge.rec{background:var(--go-bg);color:var(--go);}
+.cat-badge.cos{background:var(--warn-bg);color:var(--warn);}
+.cat-badge.ex{background:var(--stop-bg);color:var(--stop);}
+.add-line{border:1.5px dashed var(--ln2);background:transparent;border-radius:8px;padding:9px;width:100%;cursor:pointer;color:var(--ink3);font-family:'Syne',sans-serif;font-size:13px;font-weight:500;transition:all .14s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.add-line:hover{border-color:var(--ink3);color:var(--ink);background:var(--p2);}
+
+/* ── TOTALES RESUMEN ── */
+.totals-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:var(--p2);border-top:1px solid var(--ln);padding:14px 22px;}
+.tot-item{text-align:center;}
+.tot-label{font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px;}
+.tot-value{font-family:'Newsreader',serif;font-size:18px;font-weight:400;color:var(--ink);}
+.tot-value.go{color:var(--go);}
+.tot-value.warn{color:var(--warn);}
+.tot-value.stop{color:var(--stop);}
+
+/* ── SAP CODES ── */
+.sap-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.sap-opt{border:1.5px solid var(--ln);background:var(--p2);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .14s;}
+.sap-opt:hover{border-color:var(--ln2);}
+.sap-opt.sel{border-color:var(--ink);}
+.sap-opt-code{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--ink3);}
+.sap-opt.sel .sap-opt-code{color:var(--ink);}
+.sap-opt-desc{font-size:12px;color:var(--ink2);margin-top:2px;line-height:1.3;}
+.sap-opt.sel-go{border-color:var(--go-l);background:var(--go-bg);}
+.sap-opt.sel-go .sap-opt-code{color:var(--go);}
+.sap-opt.sel-warn{border-color:var(--warn-l);background:var(--warn-bg);}
+.sap-opt.sel-warn .sap-opt-code{color:var(--warn);}
+.sap-opt.sel-blue{border-color:var(--blue-l);background:var(--blue-bg);}
+.sap-opt.sel-blue .sap-opt-code{color:var(--blue);}
+.sap-opt.sel-orange{border-color:var(--orange-l);background:var(--orange-bg);}
+.sap-opt.sel-orange .sap-opt-code{color:var(--orange);}
+
+/* ── DESTINO ── */
+.destino-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+/* ── FLETE INPUTS ── */
+.flete-row{display:grid;grid-template-columns:1fr 1fr 80px;gap:12px;}
+
+/* ── EVAL BUTTON ── */
+.eval-btn{background:var(--ink);color:var(--bg);border:none;padding:13px 28px;border-radius:9px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .14s;width:100%;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:8px;}
+.eval-btn:hover{background:var(--ink2);}
+.eval-btn svg{width:16px;height:16px;}
+.eval-btn.running{background:var(--ink3);}
+
+/* ── RESULT PANEL ── */
+.result-panel{position:sticky;top:70px;display:flex;flex-direction:column;gap:12px;}
+
+/* Motor trace */
+.motor-trace{background:var(--p);border:1px solid var(--ln);border-radius:14px;overflow:hidden;}
+.mt-head{padding:14px 18px;border-bottom:1px solid var(--ln);background:var(--p2);display:flex;align-items:center;justify-content:space-between;}
+.mt-title{font-family:'Newsreader',serif;font-size:16px;font-weight:400;font-style:italic;color:var(--ink3);}
+.mt-result{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;padding:4px 10px;border-radius:5px;}
+.mt-result.go{background:var(--go);color:white;}
+.mt-result.stop{background:var(--stop);color:white;}
+.mt-result.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-l);}
+.mt-result.blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-l);}
+.mt-result.orange{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-l);}
+.mt-result.idle{background:var(--p3);color:var(--ink3);}
+
+.mt-body{padding:0;}
+.trace-step{display:flex;align-items:flex-start;gap:0;border-bottom:1px solid var(--ln);}
+.trace-step:last-child{border:none;}
+.trace-icon{width:44px;display:flex;align-items:center;justify-content:center;padding:12px 0;flex-shrink:0;}
+.ti-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--ln2);background:var(--p2);}
+.ti-dot.pass{border-color:var(--go-l);background:var(--go-bg);}
+.ti-dot.fail{border-color:var(--stop-l);background:var(--stop-bg);}
+.ti-dot.warn{border-color:var(--warn-l);background:var(--warn-bg);}
+.ti-dot.skip{border-color:var(--ln2);background:var(--p3);}
+.ti-dot.active{border-color:var(--ink);background:var(--ink);}
+.ti-dot.blue{border-color:var(--blue-l);background:var(--blue-bg);}
+.ti-dot.orange{border-color:var(--orange-l);background:var(--orange-bg);}
+.trace-content{flex:1;padding:10px 16px 10px 0;}
+.trace-layer{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:2px;}
+.trace-name{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:3px;}
+.trace-detail{font-size:12px;color:var(--ink2);line-height:1.5;}
+.trace-code{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:4px;display:inline-block;margin-top:4px;}
+.trace-code.go{background:var(--go-bg);color:var(--go);}
+.trace-code.stop{background:var(--stop-bg);color:var(--stop);}
+.trace-code.warn{background:var(--warn-bg);color:var(--warn);}
+.trace-code.skip{background:var(--p3);color:var(--ink3);}
+.trace-code.blue{background:var(--blue-bg);color:var(--blue);}
+.trace-code.orange{background:var(--orange-bg);color:var(--orange);}
+
+/* Criteria grid */
+.crit-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:14px 18px;border-bottom:1px solid var(--ln);}
+.cg-item{border-radius:6px;padding:8px 4px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;}
+.cg-label{font-size:8.5px;letter-spacing:.04em;text-transform:uppercase;display:block;margin-bottom:3px;opacity:.7;}
+.cg-item.ok{background:var(--go-bg);color:var(--go);border:1px solid var(--go-l);}
+.cg-item.fail{background:var(--stop-bg);color:var(--stop);border:1px solid var(--stop-l);}
+.cg-item.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-l);}
+.cg-item.na{background:var(--p3);color:var(--ink3);border:1px solid var(--ln);}
+.cg-item.skip{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-l);}
+.cg-item.blue{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-l);}
+.cg-item.orange{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-l);}
+
+/* Message */
+.result-msg{padding:14px 18px;}
+.rm-text{font-size:13px;color:var(--ink2);line-height:1.7;}
+.rm-text strong{color:var(--ink);}
+
+/* Meter */
+.pct-meter{padding:0 18px 14px;}
+.pm-head{display:flex;justify-content:space-between;margin-bottom:5px;font-size:12px;}
+.pm-lbl{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;}
+.pm-val{font-family:'Newsreader',serif;font-size:16px;font-weight:400;}
+.pm-val.ok{color:var(--go);}
+.pm-val.warn{color:var(--warn);}
+.pm-val.stop{color:var(--stop);}
+.pm-bar{height:5px;background:var(--p3);border-radius:3px;overflow:hidden;position:relative;}
+.pm-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.pm-fill.ok{background:var(--go-m);}
+.pm-fill.warn{background:var(--warn-m);}
+.pm-fill.stop{background:var(--stop-m);}
+.pm-thresh{position:absolute;top:-2px;bottom:-2px;width:1.5px;background:var(--ink3);opacity:.3;}
+.pm-thresh::after{content:'15%';position:absolute;top:-13px;left:50%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--ink3);white-space:nowrap;}
+
+/* Prod summary */
+.prod-summary{background:var(--p);border:1px solid var(--ln);border-radius:14px;overflow:hidden;}
+.ps-head{padding:12px 16px;border-bottom:1px solid var(--ln);background:var(--p2);}
+.ps-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:600;}
+.ps-rows{padding:8px 0;}
+.ps-row{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;font-size:12.5px;}
+.ps-row-label{display:flex;align-items:center;gap:8px;color:var(--ink2);}
+.ps-row-dot{width:8px;height:8px;border-radius:50%;}
+.ps-row-dot.go{background:var(--go);}
+.ps-row-dot.warn{background:var(--warn-m);}
+.ps-row-dot.stop{background:var(--stop);}
+.ps-row-dot.blue{background:var(--blue);}
+.ps-row-amt{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink);font-weight:500;}
+.ps-total{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-top:1px solid var(--ln);font-weight:600;}
+.ps-total-lbl{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);}
+.ps-total-val{font-family:'Newsreader',serif;font-size:18px;}
+
+/* IDLE state */
+.idle-state{padding:32px 18px;text-align:center;color:var(--ink3);font-family:'Newsreader',serif;font-style:italic;font-size:15px;}
+</style>
+</head>
+<body>
+
+<header class="tb">
+  <div class="brand">
+    <div class="bmark">G</div>
+    <div class="bname">GPA Admin <em>· simulador v2.2</em></div>
+  </div>
+  <div class="tbr">
+    <span class="v-chip">Motor v2.2</span>
+    <button class="tbtn" onclick="toggleTheme()">☀ / ☽</button>
+  </div>
+</header>
+
+<div class="ph">
+  <div class="ph-ey">Pre-ejecución · simulador de elegibilidad</div>
+  <h1 class="ph-title">¿Califica <em>para apoyo de flete?</em></h1>
+  <p class="ph-sub">Ingresa los datos del pedido antes de comprometer el flete. Selecciona el origen, agrega las categorías de producto con su monto y el motor evalúa los 5 criterios en tiempo real.</p>
+</div>
+
+<div class="layout">
+
+  <!-- ═══════════ FORMULARIO ═══════════ -->
+  <div class="form-panel">
+    <div class="fp-head">
+      <div class="fp-title">Datos de la solicitud <em>· pre-ejecución</em></div>
+    </div>
+    <div class="fp-body">
+
+      <!-- ORIGEN -->
+      <div class="field">
+        <div class="field-label">Sucursal origen <span class="req">*</span></div>
+        <div class="origen-grid" id="origen-grid">
+          <button class="suc-btn" data-suc="GDL" onclick="selOrigen(this)">
+            <div class="suc-dot"></div>
+            <div class="suc-code">GDL</div>
+            <div class="suc-name">Guadalajara</div>
+          </button>
+          <button class="suc-btn" data-suc="CDMX" onclick="selOrigen(this)">
+            <div class="suc-dot"></div>
+            <div class="suc-code">CDMX</div>
+            <div class="suc-name">Ciudad de México</div>
+          </button>
+          <button class="suc-btn" data-suc="MTY" onclick="selOrigen(this)">
+            <div class="suc-dot"></div>
+            <div class="suc-code">MTY</div>
+            <div class="suc-name">Monterrey</div>
+          </button>
+          <button class="suc-btn" data-suc="CUN" onclick="selOrigen(this)">
+            <div class="suc-dot"></div>
+            <div class="suc-code">CUN</div>
+            <div class="suc-name">Cancún</div>
+          </button>
+          <button class="suc-btn" data-suc="PVR" onclick="selOrigen(this)">
+            <div class="suc-dot"></div>
+            <div class="suc-code">PVR</div>
+            <div class="suc-name">Puerto Vallarta</div>
+          </button>
+          <button class="suc-btn" data-suc="SJD" onclick="selOrigen(this)">
+            <div class="suc-dot"></div>
+            <div class="suc-code">SJD</div>
+            <div class="suc-name">Los Cabos</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- DESTINO -->
+      <div class="field">
+        <div class="field-label">Destino de entrega <span class="req">*</span></div>
+        <div class="destino-row">
+          <select id="dest-estado" onchange="updateTotals()">
+            <option value="">Estado…</option>
+            <option>Jalisco</option><option>Nuevo León</option><option>Tamaulipas</option>
+            <option>Coahuila</option><option>Yucatán</option><option>Quintana Roo</option>
+            <option>Guerrero</option><option>Veracruz</option><option>Puebla</option>
+            <option>Guanajuato</option><option>Querétaro</option><option>Michoacán</option>
+            <option>Nayarit</option><option>Sinaloa</option><option>Sonora</option>
+            <option>CDMX</option><option>Edo. México</option><option>Morelos</option>
+            <option>San Luis Potosí</option><option>Aguascalientes</option>
+            <option>Chihuahua</option><option>Durango</option><option>Zacatecas</option>
+            <option>Hidalgo</option><option>Campeche</option><option>Tabasco</option>
+            <option>BCS</option><option>BCN</option><option>Colima</option>
+            <option value="otro">Otro (fuera de catálogo)</option>
+          </select>
+          <input type="text" id="dest-ciudad" placeholder="Ciudad específica…">
+        </div>
+      </div>
+
+      <!-- TIPO SAP -->
+      <div class="field">
+        <div class="field-label">Tipo de operación <span class="hint">detectado por código SAP</span></div>
+        <div class="sap-grid">
+          <div class="sap-opt sel" data-sap="normal" onclick="selSAP(this,'')">
+            <div class="sap-opt-code">Sin señal SAP</div>
+            <div class="sap-opt-desc">Venta cliente · C1–C5</div>
+          </div>
+          <div class="sap-opt" data-sap="GS0229" onclick="selSAP(this,'sel-warn')">
+            <div class="sap-opt-code">GS0229</div>
+            <div class="sap-opt-desc">Back Order · solo C3</div>
+          </div>
+          <div class="sap-opt" data-sap="GS0231" onclick="selSAP(this,'sel-blue')">
+            <div class="sap-opt-code">GS0231</div>
+            <div class="sap-opt-desc">Dispersión interna</div>
+          </div>
+          <div class="sap-opt" data-sap="GS0248" onclick="selSAP(this,'sel-orange')">
+            <div class="sap-opt-code">GS0248</div>
+            <div class="sap-opt-desc">Cargo por envío recovery</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRODUCTOS -->
+      <div class="field" id="prod-section">
+        <div class="field-label">
+          Composición del pedido
+          <span class="hint">múltiples categorías · USD s/IVA</span>
+        </div>
+        <div class="prod-lines" id="prod-lines">
+          <!-- líneas dinámicas -->
+        </div>
+        <button class="add-line" onclick="addLine()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Agregar categoría de producto
+        </button>
+      </div>
+
+      <!-- FLETE -->
+      <div class="field" id="flete-section">
+        <div class="field-label">Flete estimado <span class="req">*</span></div>
+        <div class="flete-row">
+          <div>
+            <input type="number" id="flete-mxn" placeholder="Subtotal s/IVA (MXN)" step="0.01" oninput="updateTotals()">
+          </div>
+          <div>
+            <input type="number" id="tc-fv" placeholder="T/C de la FV" step="0.01" value="17.30" oninput="updateTotals()">
+          </div>
+          <div style="display:flex;align-items:center;padding-left:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink3);">MXN</div>
+        </div>
+      </div>
+
+      <!-- CARGO POR ENVIO (solo GS0248) -->
+      <div class="field" id="cpe-section" style="display:none;">
+        <div class="field-label">Carta porte · valor a comparar</div>
+        <input type="number" id="cp-valor" placeholder="Subtotal carta porte s/IVA (MXN)" step="0.01">
+      </div>
+
+    </div><!-- fp-body -->
+
+    <!-- TOTALES BAR -->
+    <div class="totals-bar" id="totals-bar">
+      <div class="tot-item">
+        <div class="tot-label">Total pedido</div>
+        <div class="tot-value" id="tot-total">$0.00 <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink3)">USD</span></div>
+      </div>
+      <div class="tot-item">
+        <div class="tot-label">Equipo + Rec.</div>
+        <div class="tot-value go" id="tot-equipo">$0.00</div>
+      </div>
+      <div class="tot-item">
+        <div class="tot-label">Costal / Cuñete</div>
+        <div class="tot-value warn" id="tot-costal">$0.00</div>
+      </div>
+      <div class="tot-item">
+        <div class="tot-label">% flete est.</div>
+        <div class="tot-value" id="tot-pct">—</div>
+      </div>
+    </div>
+
+    <div style="padding:16px 22px;border-top:1px solid var(--ln);">
+      <button class="eval-btn" id="eval-btn" onclick="evaluar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        Evaluar solicitud
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════ RESULTADO ═══════════ -->
+  <div class="result-panel">
+
+    <!-- Resumen de productos -->
+    <div class="prod-summary" id="prod-summary">
+      <div class="ps-head"><div class="ps-title">Composición del pedido</div></div>
+      <div class="ps-rows" id="ps-rows">
+        <div style="padding:16px;text-align:center;font-family:'Newsreader',serif;font-style:italic;font-size:13px;color:var(--ink3)">Agrega productos para ver el resumen</div>
+      </div>
+    </div>
+
+    <!-- Motor trace -->
+    <div class="motor-trace">
+      <div class="mt-head">
+        <div class="mt-title">Resultado del motor</div>
+        <div class="mt-result idle" id="mt-result">Pendiente</div>
+      </div>
+      <div id="criteria-grid" class="crit-grid" style="display:none"></div>
+      <div id="pct-meter" class="pct-meter" style="display:none"></div>
+      <div class="mt-body" id="trace-body">
+        <div class="idle-state">Completa el formulario y presiona "Evaluar" para ver el análisis del motor.</div>
+      </div>
+      <div class="result-msg" id="result-msg" style="display:none">
+        <div class="rm-text" id="rm-text"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── THEME ──
+function toggleTheme(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('gpa-sim-theme',t);}catch(e){}}
+try{const s=localStorage.getItem('gpa-sim-theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}
+
+// ── DATA ──
+let origenSel = null;
+let sapSel = 'normal';
+let lineCount = 0;
+
+const CATEGORIAS = {
+  EQUIPO:      { label:'Equipo',           badge:'eq',  color:'go' },
+  RECUBRIM:    { label:'Recubrimiento',    badge:'rec', color:'go' },
+  COSTAL:      { label:'Costal / Cuñete',  badge:'cos', color:'warn' },
+  EXCLUIDO:    { label:'Excluido (cloro, filtrante, Diamond Brite)', badge:'ex', color:'stop' },
+};
+
+const DESTINOS = ['Jalisco','Nuevo León','Tamaulipas','Coahuila','Yucatán','Quintana Roo','Guerrero','Veracruz','Puebla','Guanajuato','Querétaro','Michoacán','Nayarit','Sinaloa','Sonora','CDMX','Edo. México','Morelos','San Luis Potosí','Aguascalientes','Chihuahua','Durango','Zacatecas','Hidalgo','Campeche','Tabasco','BCS','BCN','Colima'];
+
+// ── SUCURSAL ──
+function selOrigen(btn){
+  document.querySelectorAll('.suc-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  origenSel = btn.dataset.suc;
+}
+
+// ── SAP ──
+function selSAP(el, cls){
+  document.querySelectorAll('.sap-opt').forEach(o=>{o.classList.remove('sel','sel-go','sel-warn','sel-blue','sel-orange');});
+  el.classList.add('sel');
+  if(cls) el.classList.add(cls);
+  sapSel = el.dataset.sap;
+  // Toggle sections
+  const isCPE = sapSel === 'GS0248';
+  const isDisp = sapSel === 'GS0231';
+  document.getElementById('prod-section').style.display = isCPE ? 'none' : '';
+  document.getElementById('flete-section').style.display = '';
+  document.getElementById('cpe-section').style.display = isCPE ? '' : 'none';
+  document.getElementById('flete-section').querySelector('label,div').textContent;
+  updateTotals();
+}
+
+// ── PRODUCT LINES ──
+function addLine(){
+  lineCount++;
+  const id = 'line-' + lineCount;
+  const div = document.createElement('div');
+  div.className = 'prod-line';
+  div.id = id;
+  div.innerHTML = `
+    <select class="cat-sel" onchange="updateLine('${id}')" id="cat-${id}">
+      <option value="">Categoría…</option>
+      <option value="EQUIPO">Equipo</option>
+      <option value="RECUBRIM">Recubrimiento</option>
+      <option value="COSTAL">Costal / Cuñete</option>
+      <option value="EXCLUIDO">Excluido</option>
+    </select>
+    <input class="amt-input" type="number" id="amt-${id}" placeholder="0.00 USD" step="0.01" oninput="updateTotals()">
+    <button class="prod-line-del" onclick="delLine('${id}')" title="Eliminar">×</button>
+  `;
+  document.getElementById('prod-lines').appendChild(div);
+  updateTotals();
+}
+
+function updateLine(id){updateTotals();}
+
+function delLine(id){
+  const el = document.getElementById(id);
+  if(el) el.remove();
+  updateTotals();
+}
+
+// ── TOTALS ──
+function getLines(){
+  const lines = [];
+  document.querySelectorAll('.prod-line').forEach(line => {
+    const id = line.id;
+    const cat = document.getElementById('cat-' + id)?.value;
+    const amt = parseFloat(document.getElementById('amt-' + id)?.value) || 0;
+    if(cat && amt > 0) lines.push({cat, amt});
+  });
+  return lines;
+}
+
+function updateTotals(){
+  const lines = getLines();
+  const totUSD = lines.reduce((s,l) => s+l.amt, 0);
+  const equipoUSD = lines.filter(l=>l.cat==='EQUIPO'||l.cat==='RECUBRIM').reduce((s,l)=>s+l.amt,0);
+  const costalUSD = lines.filter(l=>l.cat==='COSTAL').reduce((s,l)=>s+l.amt,0);
+
+  document.getElementById('tot-total').innerHTML = `$${totUSD.toFixed(2)} <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink3)">USD</span>`;
+  document.getElementById('tot-equipo').textContent = `$${equipoUSD.toFixed(2)}`;
+  document.getElementById('tot-costal').textContent = `$${costalUSD.toFixed(2)}`;
+
+  const tc = parseFloat(document.getElementById('tc-fv')?.value) || 17.30;
+  const fMXN = parseFloat(document.getElementById('flete-mxn')?.value) || 0;
+  const fUSD = fMXN / tc;
+  const pct = totUSD > 0 ? (fUSD / totUSD * 100) : 0;
+  const pctEl = document.getElementById('tot-pct');
+  if(totUSD > 0 && fMXN > 0){
+    pctEl.textContent = pct.toFixed(1) + '%';
+    pctEl.className = 'tot-value ' + (pct > 30 ? 'stop' : pct > 15 ? 'warn' : 'go');
+  } else {
+    pctEl.textContent = '—';
+    pctEl.className = 'tot-value';
+  }
+
+  // Update product summary panel
+  updateProdSummary(lines, totUSD, equipoUSD, costalUSD);
+}
+
+function updateProdSummary(lines, totUSD, equipoUSD, costalUSD){
+  const container = document.getElementById('ps-rows');
+  if(lines.length === 0){
+    container.innerHTML = '<div style="padding:16px;text-align:center;font-family:\'Newsreader\',serif;font-style:italic;font-size:13px;color:var(--ink3)">Agrega productos para ver el resumen</div>';
+    return;
+  }
+  // Group by category
+  const groups = {};
+  lines.forEach(l=>{
+    if(!groups[l.cat]) groups[l.cat]={amt:0};
+    groups[l.cat].amt += l.amt;
+  });
+  const colors = {EQUIPO:'go',RECUBRIM:'go',COSTAL:'warn',EXCLUIDO:'stop'};
+  const labels = {EQUIPO:'Equipo',RECUBRIM:'Recubrimiento',COSTAL:'Costal / Cuñete',EXCLUIDO:'Excluido'};
+  let html = '';
+  Object.entries(groups).forEach(([cat,{amt}])=>{
+    const pct = totUSD > 0 ? (amt/totUSD*100).toFixed(0) : 0;
+    html += `<div class="ps-row"><div class="ps-row-label"><div class="ps-row-dot ${colors[cat]||'blue'}"></div>${labels[cat]||cat}</div><div class="ps-row-amt">$${amt.toFixed(2)} <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink3)">${pct}%</span></div></div>`;
+  });
+  html += `<div class="ps-total"><div class="ps-total-lbl">Total consolidado</div><div class="ps-total-val">$${totUSD.toFixed(2)} USD</div></div>`;
+  container.innerHTML = html;
+}
+
+// ── EVALUACIÓN ──
+function evaluar(){
+  const btn = document.getElementById('eval-btn');
+  btn.classList.add('running');
+  btn.textContent = 'Evaluando…';
+  setTimeout(()=>{
+    btn.classList.remove('running');
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Evaluar solicitud`;
+    runMotor();
+  }, 400);
+}
+
+function runMotor(){
+  const lines = getLines();
+  const estado = document.getElementById('dest-estado').value;
+  const ciudad = document.getElementById('dest-ciudad').value;
+  const tc = parseFloat(document.getElementById('tc-fv').value) || 17.30;
+  const fMXN = parseFloat(document.getElementById('flete-mxn').value) || 0;
+  const fUSD = fMXN / tc;
+  const origen = origenSel;
+
+  const totUSD = lines.reduce((s,l) => s+l.amt, 0);
+  const equipoUSD = lines.filter(l=>l.cat==='EQUIPO'||l.cat==='RECUBRIM').reduce((s,l)=>s+l.amt,0);
+  const costalUSD = lines.filter(l=>l.cat==='COSTAL').reduce((s,l)=>s+l.amt,0);
+  const exclUSD = lines.filter(l=>l.cat==='EXCLUIDO').reduce((s,l)=>s+l.amt,0);
+  const tieneCostal = costalUSD > 0;
+  const tieneElegible = equipoUSD > 0;
+  const tieneExcluido = exclUSD > 0;
+  const pct = totUSD > 0 ? fUSD / totUSD : 0;
+  const pctPct = (pct*100).toFixed(1);
+  const destinoOK = DESTINOS.includes(estado);
+
+  const steps = [];
+  let codigo, tipo, resClass;
+
+  // Validar origen
+  if(!origen){
+    addStep(steps,'warn','Origen','Sucursal GPA','Selecciona la sucursal de origen para continuar.','warn','—');
+    renderTrace(steps,'—','idle',null,null,'Selecciona una sucursal de origen.');
+    return;
+  }
+
+  // CAPA 0: unicidad (simulado)
+  addStep(steps,'pass','Capa 0','Unicidad documental','FV y CP no registradas en solicitudes previas (simulación).','go','OK');
+
+  // CAPA 1a: dispersión
+  if(sapSel === 'GS0231'){
+    addStep(steps,'active','Capa 1a','GS0231 detectado','Operación clasificada como DISPERSIÓN INTERNA. Evaluar contra tarifas 2026.','blue','GS0231');
+    addStep(steps,'skip','Capa 1b','Cargo por envío','No aplica · operación es dispersión.','skip','skip');
+    addStep(steps,'skip','Capa 2','Back Order','No aplica.','skip','skip');
+    addStep(steps,'skip','Capa 3','Motor C1–C5','No aplica · dispersión interna.','skip','skip');
+    codigo='R-800';tipo='Dispersión interna · evaluar tarifas 2026';resClass='blue';
+    renderTrace(steps,'R-800','blue',
+      [{l:'SAP',s:'blue',v:'GS0231'},{l:'Fletera',s:'blue',v:'Verificar'},{l:'Ruta',s:'blue',v:estado||'—'},{l:'Vehículo',s:'blue',v:'?'},{l:'Tarifa',s:'blue',v:'Tabla'}],
+      null,
+      `<strong>GS0231 detectado → DISPERSIÓN INTERNA.</strong> El motor de tarifas 2026 verifica: fletera × vehículo × destino. Si la ruta tiene tarifa y el flete está dentro del umbral del 10% → R-800 auto-aprobada.`
+    );
+    return;
+  }
+
+  // CAPA 1b: cargo por envío
+  if(sapSel === 'GS0248'){
+    const cpValor = parseFloat(document.getElementById('cp-valor').value) || 0;
+    const fvValor = fMXN;
+    const delta = Math.abs(fvValor - cpValor);
+    const tolerancia = cpValor * 0.01;
+    addStep(steps,'skip','Capa 1a','Dispersión interna','No aplica · GS0248 no es dispersión.','skip','skip');
+    addStep(steps,'active','Capa 1b','GS0248 · Cargo por envío',`FV: $${fvValor.toFixed(2)} MXN · CP: $${cpValor.toFixed(2)} MXN · Δ: $${delta.toFixed(2)} MXN (${cpValor>0?(delta/cpValor*100).toFixed(1):0}%)`, delta<=tolerancia?'orange':'warn', delta<=tolerancia?'R-060':'R-061');
+    if(delta <= tolerancia || cpValor === 0){
+      codigo='R-060';tipo='Cargo por envío aprobado';resClass='orange';
+      renderTrace(steps,'R-060','orange',
+        [{l:'SAP',s:'orange',v:'GS0248'},{l:'SKU',s:'orange',v:'00400...'},{l:'FV≈CP',s:'ok',v:'≤1% ✓'},{l:'—',s:'na',v:'—'},{l:'—',s:'na',v:'—'}],
+        null,
+        `<strong>R-060 · Cargo por envío aprobado.</strong> La FV de recuperación de flete coincide con el costo de la carta porte dentro del umbral del 1%. Auto-aprobada sin intervención.`
+      );
+    } else {
+      codigo='R-061';tipo='Cargo por envío · diferencia detectada';resClass='warn';
+      renderTrace(steps,'R-061','warn',
+        [{l:'SAP',s:'orange',v:'GS0248'},{l:'SKU',s:'orange',v:'00400...'},{l:'FV≈CP',s:'fail',v:`${(delta/cpValor*100).toFixed(1)}% ✗`},{l:'—',s:'na',v:'—'},{l:'—',s:'na',v:'—'}],
+        null,
+        `<strong>R-061 · Diferencia entre FV y CP supera el umbral del 1%.</strong> FV: $${fvValor.toFixed(2)} · CP: $${cpValor.toFixed(2)} · Δ $${delta.toFixed(2)} MXN (${(delta/cpValor*100).toFixed(1)}%). Requiere revisión del aprobador para validar si la diferencia es justificada.`
+      );
+    }
+    return;
+  }
+
+  // CAPA 2: Back Order
+  if(sapSel === 'GS0229'){
+    addStep(steps,'skip','Capa 1a','Dispersión interna','No aplica.','skip','skip');
+    addStep(steps,'skip','Capa 1b','Cargo por envío','No aplica.','skip','skip');
+    addStep(steps,'active','Capa 2','GS0229 · Back Order','Excepción activa. Solo se evalúa C3 (destino).','warn','GS0229');
+    if(!estado || estado === 'otro'){
+      addStep(steps,'fail','C3 Destino','Fuera de catálogo',`${estado||'Sin seleccionar'} no está en el catálogo del programa.`,'stop','R-301');
+      codigo='R-301';resClass='stop';
+      renderTrace(steps,'R-301','stop',
+        [{l:'C1',s:'skip',v:'Exento'},{l:'C2',s:'skip',v:'Exento'},{l:'C3',s:'fail',v:'✗'},{l:'C4',s:'skip',v:'Exento'},{l:'C5',s:'skip',v:'Exento'}],
+        null,
+        `<strong>Back Order (GS0229) pero el destino no está cubierto.</strong> El estado seleccionado no figura en el catálogo del programa. C3 es el único criterio evaluado en Back Order — si el destino no aplica, la solicitud se rechaza.`
+      );
+    } else {
+      addStep(steps,'pass','C3 Destino','En catálogo',`${estado} está en el catálogo del programa. ✓`,'go','R-050');
+      codigo='R-050';resClass='go';
+      renderTrace(steps,'R-050','go',
+        [{l:'C1',s:'skip',v:'Exento'},{l:'C2',s:'skip',v:'Exento'},{l:'C3',s:'ok',v:`${estado.substring(0,5)} ✓`},{l:'C4',s:'skip',v:'Exento'},{l:'C5',s:'skip',v:'Exento'}],
+        null,
+        `<strong>R-050 · Back Order aprobado.</strong> GS0229 activo — solo se valida el destino. ${estado} está en el catálogo del programa. Monto, producto, fletera y proporción del flete no se evalúan.`
+      );
+    }
+    return;
+  }
+
+  // CAPA 3: Motor C1-C5
+  addStep(steps,'skip','Capa 1a','Dispersión interna','No aplica · sin GS0231.','skip','skip');
+  addStep(steps,'skip','Capa 1b','Cargo por envío','No aplica · sin GS0248.','skip','skip');
+  addStep(steps,'skip','Capa 2','Back Order','No aplica · sin GS0229.','skip','skip');
+
+  // C1: Monto
+  if(lines.length === 0){
+    addStep(steps,'warn','C1 Monto','Sin productos','Agrega al menos una categoría de producto con su monto.','warn','—');
+    renderTrace(steps,'—','idle',null,null,'Agrega productos al pedido para evaluar C1.');
+    return;
+  }
+  let c1pass = true, c1code='', c1detail='';
+  if(tieneCostal && totUSD < 1000){
+    c1pass=false;c1code='R-103';c1detail=`Con costal incluido se requiere mínimo $1,000 USD. Total: $${totUSD.toFixed(2)}.`;
+  } else if(tieneCostal && equipoUSD < 500){
+    c1pass=false;c1code='R-102';c1detail=`Con costal, el equipo debe ser ≥ $500 USD. Equipo+Rec: $${equipoUSD.toFixed(2)}.`;
+  } else if(!tieneCostal && totUSD < 350){
+    c1pass=false;c1code='R-101';c1detail=`Monto $${totUSD.toFixed(2)} USD menor al mínimo de $350 USD.`;
+  }
+  if(!c1pass){
+    addStep(steps,'fail','C1 Monto','Falla',c1detail,'stop',c1code);
+    renderTrace(steps,c1code,'stop',
+      [{l:'C1',s:'fail',v:c1code},{l:'C2',s:'na',v:'—'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],
+      null,
+      `<strong>${c1code}:</strong> ${c1detail}`
+    );
+    return;
+  }
+  addStep(steps,'pass','C1 Monto','OK',`$${totUSD.toFixed(2)} USD · ${tieneCostal?'Con costal':'Sin costal'}. ✓`,'go','✓');
+
+  // C2: Producto
+  let c2pass=true, c2code='', c2detail='';
+  if(tieneExcluido && !tieneElegible){
+    c2pass=false;c2code='R-201';c2detail=`Pedido contiene productos excluidos y no tiene equipo ni recubrimiento elegible.`;
+  } else if(!tieneElegible){
+    c2pass=false;c2code='R-202';c2detail=`Sin productos elegibles (equipo o recubrimiento). Categorías actuales: ${[...new Set(lines.map(l=>l.cat))].join(', ')}.`;
+  }
+  if(!c2pass){
+    addStep(steps,'fail','C2 Producto','Falla',c2detail,'stop',c2code);
+    renderTrace(steps,c2code,'stop',
+      [{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'fail',v:c2code},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],
+      null,
+      `<strong>${c2code}:</strong> ${c2detail}`
+    );
+    return;
+  }
+  addStep(steps,'pass','C2 Producto','OK',`Elegible. Equipo+Rec: $${equipoUSD.toFixed(2)} USD. ✓`,'go','✓');
+
+  // C3: Destino
+  if(!estado){
+    addStep(steps,'warn','C3 Destino','Sin destino','Selecciona el estado de destino para continuar.','warn','—');
+    renderTrace(steps,'—','idle',null,null,'Selecciona el destino para continuar la evaluación.');
+    return;
+  }
+  let c3soft = false;
+  if(!destinoOK){
+    addStep(steps,'fail','C3 Destino','Fuera de catálogo',`${estado} no está en el catálogo del programa.`,'stop','R-301');
+    renderTrace(steps,'R-301','stop',
+      [{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'ok',v:'✓'},{l:'C3',s:'fail',v:'R-301'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],
+      null,
+      `<strong>R-301:</strong> El estado "${estado}" no figura en el catálogo de destinos del programa.`
+    );
+    return;
+  }
+  addStep(steps,'pass','C3 Destino','OK',`${estado}${ciudad?', '+ciudad:''} en catálogo. ✓`,'go','✓');
+
+  // C4 (simulado - asumimos fletera y servicio OK en simulador)
+  addStep(steps,'pass','C4 Entrega + Fletera','OK (simulado)','Tipo de servicio = entrega domicilio. Fletera en catálogo. ✓','go','✓');
+
+  // C5: Proporción
+  if(fMXN === 0){
+    addStep(steps,'warn','C5 Proporción','Sin flete','Ingresa el flete estimado para calcular la proporción.','warn','—');
+    renderTrace(steps,'—','idle',null,null,'Ingresa el flete estimado para completar la evaluación.');
+    return;
+  }
+  let c5code='',c5class='ok',c5detail='';
+  if(pct > 0.30){
+    c5code='R-502';c5class='warn';c5detail=`Flete ${pctPct}% supera el umbral crítico del 30%. Escalar a Aprobador 2 sugerido.`;
+    addStep(steps,'warn','C5 Proporción',`${pctPct}% > 30%`,c5detail,'warn','R-502');
+    codigo='R-502';resClass='warn';
+  } else if(pct > 0.15){
+    c5code='R-501';c5class='warn';c5detail=`Flete ${pctPct}% supera el umbral del 15%. Requiere revisión del aprobador.`;
+    addStep(steps,'warn','C5 Proporción',`${pctPct}% > 15%`,c5detail,'warn','R-501');
+    codigo='R-501';resClass='warn';
+  } else {
+    addStep(steps,'pass','C5 Proporción',`${pctPct}% ✓`,`Flete ${pctPct}% del pedido. Dentro del umbral del 15%. ✓`,'go','✓');
+    codigo='R-000';resClass='go';
+  }
+
+  // Render
+  const crits = [
+    {l:'C1 Monto',s:'ok',v:`$${totUSD.toFixed(0)}`},
+    {l:'C2 Producto',s:'ok',v:'Elegible'},
+    {l:'C3 Destino',s:'ok',v:estado.substring(0,6)},
+    {l:'C4 Flete',s:'ok',v:'OK'},
+    {l:'C5 %',s:c5class,v:pctPct+'%'}
+  ];
+  const meterHTML = `<div class="pm-head"><span class="pm-lbl">% flete / pedido (s/IVA)</span><span class="pm-val ${pct>0.30?'stop':pct>0.15?'warn':'ok'}">${pctPct}%</span></div><div class="pm-bar"><div class="pm-fill ${pct>0.30?'stop':pct>0.15?'warn':'ok'}" style="width:${Math.min(pct/0.40*100,100)}%"></div><div class="pm-thresh" style="left:${0.15/0.40*100}%"></div></div>`;
+
+  let msg = '';
+  if(codigo==='R-000') msg=`<strong>R-000 · Apoyo completo auto-aprobado.</strong> Los 5 criterios se cumplen. Origen: ${origen}. Destino: ${estado}${ciudad?', '+ciudad:''}. Flete: ${pctPct}% del pedido. Esta solicitud sería liberada automáticamente por el motor.`;
+  else msg=`<strong>${c5code}:</strong> ${c5detail} El aprobador debe revisar si el flete es justificado para este destino.`;
+
+  renderTrace(steps, codigo, resClass, crits, meterHTML, msg);
+}
+
+// ── HELPERS ──
+function addStep(steps, dotClass, layer, name, detail, codeClass, codeText){
+  steps.push({dotClass, layer, name, detail, codeClass, codeText});
+}
+
+function renderTrace(steps, codigo, resClass, crits, meterHTML, msg){
+  // Result badge
+  document.getElementById('mt-result').className = 'mt-result ' + resClass;
+  document.getElementById('mt-result').textContent = codigo;
+
+  // Criteria grid
+  const cg = document.getElementById('criteria-grid');
+  if(crits){
+    cg.style.display='grid';
+    cg.innerHTML = crits.map(c=>`<div class="cg-item ${c.s}"><span class="cg-label">${c.l}</span>${c.v}</div>`).join('');
+  } else { cg.style.display='none'; }
+
+  // Meter
+  const pm = document.getElementById('pct-meter');
+  if(meterHTML){ pm.style.display='block'; pm.innerHTML=meterHTML; } else { pm.style.display='none'; }
+
+  // Steps
+  const tb = document.getElementById('trace-body');
+  tb.innerHTML = steps.map(s=>`
+    <div class="trace-step">
+      <div class="trace-icon"><div class="ti-dot ${s.dotClass}"></div></div>
+      <div class="trace-content">
+        <div class="trace-layer">${s.layer}</div>
+        <div class="trace-name">${s.name}</div>
+        <div class="trace-detail">${s.detail}</div>
+        ${s.codeText && s.codeText !== '—' && s.codeText !== 'skip' ? `<span class="trace-code ${s.codeClass}">${s.codeText}</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  // Message
+  const rm = document.getElementById('result-msg');
+  const rmt = document.getElementById('rm-text');
+  if(msg){ rm.style.display='block'; rmt.innerHTML=msg; } else { rm.style.display='none'; }
+}
+
+// Init
+addLine();
+updateTotals();
+</script>
+</body>
+</html>

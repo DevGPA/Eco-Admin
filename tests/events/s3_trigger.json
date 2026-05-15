@@ -1,0 +1,11 @@
+{
+  "Records": [
+    {
+      "eventSource": "aws:s3",
+      "s3": {
+        "bucket": { "name": "gpa-documentos-dev" },
+        "object": { "key": "pendientes/2026-04-22/116873635.pdf" }
+      }
+    }
+  ]
+}

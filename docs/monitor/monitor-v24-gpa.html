@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GPA Admin · Motor de Fletes v2.4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&family=Nunito:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══ GPA BRAND TOKENS ═══════════════════════════════════════════ */
+:root {
+  /* Brand primario */
+  --navy:       #1C2535;   /* Barra nav GPA */
+  --navy-m:     #243045;
+  --navy-l:     #2E3D58;
+  --navy-bg:    #EBF0F7;
+  --teal:       #3AADAD;   /* Rombos GPA */
+  --teal-d:     #2B8888;
+  --teal-bg:    #E4F5F5;
+  --teal-l:     #7DCECE;
+  --gold:       #C4960A;   /* Aniversario GPA */
+  --gold-bg:    #FDF6E3;
+  --gold-l:     #E0B830;
+  /* Superficie */
+  --bg:         #F5F6F8;
+  --p:          #FFFFFF;
+  --p2:         #EEF0F4;
+  --p3:         #E4E7ED;
+  --ink:        #1C2535;
+  --ink2:       #3A4A60;
+  --ink3:       #7A8A9A;
+  --ln:         #D0D6E0;
+  --ln2:        #B8C0CC;
+  /* Estados */
+  --go:         #1A6640;
+  --go-m:       #228852;
+  --go-bg:      #E4F4EC;
+  --go-l:       #60B888;
+  --warn:       #6A4400;
+  --warn-m:     #A06A10;
+  --warn-bg:    #FDF3DC;
+  --warn-l:     #D8A820;
+  --stop:       #7A1A1A;
+  --stop-m:     #B02828;
+  --stop-bg:    #FAE8E8;
+  --stop-l:     #D87070;
+  --hold:       #2E2278;
+  --hold-m:     #4A3EC0;
+  --hold-bg:    #EBEAFB;
+  --hold-l:     #9480DC;
+  --disp:       var(--navy-m);
+  --disp-bg:    var(--navy-bg);
+  --disp-l:     #6A88B8;
+  --sh:  0 1px 4px rgba(28,37,53,.06);
+  --shm: 0 6px 24px rgba(28,37,53,.12);
+}
+[data-theme=dark] {
+  --navy:       #0E1520;
+  --navy-m:     #182030;
+  --navy-l:     #1C2840;
+  --navy-bg:    #080E18;
+  --teal:       #2EAAAA;
+  --teal-d:     #1E7878;
+  --teal-bg:    #041414;
+  --teal-l:     #1E7878;
+  --gold:       #E0B020;
+  --gold-bg:    #1A1000;
+  --gold-l:     #6A4800;
+  --bg:#0A0C10;--p:#121820;--p2:#181E28;--p3:#202830;
+  --ink:#DDE4EE;--ink2:#8A9AAA;--ink3:#505A68;
+  --ln:#1A2030;--ln2:#242E40;
+  --go:#2EAA60;--go-m:#228852;--go-bg:#041008;--go-l:#1A6640;
+  --warn:#D8A020;--warn-m:#A06A10;--warn-bg:#181000;--warn-l:#6A4400;
+  --stop:#E07070;--stop-m:#B02828;--stop-bg:#180808;--stop-l:#7A1A1A;
+  --hold:#9080E8;--hold-m:#4A3EC0;--hold-bg:#0C0820;--hold-l:#2E2278;
+  --disp:#6A9ADA;--disp-bg:#080E18;--disp-l:#1C2840;
+  --sh:0 1px 4px rgba(0,0,0,.3);--shm:0 6px 24px rgba(0,0,0,.5);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{background:var(--bg);color:var(--ink);font-family:'Nunito Sans',sans-serif;font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+
+/* ═══ GPA LOGO SVG ═══════════════════════════════════════════════ */
+.gpa-logo{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.gpa-badge{width:36px;height:36px;position:relative;flex-shrink:0;}
+.gpa-badge svg{width:36px;height:36px;}
+.gpa-wordmark{display:flex;flex-direction:column;gap:0;}
+.gpa-w1{font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;color:#FFFFFF;line-height:1.1;letter-spacing:-.01em;}
+.gpa-w2{font-family:'Nunito Sans',sans-serif;font-size:10px;font-weight:400;color:rgba(255,255,255,.65);line-height:1;letter-spacing:.02em;}
+
+/* ═══ TOPBAR ═════════════════════════════════════════════════════ */
+.tb{display:flex;align-items:center;gap:14px;padding:0 22px;height:54px;background:var(--navy);border-bottom:2px solid var(--teal);position:sticky;top:0;z-index:60;}
+.tb-divider{width:1px;height:22px;background:rgba(255,255,255,.12);flex-shrink:0;}
+.tb-title{font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:.04em;text-transform:uppercase;flex-shrink:0;}
+.layers{flex:1;display:flex;align-items:center;gap:5px;overflow:hidden;justify-content:center;}
+.lc{font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:600;padding:2px 7px;border-radius:3px;white-space:nowrap;display:flex;align-items:center;gap:3px;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.55);}
+.lc::before{content:'';width:4px;height:4px;border-radius:50%;flex-shrink:0;}
+.lc0{border-color:rgba(90,190,190,.3);color:#8ADADA;}.lc0::before{background:#3AADAD;}
+.lc1{border-color:rgba(58,173,173,.25);color:#7ACECE;}.lc1::before{background:var(--teal);}
+.lc2{border-color:rgba(196,150,10,.3);color:#D4B050;}.lc2::before{background:var(--gold);}
+.lc3{border-color:rgba(200,160,30,.25);color:#C8A830;}.lc3::before{background:var(--gold);}
+.lc4{border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.4);}.lc4::before{background:rgba(255,255,255,.35);}
+.lc5{border-color:rgba(58,173,173,.25);color:#7ACECE;}.lc5::before{background:var(--teal);}
+.arr{color:rgba(255,255,255,.2);font-size:9px;}
+.tbr{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.vc-chip{font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600;padding:3px 8px;border-radius:4px;background:var(--teal-bg);color:var(--teal);border:1px solid rgba(58,173,173,.4);}
+.lv{display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,.4);}
+.lvd{width:5px;height:5px;border-radius:50%;background:#3AADAD;animation:bl 2s ease-in-out infinite;}
+@keyframes bl{0%,100%{opacity:1;}50%{opacity:.2;}}
+.tbtn{border:1px solid rgba(255,255,255,.15);background:transparent;padding:4px 10px;border-radius:4px;cursor:pointer;color:rgba(255,255,255,.6);font-family:'IBM Plex Mono',monospace;font-size:9px;transition:all .13s;display:flex;align-items:center;gap:4px;}
+.tbtn:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.9);}
+.fbtn{border-color:rgba(58,173,173,.4);color:var(--teal);}
+.fbtn:hover{background:rgba(58,173,173,.1);}
+.fbtn.loaded{border-color:rgba(34,136,82,.5);color:var(--go-m);}
+
+/* ═══ TEAL ACCENT BAR ════════════════════════════════════════════ */
+.teal-accent-bar{height:3px;background:linear-gradient(90deg,var(--teal) 0%,rgba(58,173,173,.3) 60%,transparent 100%);}
+
+/* ═══ VIEW TABS ══════════════════════════════════════════════════ */
+.vtabs{display:flex;gap:2px;padding:3px;background:var(--p3);border:1px solid var(--ln);border-radius:8px;width:fit-content;margin:12px 22px 0;}
+.vt{padding:6px 16px;border-radius:5px;font-size:12px;font-weight:700;color:var(--ink3);cursor:pointer;border:none;background:transparent;font-family:'Nunito Sans',sans-serif;transition:all .12s;display:flex;align-items:center;gap:6px;}
+.vt.active{background:var(--p);color:var(--navy);box-shadow:var(--sh);}
+.vb{font-family:'IBM Plex Mono',monospace;font-size:8.5px;padding:1px 5px;border-radius:3px;}
+.vt.active .vb-go{background:var(--go-bg);color:var(--go);}
+.vt.active .vb-warn{background:var(--warn-bg);color:var(--warn);}
+
+/* ═══ KPI ════════════════════════════════════════════════════════ */
+.ks{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:12px 22px;max-width:1900px;}
+.kpi{background:var(--p);border:1px solid var(--ln);border-radius:10px;padding:12px 13px;position:relative;overflow:hidden;}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi.brand::before{background:var(--navy);}
+.kpi.go::before{background:var(--go-m);}
+.kpi.stop::before{background:var(--stop-m);}
+.kpi.warn::before{background:var(--warn-m);}
+.kpi.teal::before{background:var(--teal);}
+.kpi.gold::before{background:var(--gold);}
+.kpi.disp::before{background:var(--disp);}
+.kl{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:7px;}
+.kv{font-family:'Nunito',sans-serif;font-size:22px;font-weight:800;line-height:1;letter-spacing:-.02em;}
+.kpi.brand .kv{color:var(--navy);}
+.kpi.go .kv{color:var(--go);}
+.kpi.stop .kv{color:var(--stop);}
+.kpi.warn .kv{color:var(--warn);}
+.kpi.teal .kv{color:var(--teal-d);}
+.kpi.gold .kv{color:var(--gold);}
+.kpi.disp .kv{color:var(--navy-m);}
+.ks2{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ink3);margin-top:4px;}
+
+/* ═══ BOARD ══════════════════════════════════════════════════════ */
+.kb{display:grid;grid-template-columns:repeat(4,minmax(270px,1fr));gap:10px;padding:8px 22px 80px;max-width:1900px;align-items:start;}
+
+/* ═══ COLUMN ═════════════════════════════════════════════════════ */
+.col{background:var(--p);border:1px solid var(--ln);border-radius:12px;overflow:hidden;}
+.col-h{padding:13px 14px 0;display:flex;align-items:center;justify-content:space-between;}
+.col-hl{display:flex;align-items:center;gap:8px;}
+.ci{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;}
+.ci svg{width:11px;height:11px;}
+.ci.go{background:var(--go-m);color:#fff;}
+.ci.warn{background:var(--warn-m);color:#fff;}
+.ci.stop{background:var(--stop-m);color:#fff;}
+.ci.hold{background:var(--hold-m);color:#fff;}
+.ct{font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:var(--navy);}
+.ccn{font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--p3);color:var(--ink3);padding:2px 7px;border-radius:4px;font-weight:600;}
+.cd{font-size:11px;color:var(--ink3);padding:2px 14px 8px;font-weight:300;}
+.cb{padding:6px 7px 12px;display:flex;flex-direction:column;gap:6px;}
+.cdiv{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--teal-d);padding:4px 2px;margin-top:2px;border-top:1px solid var(--teal-bg);display:flex;align-items:center;gap:5px;}
+.cdiv::before{content:'◆';font-size:6px;color:var(--teal);}
+.empty{padding:28px 14px;text-align:center;color:var(--ink3);font-size:12px;font-weight:300;}
+
+/* ═══ CARD ═══════════════════════════════════════════════════════ */
+.card{background:var(--p);border:1px solid var(--ln);border-radius:8px;padding:10px 11px 9px;position:relative;overflow:hidden;transition:all .13s;cursor:default;}
+.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;}
+.card.go::before{background:linear-gradient(180deg,var(--go-m),var(--go));}
+.card.warn::before{background:linear-gradient(180deg,var(--warn-m),var(--warn));}
+.card.stop::before{background:linear-gradient(180deg,var(--stop-m),var(--stop));}
+.card.teal::before{background:linear-gradient(180deg,var(--teal),var(--teal-d));}
+.card.navy::before{background:linear-gradient(180deg,var(--navy-m),var(--navy));}
+.card.gold::before{background:linear-gradient(180deg,var(--gold-l),var(--gold));}
+.card.new::before{background:linear-gradient(180deg,#9070C0,#6030A0);}
+.card:hover{border-color:var(--ln2);box-shadow:var(--shm);transform:translateY(-1px);}
+.card.sel{border-color:var(--teal);box-shadow:0 0 0 2px rgba(58,173,173,.15);}
+
+/* TYPE BADGE */
+.tb2{font-family:'IBM Plex Mono',monospace;font-size:8.5px;font-weight:600;padding:2px 6px;border-radius:3px;letter-spacing:.04em;text-transform:uppercase;display:inline-block;margin-bottom:5px;}
+.tb2.vc{background:var(--go-bg);color:var(--go);}
+.tb2.di{background:var(--disp-bg);color:var(--disp);border:1px solid rgba(58,100,180,.2);}
+.tb2.bo{background:var(--warn-bg);color:var(--warn);}
+.tb2.cpe{background:var(--gold-bg);color:var(--gold);}
+.tb2.ptx{background:var(--teal-bg);color:var(--teal-d);border:1px solid rgba(58,173,173,.25);}
+.tb2.cfdi{background:#F3EBFA;color:#561A70;}
+
+/* CARD HEAD */
+.ch{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px;}
+.chk{width:14px;height:14px;border:1.5px solid var(--ln2);border-radius:3px;cursor:pointer;display:grid;place-items:center;background:var(--p);flex-shrink:0;margin-top:1px;transition:all .12s;}
+.chk:hover{border-color:var(--teal);}
+.chk.on{background:var(--navy);border-color:var(--navy);}
+.chk.on::after{content:'';width:6px;height:3.5px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;transform:rotate(-45deg) translate(1px,-1px);}
+.cm{flex:1;min-width:0;}
+.cn{font-family:'Nunito',sans-serif;font-weight:800;font-size:12.5px;color:var(--navy);letter-spacing:-.01em;line-height:1.2;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cf{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--ink3);}
+.cu{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;flex-shrink:0;white-space:nowrap;}
+.cu.a{background:var(--go-bg);color:var(--go);}
+.cu.w{background:var(--warn-bg);color:var(--warn);}
+.cu.s{background:var(--stop-bg);color:var(--stop);}
+.cu.d{background:var(--disp-bg);color:var(--disp);}
+.cu.t{background:var(--teal-bg);color:var(--teal-d);}
+.cu.g{background:var(--gold-bg);color:var(--gold);}
+
+/* SAP TAG */
+.st{font-family:'IBM Plex Mono',monospace;font-size:8.5px;font-weight:600;padding:2px 6px;border-radius:3px;display:inline-flex;align-items:center;gap:3px;margin-bottom:6px;}
+.st.s31{background:var(--disp-bg);color:var(--disp);}
+.st.s29{background:var(--warn-bg);color:var(--warn);}
+.st.s48{background:var(--gold-bg);color:var(--gold);}
+.st.s30{background:var(--p3);color:var(--ink3);}
+.st.sptx{background:var(--teal-bg);color:var(--teal-d);}
+.st.scfdi{background:#F3EBFA;color:#561A70;}
+
+/* CRITERIA ROW */
+.cr{display:flex;gap:2px;padding:3px 0 6px;margin-bottom:5px;border-bottom:1px dashed var(--ln);}
+.c{flex:1;height:18px;border-radius:3px;display:grid;place-items:center;font-family:'IBM Plex Mono',monospace;font-size:8.5px;font-weight:700;cursor:help;position:relative;}
+.c.ok{background:var(--go-bg);color:var(--go);border:1px solid rgba(34,136,82,.2);}
+.c.fail{background:var(--stop-bg);color:var(--stop);border:1px solid rgba(176,40,40,.2);}
+.c.soft{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(160,106,16,.2);}
+.c.na{background:var(--p3);color:var(--ink3);border:1px solid var(--ln);}
+.c.di{background:var(--disp-bg);color:var(--disp);border:1px solid rgba(58,100,180,.2);}
+.c.bo{background:var(--warn-bg);color:var(--warn-m);border:1px solid rgba(160,106,16,.2);}
+.c.pt{background:var(--teal-bg);color:var(--teal-d);border:1px solid rgba(58,173,173,.25);}
+.c[title]:hover::after{content:attr(title);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:9px;font-weight:400;padding:4px 8px;border-radius:4px;white-space:nowrap;z-index:99;pointer-events:none;font-family:'Nunito Sans',sans-serif;}
+
+/* RESULT ROW */
+.rr{display:flex;align-items:center;gap:5px;margin-bottom:5px;}
+.rc{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;flex-shrink:0;}
+.rc.go{background:var(--go-bg);color:var(--go);}
+.rc.warn{background:var(--warn-bg);color:var(--warn);}
+.rc.stop{background:var(--stop-bg);color:var(--stop);}
+.rc.teal{background:var(--teal-bg);color:var(--teal-d);}
+.rc.disp{background:var(--disp-bg);color:var(--disp);}
+.rc.gold{background:var(--gold-bg);color:var(--gold);}
+.rt{font-size:10.5px;color:var(--ink2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* METER */
+.mtr{margin-bottom:5px;}
+.mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+.ml{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase;}
+.mv{font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;}
+.mv.ok{color:var(--go);}
+.mv.warn{color:var(--warn);}
+.mv.stop{color:var(--stop);}
+.mbar{height:4px;background:var(--p3);border-radius:3px;overflow:hidden;position:relative;}
+.mfill{height:100%;border-radius:3px;}
+.mfill.ok{background:linear-gradient(90deg,var(--go-m),var(--go));}
+.mfill.warn{background:linear-gradient(90deg,var(--warn-m),var(--warn-l));}
+.mfill.stop{background:linear-gradient(90deg,var(--stop-m),var(--stop-l));}
+.mt{position:absolute;top:-2px;bottom:-2px;width:1.5px;background:var(--ink3);opacity:.3;}
+.mt::after{content:'15%';position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:7px;color:var(--ink3);white-space:nowrap;}
+
+/* TBOX */
+.tbox{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px;}
+.tbi{background:var(--p2);border-radius:4px;padding:5px 7px;border:1px solid var(--ln);}
+.tbl{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--ink3);letter-spacing:.04em;text-transform:uppercase;margin-bottom:1px;}
+.tbv{font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;color:var(--navy);}
+
+/* PTX TABLE */
+.ptxt{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:5px;border:1px solid var(--teal-l);border-radius:5px;overflow:hidden;}
+.ptxt th{text-align:left;padding:4px 7px;font-family:'IBM Plex Mono',monospace;font-size:7.5px;letter-spacing:.06em;text-transform:uppercase;background:var(--teal-bg);color:var(--teal-d);border-bottom:1px solid rgba(58,173,173,.2);}
+.ptxt td{padding:4px 7px;border-bottom:1px dashed var(--ln);color:var(--ink2);font-family:'IBM Plex Mono',monospace;font-size:9px;}
+.ptxt tr:last-child td{border:none;}
+
+/* BO BOX */
+.bob{background:var(--warn-bg);border:1px solid rgba(160,106,16,.2);border-radius:5px;padding:6px 8px;margin-bottom:5px;}
+.boh{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--warn);letter-spacing:.06em;text-transform:uppercase;margin-bottom:1px;font-weight:700;}
+.bov{font-size:10.5px;color:var(--ink2);}
+
+/* CARD META */
+.cmeta{display:flex;align-items:center;gap:4px;padding-top:5px;border-top:1px dashed var(--ln);font-size:10px;color:var(--ink3);flex-wrap:wrap;}
+.ms{color:var(--ln2);}
+
+/* CARD FOOT */
+.cft{display:flex;align-items:center;justify-content:space-between;gap:4px;padding-top:5px;border-top:1px solid var(--ln);}
+.dps{display:flex;gap:2px;}
+.dp{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--teal-d);background:var(--teal-bg);padding:2px 6px;border-radius:3px;text-decoration:none;border:1px solid rgba(58,173,173,.2);transition:all .12s;cursor:pointer;}
+.dp:hover{background:var(--teal-bg);border-color:var(--teal);}
+.bs{display:flex;gap:2px;}
+.btn{border:1px solid var(--ln);background:var(--p);color:var(--ink2);font-family:'Nunito Sans',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;cursor:pointer;transition:all .12s;}
+.btn:hover{background:var(--p2);}
+.btnp{background:var(--navy);color:#fff;border-color:var(--navy);}
+.btnp:hover{background:var(--navy-m);}
+.btnd{color:var(--stop);border-color:rgba(176,40,40,.25);}
+.btnd:hover{background:var(--stop-bg);}
+
+/* BULK */
+.bulk{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(130%);background:var(--navy);color:#fff;border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 32px rgba(28,37,53,.35);z-index:100;transition:transform .22s cubic-bezier(.4,0,.2,1);}
+.bulk.vis{transform:translateX(-50%) translateY(0);}
+.bcnt{font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;padding-right:10px;border-right:1px solid rgba(255,255,255,.15);}
+.bb{background:transparent;border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:'Nunito Sans',sans-serif;font-size:10.5px;font-weight:700;transition:all .12s;}
+.bb:hover{background:rgba(255,255,255,.1);}
+.bb.gob{background:var(--go-m);border-color:var(--go-m);}
+.bb.rb{border-color:var(--stop-l);color:#EE9090;}
+
+/* FOLDER PANEL */
+.fp{position:fixed;top:0;right:-430px;width:400px;height:100vh;background:var(--p);border-left:1px solid var(--ln);z-index:200;display:flex;flex-direction:column;transition:right .22s cubic-bezier(.4,0,.2,1);box-shadow:-4px 0 28px rgba(28,37,53,.14);}
+.fp.open{right:0;}
+.fph{padding:0 18px;height:54px;display:flex;align-items:center;justify-content:space-between;background:var(--navy);flex-shrink:0;}
+.fph-l{display:flex;flex-direction:column;gap:1px;}
+.fph-t{font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:#fff;}
+.fph-p{font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,.5);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fpx{border:none;background:transparent;cursor:pointer;color:rgba(255,255,255,.6);font-size:18px;padding:4px;border-radius:3px;transition:all .12s;line-height:1;}
+.fpx:hover{color:#fff;}
+.fptb{padding:10px 16px;border-bottom:1px solid var(--ln);display:flex;gap:7px;flex-shrink:0;}
+.fpsl{flex:1;border:1.5px dashed var(--ln2);background:transparent;border-radius:6px;padding:8px;cursor:pointer;color:var(--ink2);font-family:'Nunito Sans',sans-serif;font-size:12px;font-weight:700;transition:all .12s;display:flex;align-items:center;justify-content:center;gap:5px;}
+.fpsl:hover{border-color:var(--teal);color:var(--teal-d);}
+.fpev{background:var(--navy);color:#fff;border:none;padding:8px 13px;border-radius:6px;cursor:pointer;font-family:'Nunito Sans',sans-serif;font-size:12px;font-weight:700;display:none;}
+.fpev.show{display:block;}
+.fpev:hover{background:var(--navy-m);}
+.fpst{padding:7px 16px;border-bottom:1px solid var(--ln);display:flex;gap:12px;flex-wrap:wrap;flex-shrink:0;}
+.fss{display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--ink2);}
+.fsd{width:6px;height:6px;border-radius:50%;}
+.fsd.fv{background:var(--go-m);}
+.fsd.cp{background:var(--disp);}
+.fsd.ptx{background:var(--teal-d);}
+.fsd.cfdi{background:#7030A0;}
+.fsd.xml{background:var(--warn-m);}
+.fsd.all{background:var(--ink3);}
+.fpbs{flex:1;overflow-y:auto;}
+.fpe{padding:40px 16px;text-align:center;color:var(--ink3);font-size:12.5px;font-weight:300;}
+.fpsec{border-bottom:1px solid var(--ln);}
+.fpsh{padding:7px 16px;background:var(--p2);display:flex;align-items:center;justify-content:space-between;cursor:pointer;position:sticky;top:0;z-index:1;}
+.fpsh:hover{background:var(--p3);}
+.fpst2{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);display:flex;align-items:center;gap:5px;font-weight:600;}
+.fpsn{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:1px 5px;border-radius:2px;background:var(--p3);color:var(--ink3);}
+.fpc{font-size:9px;color:var(--ink3);transition:transform .12s;}
+.fpsec.collapsed .fpsb{display:none;}
+.fpsec.collapsed .fpc{transform:rotate(-90deg);}
+.fpsb{padding:2px 0;}
+.fi{display:flex;align-items:center;gap:9px;padding:7px 16px;transition:background .11s;}
+.fi:hover{background:var(--p2);}
+.fii{width:24px;height:24px;border-radius:5px;display:grid;place-items:center;flex-shrink:0;}
+.fii.pdf{background:var(--stop-bg);}
+.fii.pdf svg,.fii.xml svg{width:11px;height:11px;}
+.fii.xml{background:var(--warn-bg);}
+.fin{flex:1;min-width:0;}
+.finm{font-size:12px;font-weight:700;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fim{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3);}
+.fib{font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:700;padding:2px 5px;border-radius:2px;flex-shrink:0;}
+.fib.fv{background:var(--go-bg);color:var(--go);}
+.fib.cp{background:var(--disp-bg);color:var(--disp);}
+.fib.ptx{background:var(--teal-bg);color:var(--teal-d);}
+.fib.cfdi{background:#F3EBFA;color:#561A70;}
+.fib.xml{background:var(--warn-bg);color:var(--warn-m);}
+.fib.unk{background:var(--p3);color:var(--ink3);}
+.fpfo{padding:10px 16px;border-top:1px solid var(--ln);background:var(--navy);flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:9px;color:rgba(255,255,255,.4);line-height:1.6;}
+.ovl{position:fixed;inset:0;background:rgba(28,37,53,0);pointer-events:none;z-index:199;transition:background .22s;}
+.ovl.show{background:rgba(28,37,53,.35);pointer-events:all;}
+
+/* VIEWS */
+.view{display:none;}
+.view.active{display:block;}
+
+/* ═══ SIMULATOR ══════════════════════════════════════════════════ */
+.sim{padding:14px 22px 60px;max-width:1700px;display:grid;grid-template-columns:1fr 350px;gap:16px;align-items:start;}
+.sf{background:var(--p);border:1px solid var(--ln);border-radius:12px;overflow:hidden;}
+.sfh{padding:14px 18px;border-bottom:1px solid var(--ln);background:var(--navy);display:flex;align-items:center;gap:10px;}
+.sfh-icon{width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,.1);display:grid;place-items:center;}
+.sfht{font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;color:#fff;}
+.sfht span{font-weight:300;color:rgba(255,255,255,.55);}
+.sfb{padding:16px 18px;display:flex;flex-direction:column;gap:14px;}
+.fl{display:flex;flex-direction:column;gap:5px;}
+.fll{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:600;display:flex;align-items:center;gap:7px;}
+.fll .hint{font-size:8.5px;color:var(--ink3);letter-spacing:.03em;font-weight:400;text-transform:none;margin-left:auto;}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+input,select{border:1px solid var(--ln);background:var(--p2);color:var(--navy);padding:8px 10px;border-radius:6px;font-family:'Nunito Sans',sans-serif;font-size:13px;font-weight:600;outline:none;transition:border-color .12s;width:100%;}
+input:focus,select:focus{border-color:var(--teal);}
+input::placeholder{color:var(--ink3);font-weight:400;}
+/* Sucursales */
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
+.sb{border:1.5px solid var(--ln);background:var(--p2);border-radius:8px;padding:8px 6px;cursor:pointer;transition:all .13s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.sb:hover{border-color:var(--teal-l);background:var(--teal-bg);}
+.sb.sel{border-color:var(--navy);background:var(--p);}
+.sc{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--ink3);}
+.sb.sel .sc{color:var(--navy);}
+.sn{font-size:11px;font-weight:700;color:var(--ink3);line-height:1.2;}
+.sb.sel .sn{color:var(--navy);}
+.sd{width:5px;height:5px;border-radius:50%;background:var(--ln2);}
+.sb.sel .sd{background:var(--teal);}
+/* SAP opts */
+.sag{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;}
+.so{border:1.5px solid var(--ln);background:var(--p2);border-radius:7px;padding:9px 10px;cursor:pointer;transition:all .13s;}
+.so:hover{border-color:var(--ln2);}
+.so.sel{border-color:var(--navy);background:var(--p);}
+.soc{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink3);}
+.so.sel .soc{color:var(--navy);}
+.sod{font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.3;font-weight:400;}
+.so.sw{border-color:rgba(160,106,16,.3);background:var(--warn-bg);}.so.sw .soc{color:var(--warn);}
+.so.sd2{border-color:rgba(28,37,53,.3);background:var(--navy-bg);}.so.sd2 .soc{color:var(--navy);}
+.so.sg2{border-color:rgba(196,150,10,.3);background:var(--gold-bg);}.so.sg2 .soc{color:var(--gold);}
+.so.st2{border-color:rgba(58,173,173,.3);background:var(--teal-bg);}.so.st2 .soc{color:var(--teal-d);}
+.so.sn2{border-color:rgba(86,26,112,.3);background:#F3EBFA;}.so.sn2 .soc{color:#561A70;}
+/* Prod lines */
+.pls{display:flex;flex-direction:column;gap:5px;}
+.pl{display:grid;grid-template-columns:1fr 120px 26px;gap:5px;align-items:center;background:var(--p2);border:1px solid var(--ln);border-radius:6px;padding:6px 8px;}
+.pl select,.pl input{border:none;background:transparent;padding:3px 4px;font-size:13px;}
+.pl input{font-family:'IBM Plex Mono',monospace;text-align:right;}
+.pld{width:24px;height:24px;border:none;background:transparent;cursor:pointer;color:var(--ink3);border-radius:4px;display:grid;place-items:center;font-size:15px;transition:all .12s;}
+.pld:hover{background:var(--stop-bg);color:var(--stop);}
+.addl{border:1.5px dashed var(--teal-l);background:transparent;border-radius:7px;padding:8px;width:100%;cursor:pointer;color:var(--teal-d);font-family:'Nunito Sans',sans-serif;font-size:12px;font-weight:700;transition:all .13s;display:flex;align-items:center;justify-content:center;gap:5px;}
+.addl:hover{border-color:var(--teal);background:var(--teal-bg);}
+/* Totals */
+.totb{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;background:var(--p2);border-top:1px solid var(--ln);padding:12px 18px;}
+.ti{text-align:center;}
+.tl{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:3px;}
+.tv{font-family:'Nunito',sans-serif;font-size:17px;font-weight:800;}
+.tv.go{color:var(--go);}
+.tv.warn{color:var(--warn);}
+.tv.stop{color:var(--stop);}
+.evb{background:var(--navy);color:#fff;border:none;padding:12px;border-radius:8px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .13s;letter-spacing:.01em;}
+.evb:hover{background:var(--navy-m);}
+/* Result panel */
+.rp{position:sticky;top:55px;display:flex;flex-direction:column;gap:10px;}
+.ps,.mt{background:var(--p);border:1px solid var(--ln);border-radius:12px;overflow:hidden;}
+.psh{padding:12px 16px;border-bottom:1px solid var(--ln);background:var(--navy);display:flex;align-items:center;justify-content:space-between;}
+.mth{padding:12px 16px;border-bottom:1px solid var(--ln);background:var(--p2);display:flex;align-items:center;justify-content:space-between;}
+.pst{font-family:'Nunito',sans-serif;font-size:11px;font-weight:800;color:#fff;letter-spacing:.04em;text-transform:uppercase;}
+.pst2{font-family:'Nunito',sans-serif;font-size:11px;font-weight:800;color:var(--navy);letter-spacing:.04em;text-transform:uppercase;}
+.mr{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:4px;}
+.mr.go{background:var(--go-m);color:white;}
+.mr.stop{background:var(--stop-m);color:white;}
+.mr.warn{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(160,106,16,.25);}
+.mr.disp{background:var(--disp-bg);color:var(--disp);border:1px solid rgba(58,100,180,.2);}
+.mr.gold{background:var(--gold-bg);color:var(--gold);border:1px solid rgba(196,150,10,.25);}
+.mr.teal{background:var(--teal-bg);color:var(--teal-d);border:1px solid rgba(58,173,173,.25);}
+.mr.idle{background:var(--p3);color:var(--ink3);}
+.psrs{padding:4px 0;}
+.psem{padding:14px;text-align:center;font-size:12px;color:var(--ink3);font-weight:300;}
+.psr{display:flex;align-items:center;justify-content:space-between;padding:5px 16px;font-size:12px;}
+.psrl{display:flex;align-items:center;gap:7px;color:var(--ink2);font-weight:600;}
+.psd{width:7px;height:7px;border-radius:50%;}
+.psd.go{background:var(--go-m);}
+.psd.warn{background:var(--warn-m);}
+.psd.stop{background:var(--stop-m);}
+.psa{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--navy);font-weight:700;}
+.psto{display:flex;justify-content:space-between;align-items:center;padding:7px 16px;border-top:1px solid var(--ln);font-weight:700;}
+.pstl{font-family:'IBM Plex Mono',monospace;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);}
+.pstv{font-family:'Nunito',sans-serif;font-size:17px;font-weight:800;color:var(--navy);}
+.cgsim{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;padding:10px 14px;border-bottom:1px solid var(--ln);}
+.cgi{border-radius:4px;padding:6px 2px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;}
+.cgil{font-size:7.5px;letter-spacing:.04em;text-transform:uppercase;display:block;margin-bottom:2px;opacity:.7;}
+.cgi.ok{background:var(--go-bg);color:var(--go);border:1px solid rgba(34,136,82,.2);}
+.cgi.fail{background:var(--stop-bg);color:var(--stop);border:1px solid rgba(176,40,40,.2);}
+.cgi.warn{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(160,106,16,.2);}
+.cgi.na{background:var(--p3);color:var(--ink3);border:1px solid var(--ln);}
+.cgi.di{background:var(--disp-bg);color:var(--disp);border:1px solid rgba(58,100,180,.2);}
+.cgi.bo{background:var(--warn-bg);color:var(--warn-m);border:1px solid rgba(160,106,16,.2);}
+.cgi.pt{background:var(--teal-bg);color:var(--teal-d);border:1px solid rgba(58,173,173,.25);}
+.pcm{padding:0 14px 10px;}
+.pmh{display:flex;justify-content:space-between;margin-bottom:4px;}
+.pml{font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3);letter-spacing:.05em;text-transform:uppercase;}
+.pmv{font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;}
+.pmv.ok{color:var(--go);}
+.pmv.warn{color:var(--warn);}
+.pmbar{height:5px;background:var(--p3);border-radius:3px;overflow:hidden;position:relative;}
+.pmf{height:100%;border-radius:3px;transition:width .35s ease;}
+.pmf.ok{background:linear-gradient(90deg,var(--go-m),var(--teal));}
+.pmf.warn{background:linear-gradient(90deg,var(--warn-m),var(--gold-l));}
+.pmf.stop{background:linear-gradient(90deg,var(--stop-m),var(--stop-l));}
+.pmt{position:absolute;top:-2px;bottom:-2px;width:1.5px;background:var(--ink3);opacity:.3;}
+.pmt::after{content:'15%';position:absolute;top:-11px;left:50%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:7px;color:var(--ink3);white-space:nowrap;}
+.trbody{padding:0;}
+.trs{display:flex;align-items:flex-start;border-bottom:1px solid var(--ln);}
+.trs:last-child{border:none;}
+.tri{width:38px;display:flex;align-items:center;justify-content:center;padding:10px 0;flex-shrink:0;}
+.trd2{width:9px;height:9px;border-radius:50%;border:2px solid var(--ln2);background:var(--p2);}
+.trd2.pass{border-color:var(--go-l);background:var(--go-bg);}
+.trd2.fail{border-color:var(--stop-l);background:var(--stop-bg);}
+.trd2.warn{border-color:var(--warn-l);background:var(--warn-bg);}
+.trd2.skip{border-color:var(--ln2);background:var(--p3);}
+.trd2.active{border-color:var(--navy);background:var(--navy);}
+.trd2.blue{border-color:var(--disp-l);background:var(--disp-bg);}
+.trd2.orange{border-color:var(--gold-l);background:var(--gold-bg);}
+.trd2.teal{border-color:var(--teal-l);background:var(--teal-bg);}
+.trc{flex:1;padding:8px 14px 8px 0;}
+.trlayer{font-family:'IBM Plex Mono',monospace;font-size:7.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--teal-d);margin-bottom:1px;font-weight:600;}
+.trname{font-family:'Nunito',sans-serif;font-size:12.5px;font-weight:800;color:var(--navy);margin-bottom:2px;}
+.trdet{font-size:11px;color:var(--ink2);line-height:1.5;}
+.trcd{font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;padding:2px 6px;border-radius:3px;display:inline-block;margin-top:3px;}
+.trcd.go{background:var(--go-bg);color:var(--go);}
+.trcd.stop{background:var(--stop-bg);color:var(--stop);}
+.trcd.warn{background:var(--warn-bg);color:var(--warn);}
+.trcd.skip{background:var(--p3);color:var(--ink3);}
+.trcd.blue{background:var(--disp-bg);color:var(--disp);}
+.trcd.orange{background:var(--gold-bg);color:var(--gold);}
+.trcd.teal{background:var(--teal-bg);color:var(--teal-d);}
+.resmsg{padding:12px 15px;}
+.rmtxt{font-size:12px;color:var(--ink2);line-height:1.7;}
+.rmtxt strong{color:var(--navy);}
+.idle-s{padding:28px 14px;text-align:center;color:var(--ink3);font-size:12.5px;font-weight:300;}
+
+/* ═══ DIAMOND DECORATION ══════════════════════════════════════════ */
+.diamond-deco{position:absolute;opacity:.04;pointer-events:none;}
+
+@media(max-width:1200px){.sim{grid-template-columns:1fr;}.rp{position:static;}.kb{grid-template-columns:repeat(2,1fr);}.ks{grid-template-columns:repeat(4,1fr);}}
+@media(max-width:700px){.kb{grid-template-columns:1fr;}.ks{grid-template-columns:repeat(2,1fr);}.layers{display:none;}}
+
+/* DATE RANGE FILTER */
+.date-filter{display:flex;align-items:center;gap:10px;padding:10px 22px;background:var(--p);border-bottom:1px solid var(--ln);flex-wrap:wrap;}
+.df-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:600;flex-shrink:0;}
+.df-inputs{display:flex;align-items:center;gap:8px;}
+.df-input{border:1px solid var(--ln);background:var(--p2);color:var(--navy);padding:5px 10px;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;outline:none;transition:border-color .12s;cursor:pointer;width:140px;}
+.df-input:focus{border-color:var(--teal);}
+.df-sep{color:var(--ink3);font-family:'IBM Plex Mono',monospace;font-size:10px;}
+.df-btn{background:var(--navy);color:#fff;border:none;padding:5px 12px;border-radius:5px;font-family:'Nunito Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .13s;flex-shrink:0;}
+.df-btn:hover{background:var(--navy-m);}
+.df-clear{background:transparent;border:1px solid var(--ln);color:var(--ink3);padding:5px 10px;border-radius:5px;font-family:'Nunito Sans',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .13s;}
+.df-clear:hover{border-color:var(--ln2);color:var(--ink);}
+.df-status{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--teal-d);font-weight:600;margin-left:4px;}
+.df-presets{display:flex;gap:5px;flex-wrap:wrap;}
+.df-preset{background:transparent;border:1px solid var(--ln);color:var(--ink3);padding:3px 9px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;cursor:pointer;transition:all .12s;letter-spacing:.03em;}
+.df-preset:hover{border-color:var(--teal-l);color:var(--teal-d);background:var(--teal-bg);}
+.df-preset.active{background:var(--teal-bg);border-color:var(--teal);color:var(--teal-d);}
+.card.filtered-out{display:none;}
+</style>
+</head>
+<body>
+<div class="ovl" id="ovl" onclick="closeFolder()"></div>
+
+<!-- ══ TOPBAR GPA ══ -->
+<header class="tb">
+  <!-- LOGO GPA -->
+  <div class="gpa-logo">
+    <div class="gpa-badge">
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="18" r="17" fill="#1C2535" stroke="rgba(58,173,173,.5)" stroke-width="1"/>
+        <circle cx="18" cy="18" r="17" fill="url(#gpaBg)"/>
+        <!-- Water wave GPA -->
+        <path d="M4 22 Q9 17 14 22 Q19 27 24 22 Q29 17 34 22" stroke="#3AADAD" stroke-width="1.5" fill="none" opacity=".6"/>
+        <path d="M4 25 Q9 20 14 25 Q19 30 24 25 Q29 20 34 25" stroke="#3AADAD" stroke-width="1" fill="none" opacity=".35"/>
+        <!-- GPA text -->
+        <text x="18" y="20" text-anchor="middle" font-family="Nunito,Arial" font-weight="900" font-size="11" fill="white" letter-spacing=".5">GPA</text>
+        <text x="18" y="28" text-anchor="middle" font-family="Nunito Sans,Arial" font-weight="400" font-size="5" fill="rgba(58,173,173,.9)" letter-spacing="1.5">AGUA</text>
+        <!-- Top arc decorative -->
+        <path d="M8 12 Q18 6 28 12" stroke="rgba(58,173,173,.5)" stroke-width="1" fill="none"/>
+        <defs>
+          <radialGradient id="gpaBg" cx="40%" cy="30%">
+            <stop offset="0%" stop-color="#243B6A"/>
+            <stop offset="100%" stop-color="#0E1A2E"/>
+          </radialGradient>
+        </defs>
+      </svg>
+    </div>
+    <div class="gpa-wordmark">
+      <span class="gpa-w1">General de Productos para el Agua</span>
+      <span class="gpa-w2">SISTEMA ADMINISTRATIVO · MOTOR DE FLETES</span>
+    </div>
+  </div>
+
+  <div class="tb-divider"></div>
+  <span class="tb-title">Motor v2.4</span>
+  <div class="tb-divider"></div>
+
+  <div class="layers">
+    <span class="lc lc0">C0 Unicidad</span><span class="arr">›</span>
+    <span class="lc lc1">C1a GS0231 Disp·GDL</span><span class="arr">›</span>
+    <span class="lc lc2">C1b GS0248 Cargo Envío</span><span class="arr">›</span>
+    <span class="lc lc3">C2 GS0229 Back Order</span><span class="arr">›</span>
+    <span class="lc lc4">C3 Motor C1–C5</span><span class="arr">›</span>
+    <span class="lc lc5">C4 Dispersiones</span>
+  </div>
+
+  <div class="tbr">
+    <span class="vc-chip">spec v2.4</span>
+    <div class="lv"><span class="lvd"></span>Motor activo · 10 fleteras ✓</div>
+    <button class="tbtn fbtn" id="fbtn" onclick="openFolder()">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Carpeta
+    </button>
+    <button class="tbtn" onclick="toggleTheme()">☀ / ☽</button>
+  </div>
+  <input type="file" id="fi" webkitdirectory multiple accept=".pdf,.xml" onchange="onFI(this)">
+</header>
+<div class="teal-accent-bar"></div>
+
+<!-- VIEW TABS -->
+<div class="vtabs">
+  <button class="vt active" onclick="sw('post',this)">Post-ejecución <span class="vb vb-go">3 batches · abr 2026</span></button>
+  <button class="vt" onclick="sw('pre',this)">Pre-ejecución <span class="vb vb-warn">Simulador v2.4</span></button>
+</div>
+
+
+<!-- ══ DATE RANGE FILTER ══ -->
+<div class="date-filter" id="dateFilter">
+  <span class="df-label">Período</span>
+  <div class="df-inputs">
+    <input type="date" class="df-input" id="dfFrom" value="2026-04-01" onchange="applyFilter()">
+    <span class="df-sep">→</span>
+    <input type="date" class="df-input" id="dfTo" value="2026-04-30" onchange="applyFilter()">
+  </div>
+  <button class="df-btn" onclick="applyFilter()">Filtrar</button>
+  <button class="df-clear" onclick="clearFilter()">Limpiar</button>
+  <div class="df-presets">
+    <button class="df-preset active" onclick="setPreset('abr26',this)">Abr 2026</button>
+    <button class="df-preset" onclick="setPreset('mar26',this)">Mar 2026</button>
+    <button class="df-preset" onclick="setPreset('q1',this)">Q1 2026</button>
+    <button class="df-preset" onclick="setPreset('mes',this)">Último mes</button>
+    <button class="df-preset" onclick="setPreset('todo',this)">Todo</button>
+  </div>
+  <span class="df-status" id="dfStatus">22/04 – 30/04/2026 · 8 docs</span>
+</div>
+
+<!-- ══ POST-EJECUCIÓN ══ -->
+<div class="view active" id="vpost">
+<div class="ks">
+  <div class="kpi brand"><div class="kl">Total evaluados</div><div class="kv">99+</div><div class="ks2">3 batches · abr 2026</div></div>
+  <div class="kpi go"><div class="kl">Auto-aprobadas</div><div class="kv">~88%</div><div class="ks2">sin intervención humana</div></div>
+  <div class="kpi stop"><div class="kl">Auto-rechazadas</div><div class="kv">~8%</div><div class="ks2">R-101 · R-103 · R-201</div></div>
+  <div class="kpi warn"><div class="kl">En revisión</div><div class="kv">2</div><div class="ks2">R-501 · R-801</div></div>
+  <div class="kpi disp"><div class="kl">Dispersiones</div><div class="kv">3</div><div class="ks2">R-800 · GS0231 GDL</div></div>
+  <div class="kpi teal"><div class="kl">Fleteras activas</div><div class="kv">6+</div><div class="ks2">Tresguerras · Estrella · más</div></div>
+  <div class="kpi gold"><div class="kl">T/C referencia</div><div class="kv">17.35</div><div class="ks2">USD · abr 2026</div></div>
+</div>
+
+<div class="kb">
+
+<!-- EN REVISIÓN -->
+<div class="col">
+  <div class="col-h"><div class="col-hl"><div class="ci warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 9v4M12 17h.01"/></svg></div><span class="ct">En revisión</span></div><span class="ccn">2</span></div>
+  <div class="cd">Requieren aprobador · SLA 4h hábiles</div>
+  <div class="cb">
+    <div class="cdiv">C5 · Flete alto · Navojoa</div>
+    <div class="card warn" onclick="selCard(this)">
+      <span class="tb2 vc">Venta cliente</span>
+      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
+        <div class="cm"><div class="cn">116873635</div><div class="cf">FA10315862 · Ecosistemas Navojoa</div></div>
+        <span class="cu w">R-501 · Flete alto > 15%</span>
+      </div>
+      <span class="st s30">GS0230 · Navojoa, SON</span>
+      <div class="cr">
+        <div class="c ok" title="C1 · $1,074 USD ✓ · costal OK">$✓</div>
+        <div class="c ok" title="C2 · Mangueras+Kit = EQUIPO ✓">◼✓</div>
+        <div class="c ok" title="C3 · Sonora en catálogo ✓">◉✓</div>
+        <div class="c ok" title="C4 · FV=domicilio · Tresguerras ✓">⇌✓</div>
+        <div class="c soft" title="C5 · 16.5% supera umbral 15%">⚠!</div>
+      </div>
+      <div class="rr"><span class="rc warn">R-501 · Flete alto > 15%</span><span class="rt">Flete 16.5% supera el umbral del 15%</span></div>
+      <div class="mtr"><div class="mh"><span class="ml">% flete vs pedido</span><span class="mv warn">16.5%</span></div><div class="mbar"><div class="mfill warn" style="width:55%"></div><div class="mt" style="left:50%"></div></div></div>
+      <div class="cmeta"><span>GDL → Navojoa, SON</span><span class="ms">·</span><span>Tresguerras</span><span class="ms">·</span><span>$1,074 USD</span></div>
+      <div class="cft"><div class="dps"><span class="dp">FV</span><span class="dp">CP</span></div><div class="bs"><button class="btn btnd">✕</button><button class="btn btnp">✓ Aprobar</button></div></div>
+    </div>
+
+    <div class="cdiv">Dispersión · tipo CAJA sin tarifa</div>
+    <div class="card navy" onclick="selCard(this)">
+      <span class="tb2 di">Dispersión interna</span>
+      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
+        <div class="cm"><div class="cn">JD322218</div><div class="cf">GS0231 · GPA Cancún · 12P+14C</div></div>
+        <span class="cu w">R-801 · Dispersión sin tarifa</span>
+      </div>
+      <span class="st s31">GS0231 → DISPERSIÓN · GDL→CUN</span>
+      <div class="cr">
+        <div class="c di" title="GS0231 · DISPERSION_INTERNA">D</div>
+        <div class="c ok" title="Origen GDL ✓">GDL✓</div>
+        <div class="c ok" title="J.Obregon · 12P CUN $44,784 ✓">P✓</div>
+        <div class="c soft" title="14 cajas · tarifa CAJA no cargada → R-801">C?</div>
+        <div class="c na" title="—">—</div>
+      </div>
+      <div class="rr"><span class="rc warn">R-801 · Dispersión sin tarifa</span><span class="rt">Tarifa tipo CAJA pendiente en catálogo</span></div>
+      <div class="tbox">
+        <div class="tbi"><div class="tbl">12 Pallets CUN</div><div class="tbv">$44,784 MXN</div></div>
+        <div class="tbi"><div class="tbl">14 Cajas</div><div class="tbv" style="color:var(--warn)">Sin tarifa →</div></div>
+      </div>
+      <div class="cmeta"><span>GDL → CUN</span><span class="ms">·</span><span>J.Obregon</span></div>
+      <div class="cft"><div class="dps"><span class="dp">JD322218</span></div><div class="bs"><button class="btn btnd">✕</button><button class="btn btnp">✓ Aprobar</button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ESCALAMIENTO -->
+<div class="col">
+  <div class="col-h"><div class="col-hl"><div class="ci hold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 11l5-5 5 5M12 6v12"/></svg></div><span class="ct">Escalamiento</span></div><span class="ccn">0</span></div>
+  <div class="cd">Cola Aprobador 2 · SLA 24h hábiles</div>
+  <div class="cb"><div class="empty">Sin escalamientos activos.</div></div>
+</div>
+
+<!-- APROBADAS -->
+<div class="col">
+  <div class="col-h"><div class="col-hl"><div class="ci go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></div><span class="ct">Aprobadas</span></div><span class="ccn">12+</span></div>
+  <div class="cd">Auto-liberadas · todos los tipos</div>
+  <div class="cb">
+
+
+
+    <div class="cdiv">Back Order · GS0229 · Multi-sucursal</div>
+    <div class="card warn" onclick="selCard(this)">
+      <span class="tb2 bo">Back Order · CUN→SJD</span>
+      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
+        <div class="cm"><div class="cn">116929225</div><div class="cf">GS0229 · CUN→SJD/BCS · Eco Water</div></div>
+        <span class="cu a">R-050 · Back Order</span>
+      </div>
+      <span class="st s29">GS0229 · BACK ORDER · origen CUN · Ferry ✓</span>
+      <div class="cr">
+        <div class="c bo" title="C1 · EXENTO Back Order">$—</div>
+        <div class="c bo" title="C2 · EXENTO Back Order">◼—</div>
+        <div class="c ok" title="C3 · Cabo San Lucas, BCS ✓">BCS✓</div>
+        <div class="c bo" title="C4 · EXENTO Back Order">⇌—</div>
+        <div class="c bo" title="C5 · EXENTO · ferry incluido">⚠—</div>
+      </div>
+      <div class="rr"><span class="rc go">R-050 · Back Order</span><span class="rt">Back Order · origen CUN válido · BCS ✓</span></div>
+      <div class="bob"><div class="boh">GS0229 · Back Order multi-sucursal</div><div class="bov">Reflectores · $235.75 MXN (incl. ferry $59.75) · SJD, BCS ✓</div></div>
+      <div class="cmeta"><span>CUN → SJD/BCS</span><span class="ms">·</span><span>Tresguerras</span><span class="ms">·</span><span>Ferry ✓</span></div>
+      <div class="cft"><div class="dps"><span class="dp">116929225</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
+    </div>
+
+    <div class="cdiv">Cargo por envío · GS0248</div>
+    <div class="card gold" onclick="selCard(this)">
+      <span class="tb2 cpe">Cargo por envío</span>
+      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
+        <div class="cm"><div class="cn">116468131</div><div class="cf">FA10316370 · M. Soledad Frances Ibarra</div></div>
+        <span class="cu g">R-060 · Cargo envío OK</span>
+      </div>
+      <span class="st s48">GS0248 · SKU 00400000000000 · CARGO POR ENVIO</span>
+      <div class="cr">
+        <div class="c pt" title="GS0248 + SKU + descripción ✓">CPE✓</div>
+        <div class="c ok" title="FV $286 MXN = CP $286 MXN · Δ $0.00">≈✓</div>
+        <div class="c na" title="C2–C5 no evaluados">—</div>
+        <div class="c na" title="—">—</div>
+        <div class="c na" title="—">—</div>
+      </div>
+      <div class="rr"><span class="rc gold">R-060 · Cargo envío OK</span><span class="rt">FV = CP · delta $0.00 ≤ umbral 1% ✓</span></div>
+      <div class="tbox">
+        <div class="tbi"><div class="tbl">FV subtotal s/IVA</div><div class="tbv">$286.00 MXN</div></div>
+        <div class="tbi"><div class="tbl">CP subtotal s/imp</div><div class="tbv">$286.00 MXN</div></div>
+      </div>
+      <div class="cmeta"><span>GDL → Guasave, SIN</span><span class="ms">·</span><span>Δ $0.00 · 0.00%</span></div>
+      <div class="cft"><div class="dps"><span class="dp">FA10316370</span><span class="dp">CP116468131</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
+    </div>
+
+    <div class="cdiv">Venta cliente · R-000 · GDL→BCS con ferry</div>
+    <div class="card go" onclick="selCard(this)">
+      <span class="tb2 vc">Venta cliente</span>
+      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
+        <div class="cm"><div class="cn">116861950</div><div class="cf">FA10315757 · Quimica &amp; Water Sol</div></div>
+        <span class="cu a">R-000 · Apoyo completo</span>
+      </div>
+      <span class="st s30">GS0230 · GDL→Cabo San Lucas · Ferry en C5</span>
+      <div class="cr">
+        <div class="c ok" title="C1 · $1,304.35 USD ✓ pedido limpio">$✓</div>
+        <div class="c ok" title="C2 · Motobomba Storm 7.5HP = EQUIPO ✓">◼✓</div>
+        <div class="c ok" title="C3 · Cabo San Lucas, BCS ✓">BCS✓</div>
+        <div class="c ok" title="C4 · FV=domicilio · Tresguerras ✓">⇌✓</div>
+        <div class="c ok" title="C5 · 8.8% incl. ferry $327.43 MXN ✓">⚠✓</div>
+      </div>
+      <div class="rr"><span class="rc go">R-000 · Apoyo completo</span><span class="rt">5/5 · ferry incluido en fleteBaseUSD ✓</span></div>
+      <div class="mtr"><div class="mh"><span class="ml">% flete (incl. ferry $327)</span><span class="mv ok">8.8%</span></div><div class="mbar"><div class="mfill ok" style="width:44%"></div><div class="mt" style="left:75%"></div></div></div>
+      <div class="cmeta"><span>GDL → CSL, BCS</span><span class="ms">·</span><span>Tresguerras</span><span class="ms">·</span><span>$1,304 USD</span></div>
+      <div class="cft"><div class="dps"><span class="dp">FV</span><span class="dp">CP</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
+    </div>
+
+    <div class="cdiv">Dispersión interna · R-800 · GDL→CUN</div>
+    <div class="card navy" onclick="selCard(this)">
+      <span class="tb2 di">Dispersión interna</span>
+      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
+        <div class="cm"><div class="cn">JC748687</div><div class="cf">GS0231 · GDL→CUN · 13 Pallets</div></div>
+        <span class="cu d">R-800 · Dispersión OK</span>
+      </div>
+      <span class="st s31">GS0231 → DISPERSIÓN INTERNA · origen GDL ✓</span>
+      <div class="cr">
+        <div class="c di" title="GS0231 detectado">D</div>
+        <div class="c ok" title="Origen GDL ✓">GDL✓</div>
+        <div class="c ok" title="J.Obregon autorizado ✓">⇌✓</div>
+        <div class="c ok" title="13P × $3,732 = $48,516 · flete $48,530 · +0.03% ✓">P✓</div>
+        <div class="c na" title="—">—</div>
+      </div>
+      <div class="rr"><span class="rc disp">R-800 · Dispersión OK</span><span class="rt">Dispersión aprobada · delta 0.03% ≤ 10%</span></div>
+      <div class="tbox">
+        <div class="tbi"><div class="tbl">Tarifa 13P CUN</div><div class="tbv">$48,516 MXN</div></div>
+        <div class="tbi"><div class="tbl">Flete facturado</div><div class="tbv">$48,530 MXN</div></div>
+      </div>
+      <div class="cmeta"><span>GDL → CUN</span><span class="ms">·</span><span>J.Obregon</span></div>
+      <div class="cft"><div class="dps"><span class="dp">JC748687</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- RECHAZADAS -->
+<div class="col">
+  <div class="col-h"><div class="col-hl"><div class="ci stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></div><span class="ct">Rechazadas</span></div><span class="ccn">2</span></div>
+  <div class="cd">Auto-rechazadas · auditoría completa</div>
+  <div class="cb">
+    <div class="cdiv">Monto insuficiente · R-101</div>
+    <div class="card stop">
+      <span class="tb2 vc">Venta cliente</span>
+      <div class="ch">
+        <div class="cm"><div class="cn">FC20107952 + FC20108237</div><div class="cf">Alvaro Chavez Gonzalez · GDL→Chetumal · ×2</div></div>
+        <span class="cu s">R-101 · Monto insuficiente</span>
+      </div>
+      <div class="cr">
+        <div class="c fail" title="C1 · $62.39 USD &lt; mínimo $350">$✗</div>
+        <div class="c na">—</div><div class="c na">—</div><div class="c na">—</div><div class="c na">—</div>
+      </div>
+      <div class="rr"><span class="rc stop">R-101 · Monto insuficiente</span><span class="rt">$62.39 USD &lt; mínimo $350 pedido limpio</span></div>
+      <div class="cmeta"><span>GDL → Chetumal, QR</span><span class="ms">·</span><span>Estafeta</span></div>
+      <div class="cft"><div class="dps"><span class="dp">FV×2</span><span class="dp">CP×2</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
+    </div>
+
+    <div class="cdiv">EXCLUIDO_GRANDE sin mínimo · R-103</div>
+    <div class="card stop">
+      <span class="tb2 vc">Venta cliente</span>
+      <div class="ch">
+        <div class="cm"><div class="cn">FA10314864</div><div class="cf">Tricloro MAX 50KG · M. Soledad Frances Ibarra</div></div>
+        <span class="cu s">R-103 · Costal sin mínimo $1,000</span>
+      </div>
+      <div class="cr">
+        <div class="c fail" title="C1 · $91.80 &lt; $1,000 (EXCLUIDO_GRANDE activado)">$✗</div>
+        <div class="c fail" title="C2 · Tricloro 50KG = EXCLUIDO_GRANDE · sin elegible">◼✗</div>
+        <div class="c na">—</div><div class="c na">—</div><div class="c na">—</div>
+      </div>
+      <div class="rr"><span class="rc stop">R-103 · Costal sin mínimo $1,000</span><span class="rt">Cuñete 50kg · requiere ≥ $1,000 USD</span></div>
+      <div class="cmeta"><span>GDL → Zitacuaro, MICH</span></div>
+      <div class="cft"><div class="dps"><span class="dp">FV</span><span class="dp">CP</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /kb -->
+</div><!-- /vpost -->
+
+<!-- ══ PRE-EJECUCIÓN ══ -->
+<div class="view" id="vpre">
+<div class="sim">
+  <div class="sf">
+    <div class="sfh">
+      <div class="sfh-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(58,173,173,.8)" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </div>
+      <div class="sfht">Simulador de elegibilidad <span>· spec v2.4 · Motor GPA</span></div>
+    </div>
+    <div class="sfb">
+      <div class="fl">
+        <div class="fll">Sucursal origen <span style="color:#EE8888">*</span><span class="hint">todas válidas para venta · dispersiones solo GDL</span></div>
+        <div class="sg" id="sg">
+          <button class="sb" data-s="GDL" onclick="selS(this)"><div class="sd"></div><div class="sc">GDL</div><div class="sn">Guadalajara</div></button>
+          <button class="sb" data-s="CDMX" onclick="selS(this)"><div class="sd"></div><div class="sc">CDMX</div><div class="sn">Cd. de México</div></button>
+          <button class="sb" data-s="MTY" onclick="selS(this)"><div class="sd"></div><div class="sc">MTY</div><div class="sn">Monterrey</div></button>
+          <button class="sb" data-s="CUN" onclick="selS(this)"><div class="sd"></div><div class="sc">CUN</div><div class="sn">Cancún</div></button>
+          <button class="sb" data-s="PVR" onclick="selS(this)"><div class="sd"></div><div class="sc">PVR</div><div class="sn">Pto. Vallarta</div></button>
+          <button class="sb" data-s="SJD" onclick="selS(this)"><div class="sd"></div><div class="sc">SJD</div><div class="sn">Los Cabos</div></button>
+        </div>
+      </div>
+      <div class="fr">
+        <div class="fl">
+          <div class="fll">Estado destino <span style="color:#EE8888">*</span></div>
+          <select id="dE" onchange="updT()">
+            <option value="">Seleccionar…</option>
+            <option>Jalisco</option><option>Nuevo León</option><option>Tamaulipas</option><option>Coahuila</option>
+            <option>Yucatán</option><option>Quintana Roo</option><option>Guerrero</option><option>Veracruz</option>
+            <option>Puebla</option><option>Guanajuato</option><option>Querétaro</option><option>Michoacán</option>
+            <option>Nayarit</option><option>Sinaloa</option><option>Sonora</option><option>CDMX</option>
+            <option>Edo. México</option><option>Morelos</option><option>San Luis Potosí</option>
+            <option>Aguascalientes</option><option>Chihuahua</option><option>Durango</option>
+            <option>Zacatecas</option><option>Hidalgo</option><option>Campeche</option><option>Tabasco</option>
+            <option>BCS</option><option>BCN</option><option>Colima</option>
+            <option>Chiapas (Tapachula · Tuxtla Gtz.)</option>
+            <option value="otro">Otro / fuera de catálogo</option>
+          </select>
+        </div>
+        <div class="fl">
+          <div class="fll">Ciudad específica</div>
+          <input type="text" id="dC" placeholder="opcional">
+        </div>
+      </div>
+      <div class="fl">
+        <div class="fll">Tipo de operación <span class="hint">según código SAP</span></div>
+        <div class="sag">
+          <div class="so sel" data-sap="normal" onclick="selSAP(this,'')"><div class="soc">Sin señal SAP</div><div class="sod">Venta cliente · C1–C5</div></div>
+          <div class="so" data-sap="GS0229" onclick="selSAP(this,'sw')"><div class="soc">GS0229</div><div class="sod">Back Order · solo C3</div></div>
+          <div class="so" data-sap="GS0231" onclick="selSAP(this,'sd2')"><div class="soc">GS0231</div><div class="sod">Dispersión · solo GDL</div></div>
+          <div class="so" data-sap="GS0248" onclick="selSAP(this,'sg2')"><div class="soc">GS0248</div><div class="sod">Cargo por envío</div></div>
+          <div class="so" data-sap="PTX" onclick="selSAP(this,'st2')"><div class="soc">PTX / GCCR</div><div class="sod">Línea factura PTX</div></div>
+          <div class="so" data-sap="CFDI4" onclick="selSAP(this,'sn2')"><div class="soc">CFDI 4.0+CP</div><div class="sod">Complemento embebido</div></div>
+        </div>
+      </div>
+      <div class="fl" id="pSec">
+        <div class="fll">Composición del pedido <span class="hint">USD s/IVA · desde la FV</span></div>
+        <div class="pls" id="pLines"></div>
+        <button class="addl" onclick="addL()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Agregar categoría de producto
+        </button>
+      </div>
+      <div class="fl" id="fSec">
+        <div class="fll">Flete <span style="color:#EE8888">*</span><span class="hint">subtotal s/IVA · incluye ferry si aplica</span></div>
+        <div class="fr3">
+          <input type="number" id="fM" placeholder="MXN s/IVA" step="0.01" oninput="updT()">
+          <input type="number" id="tC" placeholder="T/C de la FV" step="0.01" value="17.35" oninput="updT()">
+          <input type="number" id="fRY" placeholder="Ferry MXN" step="0.01" oninput="updT()">
+        </div>
+      </div>
+      <div class="fl" id="cpeSec" style="display:none">
+        <div class="fll">Valor carta porte s/imp (MXN)</div>
+        <input type="number" id="cpV" placeholder="Para comparar con FV" step="0.01">
+      </div>
+      <div class="fl" id="ptxSec" style="display:none">
+        <div class="fll">Costo servicio PTX (línea GCCR)</div>
+        <div class="fr">
+          <input type="number" id="ptxC" placeholder="Costo línea MXN" step="0.01">
+          <select id="ptxT"><option>Tarima</option><option>Caja</option><option>Bulto</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="totb">
+      <div class="ti"><div class="tl">Total pedido</div><div class="tv" id="tTot">$0.00 <span style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3)">USD</span></div></div>
+      <div class="ti"><div class="tl">Equipo+Rec</div><div class="tv go" id="tEq">$0.00</div></div>
+      <div class="ti"><div class="tl">Costal/Accs</div><div class="tv warn" id="tCo">$0.00</div></div>
+      <div class="ti"><div class="tl">% flete est.</div><div class="tv" id="tPct">—</div></div>
+    </div>
+    <div style="padding:13px 18px;border-top:2px solid var(--ln);">
+      <button class="evb" id="evb" onclick="evaluar()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        Evaluar solicitud en motor v2.4
+      </button>
+    </div>
+  </div>
+
+  <!-- RESULT PANEL -->
+  <div class="rp">
+    <div class="ps">
+      <div class="psh"><span class="pst">Composición del pedido</span></div>
+      <div class="psrs" id="psRows"><div class="psem">Agrega productos para ver el resumen</div></div>
+    </div>
+    <div class="mt">
+      <div class="mth"><span class="pst2">Resultado del motor</span><div class="mr idle" id="mrRes">Pendiente</div></div>
+      <div id="cgSim" class="cgsim" style="display:none"></div>
+      <div id="pctMtr" class="pcm" style="display:none"></div>
+      <div class="trbody" id="trBody"><div class="idle-s">Completa el formulario y presiona Evaluar.</div></div>
+      <div class="resmsg" id="resMsg" style="display:none"><div class="rmtxt" id="rmTxt"></div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- BULK BAR -->
+<div class="bulk" id="bulk">
+  <span class="bcnt"><span id="bn">0</span> seleccionadas</span>
+  <button class="bb gob">✓ Aprobar</button>
+  <button class="bb rb">✕ Rechazar</button>
+  <button class="bb">↑ Escalar</button>
+  <button class="bb" onclick="clrSel()">✕</button>
+</div>
+
+<!-- FOLDER PANEL -->
+<div class="fp" id="fpanel">
+  <div class="fph">
+    <div class="fph-l">
+      <div class="fph-t">📁 Carpeta de documentos</div>
+      <div class="fph-p" id="fpPath">Sin carpeta seleccionada</div>
+    </div>
+    <button class="fpx" onclick="closeFolder()">✕</button>
+  </div>
+  <div class="fptb">
+    <button class="fpsl" onclick="triggerFP()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Seleccionar carpeta
+    </button>
+    <button class="fpev" id="fpev" onclick="evalBatch()">Evaluar batch →</button>
+  </div>
+  <div class="fpst" id="fpSt" style="display:none">
+    <div class="fss"><div class="fsd all"></div><span id="fpTot">0</span> archivos</div>
+    <div class="fss"><div class="fsd fv"></div><span id="fpFV">0</span> FV</div>
+    <div class="fss"><div class="fsd cp"></div><span id="fpCP">0</span> CP/CFDI</div>
+    <div class="fss"><div class="fsd ptx"></div><span id="fpPTX">0</span> PTX</div>
+    <div class="fss"><div class="fsd xml"></div><span id="fpXML">0</span> XML</div>
+  </div>
+  <div class="fpbs" id="fpBody"><div class="fpe">Selecciona una carpeta para ver los documentos disponibles a evaluar con el motor v2.4.</div></div>
+  <div class="fpfo">Formatos: PDF · XML · CFDI 4.0 + CP · PTX/GCCR<br>Fleteras: Tresguerras · Estrella · Oriente · J.Obregon · Tres Guerras · Estafeta · PTX · Hormik · G.Franco · E.Camacho ✓</div>
+</div>
+
+<script>
+function toggleTheme(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('gpa-v24-th',t);}catch(e){}}
+try{const s=localStorage.getItem('gpa-v24-th');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}
+function sw(v,el){document.querySelectorAll('.vt').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('v'+v).classList.add('active');clrSel();}
+function ck(el,e){e.stopPropagation();el.classList.toggle('on');el.closest('.card').classList.toggle('sel');updBulk();}
+function selCard(){}
+function updBulk(){const n=document.querySelectorAll('.chk.on').length;document.getElementById('bn').textContent=n;document.getElementById('bulk').classList.toggle('vis',n>0);}
+function clrSel(){document.querySelectorAll('.chk.on').forEach(c=>c.classList.remove('on'));document.querySelectorAll('.card.sel').forEach(c=>c.classList.remove('sel'));updBulk();}
+function openFolder(){document.getElementById('fpanel').classList.add('open');document.getElementById('ovl').classList.add('show');}
+function closeFolder(){document.getElementById('fpanel').classList.remove('open');document.getElementById('ovl').classList.remove('show');}
+async function triggerFP(){if(window.showDirectoryPicker){try{const d=await window.showDirectoryPicker({mode:'read'});await readDir(d,d.name);return;}catch(e){if(e.name==='AbortError')return;}}document.getElementById('fi').click();}
+function onFI(inp){const fs=Array.from(inp.files);if(!fs.length)return;const fn=fs[0].webkitRelativePath.split('/')[0];document.getElementById('fpPath').textContent=fn+' · '+fs.length+' archivos';procFiles(fs.map(f=>({name:f.name,size:f.size,path:f.webkitRelativePath})));}
+async function readDir(dh,path){const fs=[];for await(const e of dh.values()){if(e.kind==='file'){const f=await e.getFile();fs.push({name:f.name,size:f.size,path:path+'/'+f.name});}}document.getElementById('fpPath').textContent=path+' · '+fs.length+' archivos';procFiles(fs);}
+function clf(n){const u=n.toUpperCase();const ext=u.split('.').pop();if(ext==='XML')return'xml';if(ext==='PDF'){if(/^(FA|FC|FV|FM|FLC)/.test(u))return'fv';if(/^(GCCR|GCR)/.test(u))return'ptx';if(/^(FAC|GDL|ACRED)/.test(u))return'cfdi';if(/^(1[0-9]{8,}|CP|JC|HP|JD|M8|VP|M83)/.test(u))return'cp';return'unk';}return'unk';}
+function fmt(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(0)+'KB';return(b/1048576).toFixed(1)+'MB';}
+function procFiles(files){
+  const rel=files.filter(f=>/\.(pdf|xml)$/i.test(f.name));
+  const cl=rel.map(f=>({...f,cls:clf(f.name)}));
+  const fv=cl.filter(f=>f.cls==='fv'),cp=cl.filter(f=>f.cls==='cp'),xml=cl.filter(f=>f.cls==='xml'),ptx=cl.filter(f=>f.cls==='ptx'),cfdi=cl.filter(f=>f.cls==='cfdi'),unk=cl.filter(f=>f.cls==='unk');
+  document.getElementById('fpSt').style.display='flex';
+  document.getElementById('fpTot').textContent=rel.length;
+  document.getElementById('fpFV').textContent=fv.length;
+  document.getElementById('fpCP').textContent=cp.length+cfdi.length;
+  document.getElementById('fpPTX').textContent=ptx.length;
+  document.getElementById('fpXML').textContent=xml.length;
+  const fe=document.getElementById('fpev');if(rel.length)fe.classList.add('show');
+  document.getElementById('fbtn').classList.add('loaded');
+  const doc=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`;
+  function mkS(title,dc,bc,bt,fs,col=false){
+    if(!fs.length)return'';
+    const rows=fs.map(f=>`<div class="fi"><div class="fii pdf">${doc}</div><div class="fin"><div class="finm">${f.name}</div><div class="fim">${fmt(f.size)}</div></div><span class="fib ${bc}">${bt}</span></div>`).join('');
+    return`<div class="fpsec ${col?'collapsed':''}"><div class="fpsh" onclick="this.parentElement.classList.toggle('collapsed')"><div class="fpst2"><span class="fsd ${dc}"></span>${title}<span class="fpsn">${fs.length}</span></div><span class="fpc">▾</span></div><div class="fpsb">${rows}</div></div>`;
+  }
+  document.getElementById('fpBody').innerHTML=!rel.length?'<div class="fpe">No se encontraron archivos compatibles.</div>':mkS('Facturas de venta (FV)','fv','fv','FV',fv)+mkS('Cartas porte (CP)','cp','cp','CP',cp)+mkS('PTX / GCCR consolidado','ptx','ptx','PTX',ptx)+mkS('CFDI 4.0 + complemento CP','cfdi','cfdi','CFDI',cfdi)+mkS('XML complementos','xml','xml','XML',xml,true)+mkS('Sin clasificar','all','unk','?',unk,true);
+}
+function evalBatch(){alert('Motor v2.4 procesará cada documento:\n• CPs Tresguerras → C1–C5 completo\n• GCCR PTX → línea por línea con FV vinculada\n• CFDI 4.0 → complemento CP como carta porte\n• GS0229/31/48 → rutas especiales\n\nFunción completa en implementación de backend GPA.');}
+let orig=null,sap='normal',lc=0;
+const DEST_OK=['Jalisco','Nuevo León','Tamaulipas','Coahuila','Yucatán','Quintana Roo','Guerrero','Veracruz','Puebla','Guanajuato','Querétaro','Michoacán','Nayarit','Sinaloa','Sonora','CDMX','Edo. México','Morelos','San Luis Potosí','Aguascalientes','Chihuahua','Durango','Zacatecas','Hidalgo','Campeche','Tabasco','BCS','BCN','Colima'];
+// Oaxaca: NO incluido → R-301 automático
+// Chiapas: solo Tapachula y Tuxtla Gutiérrez → R-000; otras ciudades → R-302
+const DEST_PEND=[];  // ningún estado pendiente
+const CHIAPAS_OK=['Tapachula','Tuxtla Gutiérrez','Tuxtla Gutierrez'];
+function evalDestino(estado,ciudad){
+  if(!estado||estado==='otro') return 'R-301';
+  if(estado==='Oaxaca') return 'R-301';
+  if(estado==='Chiapas'){
+    const c=(ciudad||'').trim();
+    const match=CHIAPAS_OK.some(x=>c.toLowerCase().includes(x.toLowerCase()));
+    return match?'OK':'R-302';
+  }
+  if(DEST_OK.includes(estado)) return 'OK';
+  return 'R-301';
+}
+function selS(btn){document.querySelectorAll('.sb').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');orig=btn.dataset.s;}
+function selSAP(el,cls){document.querySelectorAll('.so').forEach(o=>{o.classList.remove('sel','sw','sd2','sg2','st2','sn2');});el.classList.add('sel');if(cls)el.classList.add(cls);sap=el.dataset.sap;const cpe=sap==='GS0248',ptx=sap==='PTX';document.getElementById('pSec').style.display=(cpe||ptx)?'none':'';document.getElementById('fSec').style.display=(cpe||ptx)?'none':'';document.getElementById('cpeSec').style.display=cpe?'':'none';document.getElementById('ptxSec').style.display=ptx?'':'none';updT();}
+function addL(){lc++;const id='l'+lc;const d=document.createElement('div');d.className='pl';d.id=id;d.innerHTML=`<select onchange="updT()" id="c${id}"><option value="">Categoría…</option><option value="EQ">Equipo</option><option value="RE">Recubrimiento</option><option value="MI">Material Instalación</option><option value="EP">Excluido ≤25kg/≤50L</option><option value="EG">Excluido >25kg/>50L</option></select><input type="number" id="a${id}" placeholder="USD s/IVA" step="0.01" oninput="updT()"><button class="pld" onclick="document.getElementById('${id}').remove();updT()">×</button>`;document.getElementById('pLines').appendChild(d);updT();}
+function getLines(){const ls=[];document.querySelectorAll('.pl').forEach(l=>{const id=l.id;const cat=document.getElementById('c'+id)?.value;const amt=parseFloat(document.getElementById('a'+id)?.value)||0;if(cat&&amt>0)ls.push({cat,amt});});return ls;}
+function updT(){const ls=getLines();const tot=ls.reduce((s,l)=>s+l.amt,0);const eq=ls.filter(l=>l.cat==='EQ'||l.cat==='RE').reduce((s,l)=>s+l.amt,0);const co=ls.filter(l=>['EG','EP','MI'].includes(l.cat)).reduce((s,l)=>s+l.amt,0);document.getElementById('tTot').innerHTML=`$${tot.toFixed(2)} <span style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3)">USD</span>`;document.getElementById('tEq').textContent=`$${eq.toFixed(2)}`;document.getElementById('tCo').textContent=`$${co.toFixed(2)}`;const tc=parseFloat(document.getElementById('tC')?.value)||17.35;const fM=(parseFloat(document.getElementById('fM')?.value)||0)+(parseFloat(document.getElementById('fRY')?.value)||0);const fU=fM/tc;const p=tot>0?(fU/tot*100):0;const pe=document.getElementById('tPct');if(tot>0&&fM>0){pe.textContent=p.toFixed(1)+'%';pe.className='tv '+(p>30?'stop':p>15?'warn':'go');}else{pe.textContent='—';pe.className='tv';}
+const con=document.getElementById('psRows');if(!ls.length){con.innerHTML='<div class="psem">Agrega productos para ver el resumen</div>';return;}
+const grp={};ls.forEach(l=>{if(!grp[l.cat])grp[l.cat]={a:0};grp[l.cat].a+=l.amt;});const lbs={EQ:'Equipo',RE:'Recubrimiento',MI:'Mat. Instalación',EP:'Excluido ≤25kg',EG:'Excluido >25kg'};const dts={EQ:'go',RE:'go',MI:'warn',EP:'warn',EG:'stop'};let h='';Object.entries(grp).forEach(([c,{a}])=>{const pc=tot>0?(a/tot*100).toFixed(0):0;h+=`<div class="psr"><div class="psrl"><div class="psd ${dts[c]||'go'}"></div>${lbs[c]||c}</div><div class="psa">$${a.toFixed(2)} <span style="font-size:8.5px;color:var(--ink3)">${pc}%</span></div></div>`;});h+=`<div class="psto"><div class="pstl">Total consolidado</div><div class="pstv">$${tot.toFixed(2)} USD</div></div>`;con.innerHTML=h;}
+function evaluar(){const btn=document.getElementById('evb');btn.textContent='Evaluando…';setTimeout(()=>{btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Evaluar solicitud en motor v2.4`;motor();},400);}
+function motor(){
+  const ls=getLines(),estado=document.getElementById('dE').value;
+  const tc=parseFloat(document.getElementById('tC').value)||17.35;
+  const fM=(parseFloat(document.getElementById('fM')?.value)||0)+(parseFloat(document.getElementById('fRY')?.value)||0);
+  const fU=fM/tc,ori=orig;
+  const tot=ls.reduce((s,l)=>s+l.amt,0);
+  const eq=ls.filter(l=>l.cat==='EQ'||l.cat==='RE').reduce((s,l)=>s+l.amt,0);
+  const cosG=ls.filter(l=>l.cat==='EG').reduce((s,l)=>s+l.amt,0);
+  const accs=ls.filter(l=>l.cat==='MI'||l.cat==='EP').reduce((s,l)=>s+l.amt,0);
+  const tieneCostal=cosG>0,tieneAccs=accs>0,tieneEleg=eq>0;
+  const pct=tot>0?fU/tot:0,pctS=(pct*100).toFixed(1);
+  const destResult=evalDestino(estado,document.getElementById('dC').value);
+  const dOK=(destResult==='OK'),dPend=(destResult==='R-302');
+  const steps=[];
+  if(!ori){addS(steps,'warn','Origen','Sin seleccionar','Selecciona la sucursal GPA de origen.','warn','—');rnd(steps,'—','idle',null,null,'Selecciona una sucursal para continuar.');return;}
+  addS(steps,'pass','Capa 0','Unicidad documental','FV y CP sin duplicados previos (simulación).','go','OK');
+  if(sap==='GS0231'){
+    if(ori!=='GDL'){addS(steps,'fail','Capa 1a','GS0231 · '+ori+' ≠ GDL','Dispersiones solo desde GDL.','stop','R-401-D');rnd(steps,'R-401-D','stop',[{l:'SAP',s:'di',v:'GS0231'},{l:'Origen',s:'fail',v:ori},{l:'GDL?',s:'fail',v:'✗'},{l:'—',s:'na',v:'—'},{l:'—',s:'na',v:'—'}],null,`<strong>R-401-D:</strong> Las dispersiones internas (GS0231) solo se originan desde GDL. Sucursal ${ori} no autorizada.`);return;}
+    addS(steps,'active','Capa 1a','GS0231 · Dispersión · GDL ✓','Motor de tarifas 2026: fletera × vehículo × destino × pallets.','blue','GS0231');
+    rnd(steps,'R-800','disp',[{l:'SAP',s:'di',v:'GS0231'},{l:'GDL',s:'ok',v:'✓'},{l:'Fletera',s:'di',v:'?'},{l:'Ruta',s:'di',v:estado||'?'},{l:'Tarifa',s:'di',v:'Tabla'}],null,'<strong>GS0231 → DISPERSIÓN INTERNA · GDL.</strong> Tarifa 2026: fletera × vehículo × destino. Pallets → tarifa unitaria × n. Tipo CAJA pendiente en catálogo → R-801 si aplica.');return;
+  }
+  if(sap==='GS0248'){
+    const cpVal=parseFloat(document.getElementById('cpV')?.value)||0,fvVal=fM,delta=Math.abs(fvVal-cpVal),tol=cpVal*0.01;
+    addS(steps,'skip','Capa 1a','Dispersión','No aplica.','skip','skip');
+    addS(steps,'active','Capa 1b',`GS0248 · Cargo envío · Δ $${delta.toFixed(2)}`,`FV: $${fvVal.toFixed(2)} · CP: $${cpVal.toFixed(2)}`,(delta<=tol||!cpVal)?'orange':'warn',(delta<=tol||!cpVal)?'R-060':'R-061');
+    if(!cpVal){rnd(steps,'?','idle',null,null,'<strong>Ingresa el valor de la carta porte</strong> para calcular el delta FV vs CP.');return;}
+    if(delta<=tol){rnd(steps,'R-060','gold',[{l:'GS0248',s:'pt',v:'✓'},{l:'SKU',s:'pt',v:'004..'},{l:'Δ≤1%',s:'ok',v:'✓'},{l:'—',s:'na',v:'—'},{l:'—',s:'na',v:'—'}],null,`<strong>R-060 · Cargo por envío aprobado.</strong> FV $${fvVal.toFixed(2)} MXN · CP $${cpVal.toFixed(2)} MXN · Δ ${!cpVal?0:(delta/cpVal*100).toFixed(2)}% ≤ umbral 1%. Auto-aprobada.`);}
+    else{rnd(steps,'R-061','warn',[{l:'GS0248',s:'pt',v:'✓'},{l:'SKU',s:'pt',v:'004..'},{l:'Δ>1%',s:'fail',v:`${(delta/cpVal*100).toFixed(1)}%`},{l:'—',s:'na',v:'—'},{l:'—',s:'na',v:'—'}],null,`<strong>R-061 · Diferencia detectada.</strong> Δ ${(delta/cpVal*100).toFixed(1)}% supera umbral 1%. FV: $${fvVal.toFixed(2)} · CP: $${cpVal.toFixed(2)} · Δ: $${delta.toFixed(2)} MXN. Requiere revisión del aprobador.`);}
+    return;
+  }
+  if(sap==='PTX'){const cos=parseFloat(document.getElementById('ptxC')?.value)||0;addS(steps,'active','PTX / GCCR','Línea individual · código rastreo = folioCP',`Costo servicio: $${cos.toFixed(2)} MXN · FV vinculada requerida.`,'teal','GCCR');rnd(steps,'R-000','teal',[{l:'PTX',s:'pt',v:'GCCR'},{l:'FV',s:'ok',v:'Vincular'},{l:'C3',s:dOK?'ok':'fail',v:estado||'?'},{l:'C5',s:'ok',v:cos?((cos/tc).toFixed(0)+'U'):'-'},{l:'—',s:'na',v:'—'}],null,`<strong>PTX / GCCR · línea individual.</strong> Código rastreo = folioCP (R-092). FV vinculada en la tabla GCCR. Costo $${cos.toFixed(2)} MXN es fleteBase para C5.`);return;}
+  if(sap==='CFDI4'){addS(steps,'active','CFDI 4.0','Complemento CP v3.1 embebido','Folio fiscal CFDI = folioCP para R-092. Extrae origen/destino/flete del complemento.','pass','CFDI4');rnd(steps,'—','idle',null,null,'<strong>CFDI 4.0 + complemento carta porte.</strong> Motor lo procesa como CP estándar. Folio fiscal = folioCP. Continúa con C1–C5 según SAP interno.');return;}
+  if(sap==='GS0229'){
+    addS(steps,'skip','Capa 1a','Dispersión','No aplica.','skip','skip');
+    addS(steps,'skip','Capa 1b','Cargo envío','No aplica.','skip','skip');
+    addS(steps,'active','Capa 2',`GS0229 · Back Order · ${ori}`,`Cualquier sucursal válida. Solo C3 evaluado.`,'warn','GS0229');
+    if(!estado||estado==='otro'){addS(steps,'fail','C3','Fuera de catálogo',`${estado||'Sin seleccionar'} no en catálogo.`,'stop','R-301');rnd(steps,'R-301','stop',[{l:'C1',s:'bo',v:'EX'},{l:'C2',s:'bo',v:'EX'},{l:'C3',s:'fail',v:'✗'},{l:'C4',s:'bo',v:'EX'},{l:'C5',s:'bo',v:'EX'}],null,'<strong>R-301 · Back Order pero destino fuera de cobertura.</strong> C3 es el único criterio evaluado.');return;}
+    if(dPend){addS(steps,'warn','C3',`${estado} · pendiente de confirmación`,`${estado} no confirmado en catálogo.`,'warn','R-302');rnd(steps,'R-302','warn',[{l:'C1',s:'bo',v:'EX'},{l:'C2',s:'bo',v:'EX'},{l:'C3',s:'warn',v:'R-302'},{l:'C4',s:'bo',v:'EX'},{l:'C5',s:'bo',v:'EX'}],null,`<strong>R-302 · Ciudad borderline en ${estado}.</strong> Chiapas: solo Tapachula y Tuxtla Gutiérrez están autorizadas. Especifica la ciudad para confirmar cobertura.`);return;}
+    addS(steps,'pass','C3',`${estado} · en catálogo ✓`,`${estado} cubierto por el programa.`,'go','R-050');
+    rnd(steps,'R-050','go',[{l:'C1',s:'bo',v:'EX'},{l:'C2',s:'bo',v:'EX'},{l:'C3',s:'ok',v:`${estado.slice(0,5)}✓`},{l:'C4',s:'bo',v:'EX'},{l:'C5',s:'bo',v:'EX'}],null,`<strong>R-050 · Back Order aprobado.</strong> Origen ${ori} válido (cualquier sucursal). ${estado} en catálogo. C1,C2,C4,C5 exentos. Ferry incluido si aplica.`);return;
+  }
+  addS(steps,'skip','Capa 1a','Dispersión','No aplica.','skip','skip');
+  addS(steps,'skip','Capa 1b','Cargo envío','No aplica.','skip','skip');
+  addS(steps,'skip','Capa 2','Back Order','No aplica.','skip','skip');
+  if(!ls.length){addS(steps,'warn','C1','Sin productos','Agrega productos.','warn','—');rnd(steps,'—','idle',null,null,'Agrega productos al pedido para evaluar C1.');return;}
+  if(tieneCostal&&tot<1000){addS(steps,'fail','C1 Monto','R-103 · Con EXCLUIDO_GRANDE < $1,000',`Total $${tot.toFixed(2)} · requiere ≥ $1,000.`,'stop','R-103');rnd(steps,'R-103','stop',[{l:'C1',s:'fail',v:'R-103'},{l:'C2',s:'na',v:'—'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,`<strong>R-103:</strong> Con EXCLUIDO_GRANDE, mínimo $1,000 USD. Total: $${tot.toFixed(2)} USD.`);return;}
+  if(tieneCostal&&eq<500){addS(steps,'fail','C1 Monto','R-102 · Equipo < $500 con costal',`Equipo $${eq.toFixed(2)} · requiere ≥ $500.`,'stop','R-102');rnd(steps,'R-102','stop',[{l:'C1',s:'fail',v:'R-102'},{l:'C2',s:'na',v:'—'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,`<strong>R-102:</strong> Con costal ≥25kg, equipo debe ser ≥$500 USD. Actual: $${eq.toFixed(2)} USD.`);return;}
+  if(tieneAccs&&!tieneCostal&&tot<1000){addS(steps,'fail','C1 Monto','R-104 · Con accesorios < $1,000',`Total $${tot.toFixed(2)} · requiere ≥ $1,000.`,'stop','R-104');rnd(steps,'R-104','stop',[{l:'C1',s:'fail',v:'R-104'},{l:'C2',s:'na',v:'—'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,`<strong>R-104:</strong> Con MATERIAL_INSTALACION o EXCLUIDO_PEQUEÑO, mínimo $1,000 USD. Total: $${tot.toFixed(2)} USD.`);return;}
+  if(tieneAccs&&!tieneCostal&&tot>=1000&&eq/tot<0.5){addS(steps,'fail','C1 Monto','R-105 · Elegible < 50% con accesorios',`${(eq/tot*100).toFixed(0)}% elegible · requiere ≥ 50%.`,'stop','R-105');rnd(steps,'R-105','stop',[{l:'C1',s:'fail',v:'R-105'},{l:'C2',s:'na',v:'—'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,`<strong>R-105:</strong> Con accesorios, EQUIPO+RECUBRIMIENTO debe ser ≥50% del total. Actual: ${(eq/tot*100).toFixed(1)}% ($${eq.toFixed(2)} USD).`);return;}
+  if(!tieneCostal&&!tieneAccs&&tot<350){addS(steps,'fail','C1 Monto','R-101 · Pedido limpio < $350',`Total $${tot.toFixed(2)} · requiere ≥ $350.`,'stop','R-101');rnd(steps,'R-101','stop',[{l:'C1',s:'fail',v:'R-101'},{l:'C2',s:'na',v:'—'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,`<strong>R-101:</strong> $${tot.toFixed(2)} USD menor al mínimo de $350 USD para pedido limpio.`);return;}
+  addS(steps,'pass','C1 Monto','OK',`$${tot.toFixed(2)} USD · ${tieneCostal?'con costal':tieneAccs?'con accesorios':'pedido limpio'}. ✓`,'go','✓');
+  if(!tieneEleg&&accs>0){addS(steps,'fail','C2 Producto','R-202 · Solo accesorios sin elegible','Sin EQUIPO ni RECUBRIMIENTO.','stop','R-202');rnd(steps,'R-202','stop',[{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'fail',v:'R-202'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,'<strong>R-202:</strong> Sin productos elegibles (EQUIPO o RECUBRIMIENTO). Solo hay accesorios/excluidos.');return;}
+  if(cosG>0&&!tieneEleg){addS(steps,'fail','C2 Producto','R-201 · Excluido grande sin elegible','Costal/cuñete ≥25kg sin EQUIPO.','stop','R-201');rnd(steps,'R-201','stop',[{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'fail',v:'R-201'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,'<strong>R-201:</strong> Excluido grande sin producto elegible.');return;}
+  if(!tieneEleg){addS(steps,'fail','C2 Producto','R-202 · Sin elegible','Sin EQUIPO ni RECUBRIMIENTO.','stop','R-202');rnd(steps,'R-202','stop',[{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'fail',v:'R-202'},{l:'C3',s:'na',v:'—'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,'<strong>R-202:</strong> Sin productos elegibles en la FV.');return;}
+  addS(steps,'pass','C2 Producto','OK',`Equipo+Rec: $${eq.toFixed(2)} USD ✓`,'go','✓');
+  if(!estado){addS(steps,'warn','C3 Destino','Sin estado','Selecciona el estado.','warn','—');rnd(steps,'—','idle',null,null,'Selecciona el estado de destino para continuar.');return;}
+  if(estado==='otro'){addS(steps,'fail','C3 Destino','R-301 · Fuera de catálogo','Estado no cubierto.','stop','R-301');rnd(steps,'R-301','stop',[{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'ok',v:'✓'},{l:'C3',s:'fail',v:'R-301'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,'<strong>R-301:</strong> Destino fuera del catálogo del programa. El aprobador puede negociar ciudad alterna.');return;}
+  if(!dOK&&!dPend){addS(steps,'fail','C3 Destino','R-301 · '+estado+' no en catálogo','Estado no cubierto.','stop','R-301');rnd(steps,'R-301','stop',[{l:'C1',s:'ok',v:'✓'},{l:'C2',s:'ok',v:'✓'},{l:'C3',s:'fail',v:'R-301'},{l:'C4',s:'na',v:'—'},{l:'C5',s:'na',v:'—'}],null,`<strong>R-301:</strong> ${estado} no está en el catálogo del programa.`);return;}
+  if(dPend){addS(steps,'warn','C3 Destino','R-302 · '+estado+' pendiente',`${estado} no confirmado en catálogo.`,'warn','R-302');}
+  else{addS(steps,'pass','C3 Destino','OK',`${estado} en catálogo ✓`,'go','✓');}
+  addS(steps,'pass','C4 Entrega + Fletera','OK (simulado)','FV.campoEntrega = ENTREGA_DOMICILIO · Fletera en catálogo ✓','go','✓');
+  if(!fM){addS(steps,'warn','C5 Proporción','Sin flete','Ingresa el flete estimado.','warn','—');rnd(steps,'—','idle',null,null,'Ingresa el flete estimado para completar la evaluación.');return;}
+  let c5cl,c5code,c5msg;
+  if(pct>0.30){c5cl='fail';c5code='R-502';c5msg=`Flete ${pctS}% supera umbral crítico del 30%.`;addS(steps,'warn','C5 Proporción',`R-502 · ${pctS}% > 30%`,c5msg,'warn','R-502');}
+  else if(pct>0.15){c5cl='warn';c5code='R-501';c5msg=`Flete ${pctS}% supera umbral del 15%.`;addS(steps,'warn','C5 Proporción',`R-501 · ${pctS}% > 15%`,c5msg,'warn','R-501');}
+  else{c5cl='ok';c5code='R-000';c5msg=`Flete ${pctS}% dentro del umbral del 15% ✓`;addS(steps,'pass','C5 Proporción',`${pctS}% ✓`,c5msg,'go','✓');}
+  const c3st=dPend?'warn':dOK?'ok':'fail';
+  const crits=[{l:'C1 $',s:'ok',v:`$${tot.toFixed(0)}`},{l:'C2 Prod',s:'ok',v:'Elig✓'},{l:'C3 Dest',s:c3st,v:estado.slice(0,5)},{l:'C4 Flete',s:'ok',v:'OK'},{l:`C5 ${pctS}%`,s:c5cl,v:pctS+'%'}];
+  const pbar=`<div class="pmh"><span class="pml">% flete / pedido (incl. ferry)</span><span class="pmv ${pct>0.3?'stop':pct>0.15?'warn':'ok'}">${pctS}%</span></div><div class="pmbar"><div class="pmf ${pct>0.3?'stop':pct>0.15?'warn':'ok'}" style="width:${Math.min(pct/0.4*100,100)}%"></div><div class="pmt" style="left:${0.15/0.4*100}%"></div></div>`;
+  let mainCode=c5code,mainClass=c5code==='R-000'?'go':'warn';
+  if(dPend&&c5code==='R-000'){mainCode='R-302';mainClass='warn';}
+  let msg='';
+  if(mainCode==='R-000')msg=`<strong>R-000 · Apoyo completo auto-aprobado.</strong> Los 5 criterios se cumplen. Origen: ${ori}. Destino: ${estado}. Flete: ${pctS}% del pedido (ferry incluido si aplica). Esta solicitud sería liberada automáticamente por el motor v2.4.`;
+  else if(mainCode==='R-302'){const esChiapas=estado==='Chiapas';msg=`<strong>R-302 · Ciudad borderline.</strong> ${esChiapas?'Chiapas: solo Tapachula y Tuxtla Gutiérrez están autorizadas.':estado+' requiere confirmación de ciudad.'}. Demás criterios ✓. En revisión del aprobador.`;}
+  else msg=`<strong>${c5code}:</strong> ${c5msg} El aprobador evalúa si el flete es justificado para este destino.`;
+  rnd(steps,mainCode,mainClass,crits,pbar,msg);
+}
+function addS(steps,dc,layer,name,detail,cc,ct){steps.push({dc,layer,name,detail,cc,ct});}
+const R_CONCEPTOS = {
+  'R-000':'Apoyo completo','R-050':'Back Order','R-060':'Cargo envío OK',
+  'R-061':'Cargo envío con diferencia','R-091':'FV duplicada','R-092':'CP duplicada',
+  'R-101':'Monto insuficiente','R-102':'Costal sin equipo','R-103':'Costal sin mínimo',
+  'R-104':'Accesorios sin mínimo','R-105':'Elegible < 50%',
+  'R-201':'Excluido sin elegible','R-202':'Sin elegible',
+  'R-301':'Destino no cubierto','R-302':'Ciudad borderline',
+  'R-401':'No entrega domicilio','R-401-S':'Sucursal no autorizada',
+  'R-401-D':'Dispersión no-GDL','R-402':'Fletera no autorizada',
+  'R-501':'Flete alto > 15%','R-502':'Flete crítico > 30%',
+  'R-601':'Remoto + flete alto','R-602':'Borderline + flete alto',
+  'R-701':'En negociación','R-702':'Negociación OK','R-703':'Negociación fallida',
+  'R-800':'Dispersión OK','R-801':'Dispersión sin tarifa','R-802':'Dispersión excede',
+  'R-901':'Escalado por aprobador','R-902':'Escalado por SLA'
+};
+function rndLabel(code){const c=R_CONCEPTOS[code];return c?code+' · '+c:code;}
+function rnd(steps,code,rc,crits,meter,msg){
+  document.getElementById('mrRes').className='mr '+rc;document.getElementById('mrRes').textContent=rndLabel(code);
+  const cg=document.getElementById('cgSim');if(crits){cg.style.display='grid';cg.innerHTML=crits.map(c=>`<div class="cgi ${c.s}"><span class="cgil">${c.l}</span>${c.v}</div>`).join('');}else cg.style.display='none';
+  const pm=document.getElementById('pctMtr');if(meter){pm.style.display='block';pm.innerHTML=meter;}else pm.style.display='none';
+  document.getElementById('trBody').innerHTML=steps.map(s=>`<div class="trs"><div class="tri"><div class="trd2 ${s.dc}"></div></div><div class="trc"><div class="trlayer">${s.layer}</div><div class="trname">${s.name}</div><div class="trdet">${s.detail}</div>${s.ct&&s.ct!=='—'&&s.ct!=='skip'?`<span class="trcd ${s.cc}">${s.ct}</span>`:''}</div></div>`).join('');
+  const rm=document.getElementById('resMsg');if(msg){rm.style.display='block';document.getElementById('rmTxt').innerHTML=msg;}else rm.style.display='none';
+}
+addL();updT();
+
+// ── DATE RANGE FILTER ──────────────────────────────────────────
+// Cada tarjeta tiene data-fecha con la fecha del documento
+// La asignamos como atributo en las tarjetas del kanban
+
+// Mapa de folios → fechas (del batch de abril)
+const FOLIO_FECHAS = {
+  '116873635': '2026-04-22',
+  'JD322218':  '2026-04-27',
+  '116929225': '2026-04-23',
+  '116468131': '2026-04-14',
+  '116861950': '2026-04-22',
+  'JC748687':  '2026-04-20',
+  'FC20107952':'2026-04-18',
+  'FA10314864':'2026-04-14',
+};
+
+// Asignar data-fecha a las tarjetas al cargar
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.card').forEach(card => {
+    const cn = card.querySelector('.cn');
+    if (!cn) return;
+    const folio = cn.textContent.trim().split(' ')[0];
+    const fecha = FOLIO_FECHAS[folio];
+    if (fecha) card.dataset.fecha = fecha;
+  });
+  updateStatus();
+});
+
+function applyFilter() {
+  const from = document.getElementById('dfFrom').value;
+  const to   = document.getElementById('dfTo').value;
+  let shown  = 0;
+  document.querySelectorAll('.card').forEach(card => {
+    const f = card.dataset.fecha;
+    if (!f) { card.classList.remove('filtered-out'); shown++; return; }
+    const inRange = (!from || f >= from) && (!to || f <= to);
+    card.classList.toggle('filtered-out', !inRange);
+    if (inRange) shown++;
+  });
+  // Quitar preset activo
+  document.querySelectorAll('.df-preset').forEach(b => b.classList.remove('active'));
+  updateStatus(from, to, shown);
+}
+
+function clearFilter() {
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('filtered-out'));
+  document.getElementById('dfFrom').value = '';
+  document.getElementById('dfTo').value   = '';
+  document.querySelectorAll('.df-preset').forEach(b => b.classList.remove('active'));
+  updateStatus('','', document.querySelectorAll('.card').length);
+}
+
+function setPreset(p, btn) {
+  document.querySelectorAll('.df-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const now = new Date();
+  let from='', to='';
+  if (p==='abr26')  { from='2026-04-01'; to='2026-04-30'; }
+  if (p==='mar26')  { from='2026-03-01'; to='2026-03-31'; }
+  if (p==='q1')     { from='2026-01-01'; to='2026-03-31'; }
+  if (p==='mes')    {
+    const d = new Date(); d.setMonth(d.getMonth()-1);
+    from = d.toISOString().slice(0,10);
+    to   = new Date().toISOString().slice(0,10);
+  }
+  if (p==='todo')   { from=''; to=''; }
+  document.getElementById('dfFrom').value = from;
+  document.getElementById('dfTo').value   = to;
+  applyFilter();
+}
+
+function updateStatus(from, to, count) {
+  const el = document.getElementById('dfStatus');
+  if (!el) return;
+  if (!from && !to) { el.textContent = 'Todos los documentos · ' + (count||'') + ' docs'; return; }
+  const fmtDate = s => s ? s.split('-').reverse().join('/') : '—';
+  el.textContent = fmtDate(from) + ' – ' + fmtDate(to) + ' · ' + (count||0) + ' docs';
+}
+
+</script>
+</body>
+</html>
