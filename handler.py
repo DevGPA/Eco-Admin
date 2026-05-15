@@ -18,8 +18,10 @@
 
 from __future__ import annotations
 import json, os, logging, traceback
+from dataclasses import asdict
 from typing import Any
-from motor.evaluador import SolicitudFlete, evaluar_solicitud
+from motor.evaluador import (SolicitudInput, evaluar,
+                              CartaPorte, FacturaVenta, Partida, LineaCargo)
 from motor.catalogos import R_CONCEPTOS
 from db.validaciones import verificar_unicidad
 from db.escritura    import guardar_solicitud, cambiar_estado
@@ -113,25 +115,73 @@ def _route_evaluar(event):
     if not val["valido"]:
         _guardar_bloqueada(b,val)
         return _err(val["detalle"],409,val["codigo"])
-    sol=SolicitudFlete(
-        folio_cp=b["folioCP"],folios_fv=b["foliosFV"],
-        origen_sucursal=b["origenSucursal"],codigo_sap=b.get("codigoSAP",""),
-        destino_estado=b["destinoEstado"],destino_ciudad=b.get("destinoCiudad",""),
-        fleta_rfc=b["fletaRFC"],campo_entrega_fv=b.get("campoEntregaFV",""),
-        partidas=b["partidas"],flete_base_mxn=float(b["fleteBaseMXN"]),
-        ferry_mxn=float(b.get("ferryMXN",0)),tipo_cambio_ref=float(b["tipoCambioRef"]),
-        fecha_emision=b["fechaEmision"],folio_ptx_guia=b.get("folioPtxGuia"),
-        costo_ptx_mxn=float(b.get("costoPtxMXN",0)),es_cfdi4=bool(b.get("esCFDI4",False)))
-    resultado=evaluar_solicitud(sol)
+    sol=_build_solicitud_input(b)
+    resultado=evaluar(sol)
     reg=guardar_solicitud(resultado)
     logger.info("EVALUAR %s → %s user=%s",b["folioCP"],resultado.codigo_motor,_uid(event))
     return _ok({"id":reg["id"],"folioCP":b["folioCP"],"codigoMotor":resultado.codigo_motor,
-                "concepto":resultado.concepto,"estado":resultado.estado,
+                "concepto":resultado.concepto_motor,"estado":resultado.estado,
                 "pctFlete":round(resultado.pct_flete*100,2),
                 "montoBaseUSD":round(resultado.monto_base_usd,2),
                 "fleteBaseUSD":round(resultado.flete_base_usd,2),
-                "criterios":resultado.criterios_detalle,
+                "criterios":[asdict(c) for c in resultado.criterios],
                 "fechaEvaluacion":reg["fechaEvaluacion"]},201)
+
+
+def _build_solicitud_input(b: dict) -> SolicitudInput:
+    """Mapea el JSON plano del request al modelo estructurado del motor v2.4."""
+    tc_ref = float(b["tipoCambioRef"])
+    partidas = [
+        Partida(
+            sku=str(p.get("sku","")),
+            descripcion=str(p.get("descripcion","")),
+            cantidad=float(p.get("cantidad",0)),
+            precio_unitario_usd=float(p.get("precioUnitarioUSD",0)),
+            peso_unitario_kg=float(p.get("pesoKg",0)),
+            volumen_unitario_l=float(p.get("volumenL",0)),
+        )
+        for p in b.get("partidas",[])
+    ]
+    subtotal_usd = sum(p.importe_usd for p in partidas)
+    folios_fv = b.get("foliosFV") or []
+    campo_entrega = b.get("campoEntregaFV","ENTREGA_DOMICILIO")
+    # Una FV principal con todas las partidas; los folios adicionales se registran vacíos
+    facturas = []
+    for i, folio in enumerate(folios_fv):
+        facturas.append(FacturaVenta(
+            folio=str(folio),
+            subtotal_sin_iva=subtotal_usd if i==0 else 0.0,
+            currency="USD",
+            tipo_cambio_doc=tc_ref,
+            campo_entrega=campo_entrega,
+            partidas=partidas if i==0 else [],
+        ))
+    # Líneas de cargo de la carta porte: flete base + ferry opcional
+    lineas = [LineaCargo(codigo="78101802", descripcion="FLETE",
+                          importe=float(b["fleteBaseMXN"]), currency="MXN")]
+    ferry = float(b.get("ferryMXN",0))
+    if ferry > 0:
+        lineas.append(LineaCargo(codigo="78101700", descripcion="FERRY",
+                                  importe=ferry, currency="MXN"))
+    cp = CartaPorte(
+        folio=str(b["folioCP"]),
+        transportista_rfc=str(b["fletaRFC"]),
+        destinatario_rfc=str(b.get("destinatarioRFC","GPA000000000")),
+        codigo_sap=str(b.get("codigoSAP","")),
+        tipo_servicio_cp="ENTREGA_DOMICILIO" if campo_entrega=="ENTREGA_DOMICILIO" else "OCURRE",
+        destino_ciudad=str(b.get("destinoCiudad","")),
+        destino_estado=str(b["destinoEstado"]),
+        origen_sucursal=str(b["origenSucursal"]),
+        tipo_vehiculo=str(b.get("tipoVehiculo","PALLET")),
+        numero_pallets=int(b.get("numeroPallets",0)),
+        lineas_cargo=lineas,
+        currency="MXN",
+        tipo_cambio_doc=tc_ref,
+        codigo_rastreo=b.get("folioPtxGuia"),
+        es_cfdi40=bool(b.get("esCFDI4",False)),
+    )
+    return SolicitudInput(facturas_venta=facturas, carta_porte=cp,
+                           fecha_emision=str(b["fechaEmision"]))
 
 # ── POST /aprobar /rechazar /escalar ──────────────────────────────
 def _route_aprobar(event):

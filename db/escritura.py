@@ -3,9 +3,11 @@
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
+import json
 import os
 import uuid
 import boto3
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from decimal  import Decimal
 
@@ -77,7 +79,9 @@ def guardar_solicitud(resultado) -> dict:
         "incluyeFerry":    {"BOOL": resultado.incluye_ferry},
         "fechaEmision":    {"S": resultado.fecha_emision},
         "fechaEvaluacion": {"S": ahora},
-        "criteriosDetalle":{"S": str(resultado.criterios_detalle)},
+        "criteriosDetalle":{"S": json.dumps(
+            [asdict(c) if is_dataclass(c) else c for c in (resultado.criterios or [])],
+            ensure_ascii=False, default=str)},
         "ttl":             {"N": str(ttl)},
     }
 
