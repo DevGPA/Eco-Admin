@@ -2269,6 +2269,98 @@ async function startEvaluation() {
     70%  { box-shadow: 0 0 0 10px rgba(58,173,173,0); }
     100% { box-shadow: 0 0 0 0   rgba(58,173,173,0); }
   }
+  /* Panel de resultado de evaluación */
+  #motor-panel-ov {
+    position: fixed; inset: 0; background: rgba(28,37,53,.55);
+    backdrop-filter: blur(2px); z-index: 9500;
+    display: grid; place-items: center; padding: 20px;
+    animation: mpFade .15s ease;
+  }
+  #motor-panel {
+    background: #fff; border-radius: 14px; max-width: 560px; width: 100%;
+    max-height: 85vh; overflow: auto;
+    box-shadow: 0 24px 60px rgba(28,37,53,.45);
+    font-family: 'Nunito Sans', system-ui, sans-serif; color: #2a3548;
+    animation: mpSlide .2s ease;
+  }
+  #motor-panel .mph {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px; border-bottom: 1px solid #d6dde6;
+    background: linear-gradient(180deg, #1C2535 0%, #243045 100%);
+    color: #fff; border-radius: 14px 14px 0 0;
+  }
+  #motor-panel .mph .mpbadge {
+    padding: 4px 10px; border-radius: 999px; font-weight: 800;
+    font-size: 11px; letter-spacing: .04em;
+  }
+  #motor-panel .mph .mpbadge.ok   { background: #1f9d72; color: #fff; }
+  #motor-panel .mph .mpbadge.err  { background: #c5403f; color: #fff; }
+  #motor-panel .mph .mpbadge.warn { background: #d99a1a; color: #fff; }
+  #motor-panel .mph .mptitle {
+    flex: 1; font-family: 'Nunito', system-ui, sans-serif;
+    font-weight: 800; font-size: 15px;
+  }
+  #motor-panel .mph .mpclose {
+    background: rgba(255,255,255,.12); color: #fff; border: none;
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+    font-size: 18px; line-height: 1; font-weight: 700;
+  }
+  #motor-panel .mph .mpclose:hover { background: rgba(255,255,255,.22); }
+  #motor-panel .mpb { padding: 18px 20px; }
+  #motor-panel .mpb .mpr {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 8px 0; border-bottom: 1px dashed #e4e8ee;
+    font-size: 13px;
+  }
+  #motor-panel .mpb .mpr:last-child { border-bottom: none; }
+  #motor-panel .mpb .mpr .mpk { color: #7a8a9a; font-weight: 600; }
+  #motor-panel .mpb .mpr .mpv {
+    font-family: 'IBM Plex Mono', monospace; color: #1C2535; font-weight: 700;
+    text-align: right; word-break: break-all;
+  }
+  #motor-panel .mpb .mpr .mpv.big { font-size: 16px; color: #3AADAD; }
+  #motor-panel .mpb .mpr .mpv.warn { color: #d99a1a; }
+  #motor-panel .mpb .mpr .mpv.stop { color: #c5403f; }
+  #motor-panel .mpcrit {
+    margin-top: 14px; padding-top: 12px; border-top: 2px solid #1C2535;
+  }
+  #motor-panel .mpcrit-h {
+    font-size: 11px; font-weight: 800; color: #1C2535;
+    letter-spacing: .05em; margin-bottom: 8px;
+  }
+  #motor-panel .mpcrit-i {
+    padding: 8px 10px; margin-bottom: 6px; border-radius: 6px;
+    background: #f5f7fa; font-size: 12px;
+  }
+  #motor-panel .mpcrit-i .mpc-top {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 2px;
+  }
+  #motor-panel .mpcrit-i .mpc-r {
+    padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 800;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  #motor-panel .mpcrit-i .mpc-r.PASS { background: #e6f5ee; color: #1f9d72; }
+  #motor-panel .mpcrit-i .mpc-r.FAIL { background: #fde9e8; color: #c5403f; }
+  #motor-panel .mpcrit-i .mpc-r.WARN { background: #fdf3dc; color: #6a4400; }
+  #motor-panel .mpcrit-i .mpc-r.SKIP { background: #eef1f5; color: #7a8a9a; }
+  #motor-panel .mpcrit-i .mpc-r.INFO { background: #ebf0f7; color: #2e2278; }
+  #motor-panel .mpcrit-i .mpc-name { font-weight: 700; color: #1C2535; }
+  #motor-panel .mpcrit-i .mpc-d { color: #3a4a60; margin-top: 2px; }
+  #motor-panel .mpf {
+    padding: 12px 20px; border-top: 1px solid #d6dde6;
+    background: #f5f7fa; border-radius: 0 0 14px 14px;
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+  #motor-panel .mpf button {
+    background: #1C2535; color: #fff; border: none;
+    padding: 8px 18px; border-radius: 6px; cursor: pointer;
+    font-family: 'Nunito', system-ui, sans-serif; font-weight: 700;
+    font-size: 12px;
+  }
+  #motor-panel .mpf button:hover { background: #3AADAD; }
+  @keyframes mpFade  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes mpSlide { from { transform: translateY(-12px); opacity: 0; }
+                        to   { transform: translateY(0); opacity: 1; } }
 </style>
 <button id="btn-motor" type="button" onclick="iniciarMotor()"
         title="POST /evaluar con payload demo (requiere SDK gpa-api.js cargado)">
@@ -2329,35 +2421,136 @@ async function startEvaluation() {
       const res = await gpaApi.evaluar(demo);
       const ms  = Math.round(performance.now() - t0);
       console.log('[iniciarMotor] respuesta', res);
-
-      alert(
-        '⚙ Motor arrancado en ' + ms + 'ms\n\n' +
-        'Solicitud #' + (res.id || '?').slice(0, 8) + '\n' +
-        'Folio CP:    ' + demo.folioCP + '\n\n' +
-        'Código:      ' + res.codigoMotor + '\n' +
-        'Concepto:    ' + res.concepto + '\n' +
-        'Estado:      ' + res.estado + '\n' +
-        '% flete:     ' + res.pctFlete + '%\n' +
-        'Monto base:  $' + res.montoBaseUSD + ' USD\n' +
-        'Flete:       $' + res.fleteBaseUSD + ' USD\n\n' +
-        (res.criterios && res.criterios.length
-          ? res.criterios.length + ' criterio(s) registrado(s).'
-          : '')
-      );
-
+      _mostrarPanelResultado(res, demo, ms);
       if (window.gpaBridge && typeof gpaBridge.refreshKanban === 'function') {
         try { await gpaBridge.refreshKanban(); } catch (e) { /* ignore */ }
       }
     } catch (err) {
       console.error('[iniciarMotor] error', err);
-      const detalle = (err.codigoMotor ? '[' + err.codigoMotor + '] ' : '') +
-                      (err.message || err);
-      alert('Error al iniciar el motor: ' + detalle);
+      _mostrarPanelError(err);
     } finally {
       btn.disabled = false;
       btn.innerHTML = original;
     }
   };
+
+  // ── Panel de resultado in-page ──────────────────────────────────
+  function _cerrarPanelMotor() {
+    const ov = document.getElementById('motor-panel-ov');
+    if (ov) ov.remove();
+    document.removeEventListener('keydown', _onPanelKey);
+  }
+  function _onPanelKey(e) { if (e.key === 'Escape') _cerrarPanelMotor(); }
+
+  function _badgeClass(codigo, estado) {
+    if (!codigo) return 'err';
+    if (codigo === 'R-000' || codigo === 'R-050' ||
+        codigo === 'R-060' || codigo === 'R-800') return 'ok';
+    if (codigo.startsWith('R-1') || codigo.startsWith('R-2') ||
+        codigo.startsWith('R-3') || codigo.startsWith('R-4') ||
+        codigo === 'R-091' || codigo === 'R-092') return 'err';
+    return 'warn';
+  }
+  function _pctClass(pct) {
+    const n = parseFloat(pct);
+    if (isNaN(n)) return '';
+    if (n > 30) return 'stop';
+    if (n > 15) return 'warn';
+    return '';
+  }
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>]/g,
+      c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  }
+
+  function _mostrarPanelResultado(res, demo, ms) {
+    _cerrarPanelMotor();
+    const badge = _badgeClass(res.codigoMotor, res.estado);
+    const pcCls = _pctClass(res.pctFlete);
+    const criterios = Array.isArray(res.criterios) ? res.criterios : [];
+    const crHtml = criterios.length ? (
+      '<div class="mpcrit"><div class="mpcrit-h">' + criterios.length +
+      ' criterio(s) del motor</div>' +
+      criterios.map(c => (
+        '<div class="mpcrit-i">' +
+          '<div class="mpc-top">' +
+            '<span class="mpc-r ' + _esc(c.resultado || 'INFO') + '">' +
+              _esc(c.resultado || 'INFO') + '</span>' +
+            '<span class="mpc-name">' + _esc(c.criterio || '') + '</span>' +
+          '</div>' +
+          '<div class="mpc-d">' + _esc(c.detalle || '') +
+            (c.valor ? ' <span style="color:#7a8a9a"> · ' + _esc(c.valor) +
+              '</span>' : '') +
+          '</div>' +
+        '</div>'
+      )).join('') + '</div>'
+    ) : '';
+
+    const html =
+      '<div id="motor-panel-ov" onclick="if(event.target===this)_cerrarPanelMotor()">' +
+        '<div id="motor-panel">' +
+          '<div class="mph">' +
+            '<span class="mpbadge ' + badge + '">' + _esc(res.codigoMotor || '?') + '</span>' +
+            '<div class="mptitle">Resultado de evaluación · ' + ms + 'ms</div>' +
+            '<button class="mpclose" onclick="_cerrarPanelMotor()" title="Cerrar (Esc)">×</button>' +
+          '</div>' +
+          '<div class="mpb">' +
+            '<div class="mpr"><span class="mpk">Solicitud</span>' +
+              '<span class="mpv">' + _esc((res.id || '').slice(0, 8)) + '…</span></div>' +
+            '<div class="mpr"><span class="mpk">Folio CP</span>' +
+              '<span class="mpv">' + _esc(demo.folioCP) + '</span></div>' +
+            '<div class="mpr"><span class="mpk">Concepto</span>' +
+              '<span class="mpv big">' + _esc(res.concepto || '') + '</span></div>' +
+            '<div class="mpr"><span class="mpk">Estado</span>' +
+              '<span class="mpv">' + _esc(res.estado || '') + '</span></div>' +
+            '<div class="mpr"><span class="mpk">% Flete</span>' +
+              '<span class="mpv ' + pcCls + '">' + _esc(res.pctFlete) + '%</span></div>' +
+            '<div class="mpr"><span class="mpk">Monto base</span>' +
+              '<span class="mpv">$' + _esc(res.montoBaseUSD) + ' USD</span></div>' +
+            '<div class="mpr"><span class="mpk">Flete</span>' +
+              '<span class="mpv">$' + _esc(res.fleteBaseUSD) + ' USD</span></div>' +
+            '<div class="mpr"><span class="mpk">Origen → Destino</span>' +
+              '<span class="mpv">' + _esc(demo.origenSucursal) + ' → ' +
+              _esc(demo.destinoCiudad || demo.destinoEstado) + '</span></div>' +
+            '<div class="mpr"><span class="mpk">Fecha evaluación</span>' +
+              '<span class="mpv">' + _esc(res.fechaEvaluacion || '') + '</span></div>' +
+            crHtml +
+          '</div>' +
+          '<div class="mpf">' +
+            '<button onclick="_cerrarPanelMotor()">Cerrar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    document.addEventListener('keydown', _onPanelKey);
+  }
+
+  function _mostrarPanelError(err) {
+    _cerrarPanelMotor();
+    const codigo  = err && err.codigoMotor ? err.codigoMotor : 'ERROR';
+    const detalle = (err && err.message) ? err.message : String(err);
+    const html =
+      '<div id="motor-panel-ov" onclick="if(event.target===this)_cerrarPanelMotor()">' +
+        '<div id="motor-panel">' +
+          '<div class="mph">' +
+            '<span class="mpbadge err">' + _esc(codigo) + '</span>' +
+            '<div class="mptitle">No se pudo evaluar la solicitud</div>' +
+            '<button class="mpclose" onclick="_cerrarPanelMotor()" title="Cerrar (Esc)">×</button>' +
+          '</div>' +
+          '<div class="mpb">' +
+            '<div class="mpr"><span class="mpk">Detalle</span>' +
+              '<span class="mpv stop" style="font-family:inherit;font-weight:600">' +
+              _esc(detalle) + '</span></div>' +
+          '</div>' +
+          '<div class="mpf">' +
+            '<button onclick="_cerrarPanelMotor()">Cerrar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    document.addEventListener('keydown', _onPanelKey);
+  }
+  window._cerrarPanelMotor = _cerrarPanelMotor;
 </script>
 </body>
 </html>
