@@ -2422,6 +2422,7 @@ async function startEvaluation() {
       const ms  = Math.round(performance.now() - t0);
       console.log('[iniciarMotor] respuesta', res);
       _mostrarPanelResultado(res, demo, ms);
+      _actualizarPaginaPrincipal(res, demo);
       if (window.gpaBridge && typeof gpaBridge.refreshKanban === 'function') {
         try { await gpaBridge.refreshKanban(); } catch (e) { /* ignore */ }
       }
@@ -2551,6 +2552,126 @@ async function startEvaluation() {
     document.addEventListener('keydown', _onPanelKey);
   }
   window._cerrarPanelMotor = _cerrarPanelMotor;
+
+  // ── Actualización de la página principal (Kanban + KPIs) ─────────
+  // Mapea el estado del resultado a la columna correcta del Kanban
+  // estático y le inserta una tarjeta arriba; bumpea contadores y
+  // el KPI "En revisión" / "Total evaluados".
+  function _actualizarPaginaPrincipal(res, demo) {
+    const ESTADO_A_COL = {
+      'EN_REVISION':       0,
+      'ESCALADA':          1,
+      'AUTO_APROBADA':     2,
+      'APROBADA_MANUAL':   2,
+      'AUTO_RECHAZADA':    3,
+      'RECHAZADA_MANUAL':  3,
+      'BLOQUEADA':         3,
+    };
+    const idx = ESTADO_A_COL[res.estado];
+    const cols = document.querySelectorAll('#vpost .kb > .col');
+    if (idx === undefined || !cols[idx]) return;
+    const col = cols[idx];
+    const cb  = col.querySelector('.cb');
+    if (!cb) return;
+
+    // Color de tarjeta según código motor
+    const codigo = res.codigoMotor || '';
+    let cardClass = 'warn';
+    if (codigo === 'R-000' || codigo === 'R-050' ||
+        codigo === 'R-060' || codigo === 'R-800') cardClass = 'go';
+    else if (codigo === 'R-801') cardClass = 'navy';
+    else if (codigo.startsWith('R-1') || codigo.startsWith('R-2') ||
+             codigo.startsWith('R-3') || codigo.startsWith('R-4') ||
+             codigo === 'R-091' || codigo === 'R-092') cardClass = 'stop';
+
+    // Estado pill para el badge
+    let badgeClass = 'vc';
+    if (codigo === 'R-800' || codigo === 'R-801') badgeClass = 'di';
+
+    const hora = new Date().toLocaleTimeString('es-MX',
+      {hour:'2-digit', minute:'2-digit'});
+
+    const tarjeta = document.createElement('div');
+    tarjeta.className = 'card ' + cardClass;
+    tarjeta.setAttribute('data-api-id', res.id || '');
+    tarjeta.style.outline      = '2px solid #3AADAD';
+    tarjeta.style.outlineOffset= '-2px';
+    tarjeta.innerHTML =
+      '<span class="tb2 ' + badgeClass + '">API · ' + _esc(hora) + '</span>' +
+      '<div class="ch">' +
+        '<div class="chk"></div>' +
+        '<div class="cm">' +
+          '<div class="cn">' + _esc(demo.folioCP) + '</div>' +
+          '<div class="cf">' + _esc((demo.foliosFV && demo.foliosFV[0]) || '') +
+            ' · ' + _esc((res.id || '').slice(0, 8)) + '…</div>' +
+        '</div>' +
+        '<span class="cu w">' + _esc(codigo) + ' · ' +
+          _esc(res.concepto || '') + '</span>' +
+      '</div>' +
+      '<div class="rr">' +
+        '<span class="rc ' + (cardClass === 'stop' ? 'stop' :
+          cardClass === 'go' ? 'go' : 'warn') + '">' +
+          _esc(codigo) + ' · ' + _esc(res.concepto || '') + '</span>' +
+        '<span class="rt">Vía POST /evaluar · ' + _esc(res.estado || '') + '</span>' +
+      '</div>' +
+      '<div class="cmeta">' +
+        '<span>' + _esc(demo.origenSucursal) + ' → ' +
+          _esc(demo.destinoCiudad || demo.destinoEstado) + '</span>' +
+        '<span class="ms">·</span>' +
+        '<span>Flete ' + _esc(res.pctFlete) + '%</span>' +
+        '<span class="ms">·</span>' +
+        '<span>$' + _esc(res.montoBaseUSD) + ' USD</span>' +
+      '</div>' +
+      '<div class="cft">' +
+        '<div class="dps"><span class="dp">' + _esc(demo.folioCP) + '</span></div>' +
+        '<div class="bs"></div>' +
+      '</div>';
+
+    // Quitar "Sin escalamientos activos." / similares si están
+    const empty = cb.querySelector('.empty');
+    if (empty) empty.remove();
+
+    cb.insertBefore(tarjeta, cb.firstChild);
+
+    // Fade-in + scroll a la tarjeta
+    tarjeta.style.opacity   = '0';
+    tarjeta.style.transform = 'translateY(-10px)';
+    requestAnimationFrame(() => {
+      tarjeta.style.transition = 'opacity .3s ease, transform .3s ease';
+      tarjeta.style.opacity    = '1';
+      tarjeta.style.transform  = 'translateY(0)';
+    });
+    setTimeout(() => {
+      tarjeta.style.transition = 'outline .8s ease';
+      tarjeta.style.outline    = '2px solid transparent';
+    }, 2500);
+
+    try { tarjeta.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+    catch(e) { /* ignore */ }
+
+    // Bump contador de la columna
+    const ccn = col.querySelector('.ccn');
+    if (ccn) {
+      const cur = parseInt(String(ccn.textContent).replace(/[^0-9]/g, ''), 10) || 0;
+      ccn.textContent = String(cur + 1);
+    }
+
+    // Bump KPIs: "Total evaluados" y "En revisión"
+    const kpis = document.querySelectorAll('#vpost .ks .kpi');
+    kpis.forEach(k => {
+      const label = k.querySelector('.kl')?.textContent?.trim().toLowerCase();
+      const v     = k.querySelector('.kv');
+      if (!v) return;
+      if (label === 'total evaluados') {
+        const cur = parseInt(String(v.textContent).replace(/[^0-9]/g, ''), 10) || 0;
+        v.textContent = String(cur + 1);
+      } else if (label === 'en revisión' && idx === 0) {
+        const cur = parseInt(String(v.textContent).replace(/[^0-9]/g, ''), 10) || 0;
+        v.textContent = String(cur + 1);
+      }
+    });
+  }
+  window._actualizarPaginaPrincipal = _actualizarPaginaPrincipal;
 </script>
 </body>
 </html>
