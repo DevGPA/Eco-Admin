@@ -1,142 +1,81 @@
-# Makefile — Deploy Motor de Fletes GPA v2.4
+# Makefile — Motor de Fletes GPA v2.4 (AWS SAM)
 # ─────────────────────────────────────────────────────────────────
+# Flujo ÚNICO de infraestructura: AWS SAM (template.yaml + samconfig.toml).
+# SAM empaqueta el código y el layer (layer/requirements.txt) automáticamente.
+#
 # Uso:
-#   make package ENV=dev
-#   make deploy  ENV=prod EMAIL=oscar@gpa.com.mx
-#   make logs    ENV=dev
+#   make build
+#   make deploy ENV=dev               # dev | staging | prod
+#   make deploy-guided ENV=prod       # primera vez en un ambiente nuevo
+#   make update ENV=prod              # build + deploy rápido
+#   make logs ENV=prod
+#   make outputs ENV=prod
+#   make crear-usuario ENV=prod EMAIL=usuario@gpa.com.mx
 #   make test
+#
+# Requisitos: AWS SAM CLI, AWS CLI configurado, Python 3.12, Docker (para
+# 'sam build' con contenedor y 'sam local invoke').
 # ─────────────────────────────────────────────────────────────────
 
 ENV    ?= dev
 REGION ?= us-east-1
 EMAIL  ?=
-ACCOUNT = $(shell aws sts get-caller-identity --query Account --output text)
-DEPLOY_BUCKET = gpa-deploy-$(ENV)-$(ACCOUNT)
-STACK  = gpa-fletes-$(ENV)
-FN     = gpa-motor-fletes-$(ENV)
-DIST   = dist
+STACK   = gpa-fletes-$(ENV)
+FN      = MotorFletesFn
 
-.PHONY: all package layer deploy update-fn logs test clean
+.PHONY: build deploy deploy-guided update logs outputs test test-handler crear-usuario clean destroy
 
-all: package deploy
+# ── Build — SAM empaqueta código + layer ─────────────────────────
+build:
+	sam build
 
-# ── Crear bucket de deploy si no existe ──────────────────────────
-bucket:
-	aws s3 mb s3://$(DEPLOY_BUCKET) --region $(REGION) 2>/dev/null || true
-	aws s3api put-bucket-versioning \
-	  --bucket $(DEPLOY_BUCKET) \
-	  --versioning-configuration Status=Enabled
+# ── Deploy por ambiente (usa samconfig.toml) ─────────────────────
+deploy: build
+	sam deploy --config-env $(ENV)
 
-# ── Empaquetar código Lambda ──────────────────────────────────────
-package: bucket
-	@echo "📦 Empaquetando Lambda..."
-	rm -rf $(DIST)/lambda
-	mkdir -p $(DIST)/lambda
-	# Copiar código fuente
-	cp handler.py $(DIST)/lambda/
-	cp -r motor/  $(DIST)/lambda/motor/
-	cp -r db/     $(DIST)/lambda/db/
-	cp -r s3/     $(DIST)/lambda/s3/
-	# Crear __init__.py donde falte
-	touch $(DIST)/lambda/db/__init__.py
-	touch $(DIST)/lambda/s3/__init__.py
-	# Comprimir
-	cd $(DIST)/lambda && zip -r ../gpa-motor-fletes.zip . -x "*.pyc" -x "__pycache__/*"
-	aws s3 cp $(DIST)/gpa-motor-fletes.zip \
-	  s3://$(DEPLOY_BUCKET)/lambda/gpa-motor-fletes.zip
-	@echo "✅ Lambda empaquetada → s3://$(DEPLOY_BUCKET)/lambda/gpa-motor-fletes.zip"
+# ── Deploy interactivo (primera vez en un ambiente nuevo) ────────
+deploy-guided: build
+	sam deploy --guided --config-env $(ENV)
 
-# ── Empaquetar Layer de dependencias ─────────────────────────────
-layer: bucket
-	@echo "📦 Empaquetando Layer de dependencias..."
-	rm -rf $(DIST)/layer
-	mkdir -p $(DIST)/layer/python
-	pip install -r layer/requirements.txt -t $(DIST)/layer/python/ -q
-	cd $(DIST)/layer && zip -r ../gpa-dependencias.zip python/ -x "*.pyc"
-	aws s3 cp $(DIST)/gpa-dependencias.zip \
-	  s3://$(DEPLOY_BUCKET)/layers/gpa-dependencias.zip
-	@echo "✅ Layer empaquetado"
+# ── Actualizar (build + deploy sin confirmar changeset) ──────────
+update: build
+	sam deploy --config-env $(ENV) --no-confirm-changeset
 
-# ── Deploy completo CloudFormation ───────────────────────────────
-deploy: package layer
-	@echo "🚀 Desplegando stack $(STACK)..."
-	aws cloudformation deploy \
-	  --template-file infrastructure/stack-gpa-fletes.yaml \
-	  --stack-name $(STACK) \
-	  --region $(REGION) \
-	  --parameter-overrides \
-	    Env=$(ENV) \
-	    NotificacionesEmail=$(EMAIL) \
-	  --capabilities CAPABILITY_NAMED_IAM \
-	  --no-fail-on-empty-changeset
-	@echo "✅ Stack desplegado:"
-	@aws cloudformation describe-stacks \
-	  --stack-name $(STACK) \
-	  --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
-	  --output table
-
-# ── Actualizar solo el código (sin recrear infra) ─────────────────
-update-fn: package
-	@echo "🔄 Actualizando código Lambda..."
-	aws lambda update-function-code \
-	  --function-name $(FN) \
-	  --s3-bucket $(DEPLOY_BUCKET) \
-	  --s3-key lambda/gpa-motor-fletes.zip \
-	  --region $(REGION)
-	@echo "✅ Función actualizada"
-
-# ── Ver logs en tiempo real ───────────────────────────────────────
+# ── Logs en tiempo real ──────────────────────────────────────────
 logs:
-	aws logs tail /aws/lambda/$(FN) --follow --region $(REGION)
+	sam logs --stack-name $(STACK) --name $(FN) --tail --region $(REGION)
 
-# ── Tests locales ─────────────────────────────────────────────────
+# ── Outputs del stack (URLs, ARNs, IDs) ──────────────────────────
+outputs:
+	aws cloudformation describe-stacks \
+	  --stack-name $(STACK) --region $(REGION) \
+	  --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' --output table
+
+# ── Tests unitarios (pytest) ─────────────────────────────────────
 test:
-	@echo "🧪 Ejecutando tests..."
 	python -m pytest tests/ -v --tb=short
 
-test-handler:
-	@echo "🧪 Test handler completo..."
-	python -c "
-import json, os
-os.environ['DYNAMO_TABLE'] = 'gpa_fletes_dev'
-os.environ['S3_BUCKET']    = 'gpa-documentos-dev'
-from handler import lambda_handler
-event = {
-  'httpMethod': 'POST',
-  'path': '/evaluar',
-  'body': json.dumps({
-    'folioCP':       '116873635',
-    'foliosFV':      ['FA10315862'],
-    'origenSucursal': 'GDL',
-    'codigoSAP':     'GS0230',
-    'destinoEstado': 'Sonora',
-    'destinoCiudad': 'Navojoa',
-    'fletaRFC':      'ACT68080665A',
-    'campoEntregaFV':'ENTREGA_DOMICILIO',
-    'partidas': [
-      {'sku':'39111611','descripcion':'Reflector LED','cantidad':1,
-       'precioUnitarioUSD':1074.53,'pesoKg':5.0}
-    ],
-    'fleteBaseMXN': 18500.0,
-    'ferryMXN': 0.0,
-    'tipoCambioRef': 17.35,
-    'fechaEmision': '2026-04-22'
-  })
-}
-resp = lambda_handler(event, {})
-print('Status:', resp['statusCode'])
-print('Body:',   json.dumps(json.loads(resp['body']), indent=2, ensure_ascii=False))
-"
+# ── Invocación local de la Lambda (requiere Docker) ──────────────
+test-handler: build
+	sam local invoke $(FN) \
+	  --event tests/events/evaluar_ok.json \
+	  --env-vars tests/env.json
 
-# ── Destruir stack ────────────────────────────────────────────────
+# ── Crear usuario en Cognito (lee el UserPoolId de los outputs) ──
+crear-usuario:
+	@test -n "$(EMAIL)" || { echo "Uso: make crear-usuario ENV=$(ENV) EMAIL=usuario@gpa.com.mx"; exit 1; }
+	POOL_ID=$$(aws cloudformation describe-stacks --stack-name $(STACK) --region $(REGION) \
+	  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text); \
+	aws cognito-idp admin-create-user \
+	  --user-pool-id $$POOL_ID \
+	  --username "$(EMAIL)" \
+	  --user-attributes Name=email,Value="$(EMAIL)" Name=email_verified,Value=true \
+	  --region $(REGION)
+
+# ── Destruir el stack ────────────────────────────────────────────
 destroy:
-	@read -p "⚠️  ¿Destruir stack $(STACK)? [y/N] " ans; \
-	if [ "$$ans" = "y" ]; then \
-	  aws cloudformation delete-stack --stack-name $(STACK) --region $(REGION); \
-	  echo "Stack en proceso de eliminación..."; \
-	fi
+	sam delete --stack-name $(STACK) --region $(REGION)
 
-# ── Limpiar artefactos locales ────────────────────────────────────
+# ── Limpiar artefactos locales ───────────────────────────────────
 clean:
-	rm -rf $(DIST)/ __pycache__/ .pytest_cache/ *.pyc
-	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	rm -rf .aws-sam/ dist/ .pytest_cache/

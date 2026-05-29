@@ -204,7 +204,7 @@ pre{background:var(--s);border:1px solid var(--ln);border-radius:6px;padding:14p
   <div class="nl">Sistema</div>
   <a class="ni" onclick="go('s6')"><span class="nm get">GET</span> /health</a>
   <div class="nl">Deploy</div>
-  <a class="ni" onclick="go('s7')"><span class="nd" style="background:var(--gold)"></span>CloudFormation</a>
+  <a class="ni" onclick="go('s7')"><span class="nd" style="background:var(--gold)"></span>AWS SAM</a>
   <a class="ni" onclick="go('s8')"><span class="nd" style="background:var(--go)"></span>Makefile</a>
 </nav>
 
@@ -651,34 +651,20 @@ Access-Control-Allow-Origin: *</pre>
   </div>
 </div>
 
-<!-- S7 CLOUDFORMATION -->
+<!-- S7 SAM -->
 <div class="sec" id="s7">
-  <div class="sh"><span class="sn p-go">07</span><span class="stl">Deploy · CloudFormation</span></div>
-  <div class="co co-tl"><span>◆</span><span><strong>Stack separado.</strong> El API Gateway se despliega como stack independiente del motor Lambda, recibiendo el ARN de la Lambda como parámetro. Esto permite actualizar el código sin re-crear la API y viceversa.</span></div>
-<pre><span class="cm"># 1. Deployar motor + DynamoDB + S3 (stack-gpa-fletes.yaml)</span>
-aws cloudformation deploy \
-  --template-file infrastructure/stack-gpa-fletes.yaml \
-  --stack-name gpa-fletes-prod \
-  --parameter-overrides Env=prod \
-  --capabilities CAPABILITY_NAMED_IAM
+  <div class="sh"><span class="sn p-go">07</span><span class="stl">Deploy · AWS SAM</span></div>
+  <div class="co co-tl"><span>◆</span><span><strong>Un solo stack.</strong> Toda la infraestructura (Lambda, API Gateway HTTP + Cognito JWT, DynamoDB, S3, SQS, SNS, CloudWatch) se define en <code>template.yaml</code> y se despliega con SAM. La configuración por ambiente vive en <code>samconfig.toml</code>.</span></div>
+<pre><span class="cm"># 1. Build (SAM empaqueta código + layer)</span>
+sam build
 
-<span class="cm"># 2. Obtener ARN de la Lambda</span>
-LAMBDA_ARN=$(aws cloudformation describe-stacks \
-  --stack-name gpa-fletes-prod \
-  --query <span class="st">'Stacks[0].Outputs[?OutputKey==`LambdaArn`].OutputValue'</span> \
-  --output text)
+<span class="cm"># 2. Deploy por ambiente (primera vez: --guided)</span>
+sam deploy --guided --config-env prod
+sam deploy --config-env prod
 
-<span class="cm"># 3. Deployar API Gateway + Cognito</span>
-aws cloudformation deploy \
-  --template-file infrastructure/api-gateway-gpa.yaml \
-  --stack-name gpa-api-prod \
-  --parameter-overrides Env=prod LambdaArn=$LAMBDA_ARN \
-                        AllowedOrigin=https://admin.gpa.com.mx \
-  --capabilities CAPABILITY_NAMED_IAM
-
-<span class="cm"># 4. Obtener URL final</span>
+<span class="cm"># 3. Obtener la URL de la API y demás outputs</span>
 aws cloudformation describe-stacks \
-  --stack-name gpa-api-prod \
+  --stack-name gpa-fletes-prod \
   --query <span class="st">'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue'</span> \
   --output text
 <span class="cm"># → https://abc123.execute-api.us-east-1.amazonaws.com/prod</span></pre>
@@ -690,9 +676,9 @@ aws cloudformation describe-stacks \
   <table class="stbl">
     <thead><tr><th>Comando</th><th>Acción</th></tr></thead>
     <tbody>
-      <tr><td><span class="pill p-teal">make deploy ENV=prod</span></td><td>Paquetea código, sube a S3, despliega ambos stacks CloudFormation</td></tr>
-      <tr><td><span class="pill p-teal">make update-fn ENV=prod</span></td><td>Solo actualiza el código Lambda (sin recrear infra) — deploy de &lt;30s</td></tr>
-      <tr><td><span class="pill p-teal">make logs ENV=prod</span></td><td>CloudWatch Logs en tiempo real: <code>aws logs tail ... --follow</code></td></tr>
+      <tr><td><span class="pill p-teal">make deploy ENV=prod</span></td><td><code>sam build</code> + <code>sam deploy --config-env prod</code> (stack único)</td></tr>
+      <tr><td><span class="pill p-teal">make update ENV=prod</span></td><td>Build + deploy rápido sin confirmar changeset</td></tr>
+      <tr><td><span class="pill p-teal">make logs ENV=prod</span></td><td>CloudWatch Logs en tiempo real: <code>sam logs --tail</code></td></tr>
       <tr><td><span class="pill p-teal">make test</span></td><td>Pytest local contra el motor (sin AWS)</td></tr>
       <tr><td><span class="pill p-teal">make test-handler</span></td><td>Test del handler completo (requiere DynamoDB local o real)</td></tr>
       <tr><td><span class="pill p-warn">make destroy ENV=dev</span></td><td>Destruye el stack (con confirmación)</td></tr>

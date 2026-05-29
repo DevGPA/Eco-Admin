@@ -105,12 +105,13 @@ Eco-Admin/
 │       ├── health.json
 │       ├── monitor.json
 │       └── s3_trigger.json
-├── infrastructure/
-│   ├── stack-gpa-fletes.yaml        ← CloudFormation alternativo
-│   └── api-gateway-gpa.yaml         ← API Gateway standalone
 └── layer/
     └── requirements.txt             ← Dependencias del Lambda Layer
 ```
+
+> Infraestructura: **única fuente de verdad en `template.yaml` (AWS SAM) + `samconfig.toml`**.
+> Toda la infra (Lambda, API Gateway + Cognito JWT, DynamoDB, S3, SQS, SNS, CloudWatch)
+> se despliega con `sam deploy`. El `Makefile` envuelve los comandos SAM.
 
 ## Deploy
 
@@ -133,8 +134,8 @@ sam deploy --config-env dev        # desarrollo
 sam deploy --config-env staging    # staging
 sam deploy --config-env prod       # producción
 
-# Solo actualizar código (sin recrear infra)
-make update-code ENV=prod
+# Actualizar (build + deploy rápido)
+make update ENV=prod
 
 # Logs en tiempo real
 make logs ENV=prod
