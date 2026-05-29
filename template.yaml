@@ -155,8 +155,6 @@ Parameters:
 # ═══════════════════════════════════════════════════════════════════
 Conditions:
   IsProd:     !Equals [!Ref Env, prod]
-  IsNotProd:  !Not [!Equals [!Ref Env, prod]]
-  IsDev:      !Equals [!Ref Env, dev]
   TieneEmail: !Not [!Equals [!Ref NotificacionesEmail, '']]
 
 
