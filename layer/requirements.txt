@@ -9,10 +9,12 @@
 # ─────────────────────────────────────────────────────────────────
 
 # AWS SDK — operaciones DynamoDB, S3, SQS, SNS, Cognito
-boto3>=1.34.0
+# Rango acotado para builds reproducibles (evita un major incompatible).
+boto3>=1.34.0,<2.0.0
 
-# AWS Lambda Powertools — logging estructurado, trazabilidad, métricas
-aws-lambda-powertools>=2.34.0
+# NOTA: aws-lambda-powertools se retiró porque ningún módulo lo importa.
+# Si se adopta (logger/tracer), volver a añadirlo aquí con rango acotado:
+#   aws-lambda-powertools>=2.34.0,<3.0.0
 
 # Decimal helpers para DynamoDB (evitar float → Decimal)
 # (incluido en stdlib, no requiere instalación)

@@ -9,11 +9,13 @@ from decimal import Decimal
 from .catalogos import (
     MONTO_MIN_GENERAL, MONTO_MIN_COSTAL, MONTO_MIN_EQUIPO_COSTAL,
     MONTO_MIN_ACCESORIOS, PROP_MIN_ELEGIBLE,
-    UMBRAL_FLETE_WARN, UMBRAL_FLETE_CRIT, UMBRAL_CARGO_ENVIO,
-    UMBRAL_TARIFA_DISP, BACKORDER_ENABLED,
-    SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION,
+    UMBRAL_FLETE_WARN, UMBRAL_FLETE_CRIT, UMBRAL_FLETE_BORDERLINE,
+    UMBRAL_CARGO_ENVIO, UMBRAL_TARIFA_DISP, BACKORDER_ENABLED,
+    TIPO_CAMBIO_DEFAULT,
+    SAP_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER,
+    SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
-    evaluar_destino, categoria_partida,
+    evaluar_destino, categoria_partida, es_cargo_envio,
 )
 
 
@@ -53,7 +55,8 @@ class FacturaVenta:
     def subtotal_usd(self) -> float:
         if self.currency == "USD":
             return self.subtotal_sin_iva
-        return self.subtotal_sin_iva / self.tipo_cambio_doc
+        tc = self.tipo_cambio_doc if (self.tipo_cambio_doc or 0) > 0 else TIPO_CAMBIO_DEFAULT
+        return self.subtotal_sin_iva / tc
 
 
 @dataclass
@@ -78,7 +81,7 @@ class CartaPorte:
     numero_pallets: int = 0
     lineas_cargo: list[LineaCargo] = field(default_factory=list)
     currency: str = "MXN"
-    tipo_cambio_doc: float = 17.35
+    tipo_cambio_doc: float = TIPO_CAMBIO_DEFAULT
     # PTX / GCCR
     es_gccr: bool = False
     codigo_rastreo: Optional[str] = None  # folioCP alternativo para PTX
@@ -129,7 +132,7 @@ class ResultadoMotor:
     monto_base_usd: float = 0.0
     flete_base_usd: float = 0.0
     pct_flete: float = 0.0
-    tipo_cambio_ref: float = 17.35
+    tipo_cambio_ref: float = TIPO_CAMBIO_DEFAULT
     incluye_ferry: bool = False
     delta_cargo_envio: Optional[float] = None
     delta_pct: Optional[float] = None
@@ -150,6 +153,10 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
 
     # Datos comunes
     tipo_cambio_ref = fvs[0].tipo_cambio_doc if fvs else cp.tipo_cambio_doc
+    # Guarda anti división-por-cero: un TC ausente/0/negativo cae al respaldo.
+    # (La validación dura del valor se hace en handler.py antes de evaluar.)
+    if not tipo_cambio_ref or tipo_cambio_ref <= 0:
+        tipo_cambio_ref = TIPO_CAMBIO_DEFAULT
     folio_cp   = cp.folio_efectivo
     folios_fv  = [fv.folio for fv in fvs]
 
@@ -177,7 +184,7 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
         )
 
     # ── CAPA 1a — GS0231 DISPERSIÓN INTERNA ──────────────────────
-    if cp.codigo_sap == "GS0231" or _es_receptor_gpa(cp.destinatario_rfc):
+    if cp.codigo_sap == SAP_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
         criterios.append(CriterioDetalle(
             "Capa 1a · GS0231", "INFO", cp.codigo_sap,
             "DISPERSION_INTERNA detectada"
@@ -192,10 +199,9 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
         return _evaluar_dispersion(cp, tipo_cambio_ref, criterios, _res)
 
     # ── CAPA 1b — GS0248 CARGO POR ENVÍO ─────────────────────────
-    if (cp.codigo_sap == "GS0248"
+    if (cp.codigo_sap == SAP_CARGO_ENVIO
             and fvs
-            and fvs[0].sku_id == "00400000000000"
-            and "CARGO POR ENVIO" in (fvs[0].descripcion or "").upper()):
+            and es_cargo_envio(fvs[0].sku_id, fvs[0].descripcion)):
         criterios.append(CriterioDetalle(
             "Capa 1b · GS0248", "INFO", cp.codigo_sap,
             "CARGO_POR_ENVIO detectado"
@@ -205,7 +211,7 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
     # ── CAPA 2 — GS0229 BACK ORDER ────────────────────────────────
     is_backorder = (
         BACKORDER_ENABLED
-        and (cp.codigo_sap == "GS0229"
+        and (cp.codigo_sap == SAP_BACKORDER
              or any("BACK ORDER" in (fv.descripcion or "").upper()
                     for fv in fvs))
     )
@@ -406,17 +412,12 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
             f"{cp.destino_estado} no está en el catálogo del programa"
         ))
         return _res("R-301")
-    if dest_result == "R-302":
-        criterios.append(CriterioDetalle(
-            "C3 Destino", "WARN",
-            f"{cp.destino_estado} / {cp.destino_ciudad}",
-            "Ciudad borderline → revisión del aprobador"
-        ))
 
+    # Una sola entrada C3: OK → PASS, borderline (R-302) → WARN
     criterios.append(CriterioDetalle(
         "C3 Destino",
         "PASS" if dest_result == "OK" else "WARN",
-        f"{cp.destino_estado}",
+        f"{cp.destino_estado}" + (f" / {cp.destino_ciudad}" if dest_result == "R-302" else ""),
         "En catálogo ✓" if dest_result == "OK" else "Ciudad borderline → EN_REVISION"
     ))
 
@@ -471,7 +472,7 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     if dest_result == "R-302":
         if pct_flete > UMBRAL_FLETE_WARN:
             return _res("R-601")   # Remoto + flete alto
-        if pct_flete > 0.13:
+        if pct_flete > UMBRAL_FLETE_BORDERLINE:
             return _res("R-602")   # Borderline + flete moderado
         return _res("R-302")
 
@@ -503,17 +504,26 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _detectar_tipo(cp: CartaPorte, fvs: list[FacturaVenta]) -> str:
-    if cp.codigo_sap == "GS0231":
+    if cp.codigo_sap == SAP_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
         return "DISPERSION_INTERNA"
-    if cp.codigo_sap == "GS0248":
+    if cp.codigo_sap == SAP_CARGO_ENVIO:
         return "CARGO_POR_ENVIO"
-    if cp.codigo_sap == "GS0229":
+    if cp.codigo_sap == SAP_BACKORDER:
         return "BACK_ORDER"
     return "VENTA_CLIENTE"
 
 
 def _es_receptor_gpa(rfc: str) -> bool:
-    return rfc.upper().startswith("GPA")
+    """True solo si el RFC está en la lista configurable de receptores internos GPA.
+
+    Antes usaba startswith("GPA"), lo que secuestraba a la capa de dispersión
+    cualquier operación cuyo destinatario empezara con "GPA". Ahora es igualdad
+    exacta contra RECEPTORES_INTERNOS_GPA (vacío por defecto → solo dispara el
+    código SAP de dispersión).
+    """
+    if not rfc or not RECEPTORES_INTERNOS_GPA:
+        return False
+    return rfc.upper() in RECEPTORES_INTERNOS_GPA
 
 
 def _monto_base_usd(fvs: list[FacturaVenta], tc_ref: float) -> float:

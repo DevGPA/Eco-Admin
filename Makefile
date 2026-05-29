@@ -51,7 +51,7 @@ layer: bucket
 	@echo "📦 Empaquetando Layer de dependencias..."
 	rm -rf $(DIST)/layer
 	mkdir -p $(DIST)/layer/python
-	pip install boto3 pydantic -t $(DIST)/layer/python/ -q
+	pip install -r layer/requirements.txt -t $(DIST)/layer/python/ -q
 	cd $(DIST)/layer && zip -r ../gpa-dependencias.zip python/ -x "*.pyc"
 	aws s3 cp $(DIST)/gpa-dependencias.zip \
 	  s3://$(DEPLOY_BUCKET)/layers/gpa-dependencias.zip

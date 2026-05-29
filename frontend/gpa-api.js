@@ -5,7 +5,7 @@
 //
 // Uso:
 //   const api = new GpaApi({ env: 'prod' });
-//   await api.login('oscar@gpa.com.mx', 'password');
+//   await api.login('usuario@gpa.com.mx', 'password');
 //   const res = await api.evaluar({ folioCP: '116873635', ... });
 //   const kanban = await api.monitor({ estado: 'EN_REVISION' });
 // ─────────────────────────────────────────────────────────────────
@@ -126,12 +126,23 @@ class GpaApi {
     const data = await res.json();
     if (!res.ok) throw new GpaAuthError('CAMBIO_FALLIDO', data.message);
 
+    // Cognito puede encadenar otro desafío (MFA, etc.) en lugar de autenticar.
+    if (data.ChallengeName) {
+      throw new GpaAuthError('CHALLENGE_PENDIENTE',
+        `Desafío adicional requerido: ${data.ChallengeName}`, data.Session);
+    }
+    if (!data.AuthenticationResult) {
+      throw new GpaAuthError('CAMBIO_FALLIDO',
+        data.message || 'No se recibió la sesión tras el cambio de contraseña.');
+    }
+
     // Login exitoso después del cambio
     const auth = data.AuthenticationResult;
     this._token      = auth.IdToken;
     this._refreshTkn = auth.RefreshToken;
     this._tokenExp   = Date.now() + (auth.ExpiresIn * 1000);
-    this._userId     = this._decodeJwt(auth.IdToken).email;
+    const claims     = this._decodeJwt(auth.IdToken);
+    this._userId     = claims.email || claims['cognito:username'];
     this._saveSession();
     return { token: this._token, userId: this._userId };
   }
@@ -162,13 +173,17 @@ class GpaApi {
             }
           );
           const data = await res.json();
-          if (data.AuthenticationResult) {
-            this._token    = data.AuthenticationResult.IdToken;
-            this._tokenExp = Date.now() + (data.AuthenticationResult.ExpiresIn * 1000);
-            this._saveSession();
+          // fetch no lanza ante 4xx/5xx: validar explícitamente el refresh.
+          if (!res.ok || !data.AuthenticationResult) {
+            this.logout();
+            throw new GpaAuthError('SESION_EXPIRADA', 'Tu sesión expiró. Inicia sesión de nuevo.');
           }
+          this._token    = data.AuthenticationResult.IdToken;
+          this._tokenExp = Date.now() + (data.AuthenticationResult.ExpiresIn * 1000);
+          this._saveSession();
         } catch (e) {
           this.logout();
+          if (e instanceof GpaAuthError) throw e;
           throw new GpaAuthError('SESION_EXPIRADA', 'Tu sesión expiró. Inicia sesión de nuevo.');
         }
       } else {
@@ -384,7 +399,16 @@ class GpaApi {
   }
 
   async _handleResponse(res) {
-    const data = await res.json();
+    // Parseo defensivo: API Gateway/Cognito devuelven a veces cuerpos vacíos o
+    // no-JSON (401 sin body, 403, 502/504). Evita que res.json() lance antes de
+    // poder evaluar el status real.
+    let data = {};
+    try {
+      const txt = await res.text();
+      data = txt ? JSON.parse(txt) : {};
+    } catch (_) {
+      data = {};
+    }
 
     if (res.status === 401) {
       this.logout();
@@ -473,6 +497,24 @@ class GpaApiError extends Error {
     this.name   = 'GpaApiError';
     this.status = status;
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// UTILIDADES DE SEGURIDAD
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Escapa texto para insertarlo de forma segura en HTML (previene XSS).
+ * Cubre contextos de texto y de atributo (comillas simples y dobles).
+ */
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 
@@ -566,8 +608,13 @@ class GpaMonitorBridge {
 
   // ── Cargar kanban completo ─────────────────────────────────────
   async refreshKanban() {
-    const desde = document.getElementById('dfFrom')?.value || '2026-04-01';
-    const hasta = document.getElementById('dfTo')?.value   || '2026-04-30';
+    // Rango por defecto: mes actual (no fechas fijas que quedan desfasadas).
+    const now   = new Date();
+    const fmt   = (d) => d.toISOString().slice(0, 10);
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const desde = document.getElementById('dfFrom')?.value || fmt(first);
+    const hasta = document.getElementById('dfTo')?.value   || fmt(last);
 
     try {
       const data = await this.api.cargarKanban(desde, hasta);
@@ -591,24 +638,29 @@ class GpaMonitorBridge {
 
   // ── Render tarjeta de solicitud ────────────────────────────────
   renderCard(item) {
-    const codigo   = item.codigoMotor || '';
-    const concepto = item.conceptoMotor || '';
-    const estado   = item.estado || '';
-    const folio    = item.folioCP || '';
-    const destino  = `${item.origenSucursal || ''} → ${item.destinoEstado || ''}`;
-    const pct      = item.pctFlete ? (parseFloat(item.pctFlete) * 100).toFixed(1) : '—';
-    const fecha    = item.fechaEmision || '';
-    const solId    = (item.PK || '').replace('SOL#', '');
+    // Código sin escapar SOLO para decisiones de clase (no se inserta en el DOM)
+    const codigoRaw = item.codigoMotor || '';
+    const estado    = item.estado || '';
+    // Todo lo que se inserta como HTML va escapado (anti-XSS)
+    const codigo    = escapeHtml(codigoRaw);
+    const concepto  = escapeHtml(item.conceptoMotor || '');
+    const folio     = escapeHtml(item.folioCP || '');
+    const destino   = escapeHtml(`${item.origenSucursal || ''} → ${item.destinoEstado || ''}`);
+    const pct       = item.pctFlete ? (parseFloat(item.pctFlete) * 100).toFixed(1) : '—';
+    const fecha     = escapeHtml(item.fechaEmision || '');
+    // ID usado dentro de onclick/atributos: limitar a charset seguro (UUID-like).
+    // Esto neutraliza la inyección de JS al romper la cadena del onclick.
+    const solId     = String(item.PK || '').replace('SOL#', '').replace(/[^a-zA-Z0-9_-]/g, '');
 
     // Color de la tarjeta basado en el estado/código
     let cardClass = 'go';
-    if (codigo.startsWith('R-1') || codigo.startsWith('R-2') || codigo.startsWith('R-3'))
+    if (codigoRaw.startsWith('R-1') || codigoRaw.startsWith('R-2') || codigoRaw.startsWith('R-3'))
       cardClass = 'stop';
-    else if (codigo === 'R-501' || codigo === 'R-502' || codigo === 'R-801')
+    else if (codigoRaw === 'R-501' || codigoRaw === 'R-502' || codigoRaw === 'R-801')
       cardClass = 'warn';
-    else if (codigo === 'R-800' || estado.includes('DISPERSION'))
+    else if (codigoRaw === 'R-800' || estado.includes('DISPERSION'))
       cardClass = 'navy';
-    else if (codigo === 'R-060')
+    else if (codigoRaw === 'R-060')
       cardClass = 'gold';
 
     // Clase del badge

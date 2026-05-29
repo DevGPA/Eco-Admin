@@ -334,12 +334,18 @@ Resources:
         Motor:    v2.4
         Env:      !Ref Env
 
-  # Alias prod apuntando a la versión más reciente
+  # Versión publicada inmutable (un alias no puede apuntar a $LATEST)
+  GpaFletesFnVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref GpaFletesFn
+
+  # Alias prod apuntando a la versión publicada
   GpaFletesFnAliasLive:
     Type: AWS::Lambda::Alias
     Properties:
       FunctionName: !Ref GpaFletesFn
-      FunctionVersion: $LATEST
+      FunctionVersion: !GetAtt GpaFletesFnVersion.Version
       Name: live
 
   # ─────────────────────────────────────────────────────────────────

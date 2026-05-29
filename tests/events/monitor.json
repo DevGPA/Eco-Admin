@@ -2,7 +2,7 @@
   "requestContext": {
     "http": { "method": "GET", "path": "/monitor" },
     "authorizer": {
-      "jwt": { "claims": { "email": "oscar@gpa.com.mx" } }
+      "jwt": { "claims": { "email": "tester@example.com" } }
     }
   },
   "queryStringParameters": {

@@ -109,6 +109,12 @@ def _route_evaluar(event):
     req=["folioCP","foliosFV","origenSucursal","destinoEstado","fletaRFC","partidas","fleteBaseMXN","tipoCambioRef","fechaEmision"]
     miss=[r for r in req if r not in b]
     if miss: return _err(f"Campos requeridos: {miss}",400)
+    try:
+        tc=float(b["tipoCambioRef"])
+    except (TypeError,ValueError):
+        return _err("tipoCambioRef debe ser numérico",400)
+    if tc<=0:
+        return _err("tipoCambioRef debe ser mayor a 0",400)
     if b.get("destinoEstado")=="Chiapas" and not b.get("destinoCiudad"):
         return _err("Chiapas requiere destinoCiudad. Autorizadas: Tapachula, Tuxtla Gutiérrez.",400)
     val=verificar_unicidad(b["folioCP"],b["foliosFV"])
@@ -166,7 +172,7 @@ def _build_solicitud_input(b: dict) -> SolicitudInput:
     cp = CartaPorte(
         folio=str(b["folioCP"]),
         transportista_rfc=str(b["fletaRFC"]),
-        destinatario_rfc=str(b.get("destinatarioRFC","GPA000000000")),
+        destinatario_rfc=str(b.get("destinatarioRFC","")),
         codigo_sap=str(b.get("codigoSAP","")),
         tipo_servicio_cp="ENTREGA_DOMICILIO" if campo_entrega=="ENTREGA_DOMICILIO" else "OCURRE",
         destino_ciudad=str(b.get("destinoCiudad","")),

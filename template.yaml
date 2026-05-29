@@ -64,11 +64,8 @@ Globals:
         UMBRAL_CARGO_ENVIO:       !Ref UmbralCargoEnvio
         BACKORDER_ENABLED:        !Ref BackorderEnabled
 
-  Api:
-    Cors:
-      AllowOrigin:  !Sub "'${AllowedOrigin}'"
-      AllowHeaders: "'Content-Type,Authorization,X-GPA-UserId,X-GPA-Source'"
-      AllowMethods: "'GET,POST,OPTIONS'"
+  # Nota: Globals.Api solo aplica a AWS::Serverless::Api (REST). El CORS efectivo
+  # del HTTP API se define en GpaHttpApi.CorsConfiguration (única fuente de verdad).
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -676,13 +673,14 @@ Resources:
         - Name:     email
           Required: true
           Mutable:  true
-        - Name:     custom:rol
+        # El prefijo custom: lo añade Cognito automáticamente; el Name base NO debe llevarlo.
+        - Name:     rol
           AttributeDataType: String
           Mutable:  true
           StringAttributeConstraints:
             MinLength: '1'
             MaxLength: '50'
-        - Name:     custom:sucursal
+        - Name:     sucursal
           AttributeDataType: String
           Mutable:  true
           StringAttributeConstraints:

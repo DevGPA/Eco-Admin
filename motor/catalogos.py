@@ -5,6 +5,18 @@
 # Las constantes aquí son el fallback si SSM no está disponible.
 
 import os
+import unicodedata
+from typing import Optional
+
+
+def _normalizar(texto: str) -> str:
+    """Mayúsculas, sin acentos ni espacios redundantes — para comparar texto libre."""
+    if not texto:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", texto)
+    sin_acentos = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return " ".join(sin_acentos.upper().split())
+
 
 # ── Parámetros de monto ──────────────────────────────────────────
 MONTO_MIN_GENERAL       = float(os.environ.get("MONTO_MIN_GENERAL", "350"))
@@ -18,17 +30,42 @@ PESO_MAX_EXCLUIDO_P   = float(os.environ.get("PESO_MAX_EXCLUIDO_P", "25"))   # �
 VOLUMEN_MAX_EXCLUIDO_P= float(os.environ.get("VOLUMEN_MAX_EXCLUIDO_P", "50")) # ≤ 50L
 
 # ── Parámetros de proporción ─────────────────────────────────────
-UMBRAL_FLETE_WARN  = float(os.environ.get("UMBRAL_FLETE_WARN", "0.15"))
-UMBRAL_FLETE_CRIT  = float(os.environ.get("UMBRAL_FLETE_CRIT", "0.30"))
-UMBRAL_TARIFA_DISP = float(os.environ.get("UMBRAL_TARIFA_DISP", "0.10"))
-UMBRAL_CARGO_ENVIO = float(os.environ.get("UMBRAL_CARGO_ENVIO", "0.01"))
+UMBRAL_FLETE_WARN      = float(os.environ.get("UMBRAL_FLETE_WARN", "0.15"))
+UMBRAL_FLETE_CRIT      = float(os.environ.get("UMBRAL_FLETE_CRIT", "0.30"))
+UMBRAL_FLETE_BORDERLINE= float(os.environ.get("UMBRAL_FLETE_BORDERLINE", "0.13"))  # R-302 + C5
+UMBRAL_TARIFA_DISP     = float(os.environ.get("UMBRAL_TARIFA_DISP", "0.10"))
+UMBRAL_CARGO_ENVIO     = float(os.environ.get("UMBRAL_CARGO_ENVIO", "0.01"))
+
+# ── Tipo de cambio de respaldo (solo fallback; la fuente real es la FV/CP) ──
+TIPO_CAMBIO_DEFAULT = float(os.environ.get("TIPO_CAMBIO_DEFAULT", "17.35"))
 
 # ── Back Order ───────────────────────────────────────────────────
 BACKORDER_ENABLED = os.environ.get("BACKORDER_ENABLED", "true").lower() == "true"
 
+# ── Códigos SAP que dirigen las capas del motor ──────────────────
+SAP_DISPERSION   = os.environ.get("SAP_DISPERSION", "GS0231")    # Capa 1a
+SAP_CARGO_ENVIO  = os.environ.get("SAP_CARGO_ENVIO", "GS0248")   # Capa 1b
+SAP_BACKORDER    = os.environ.get("SAP_BACKORDER", "GS0229")     # Capa 2
+
+# ── Detección de "Cargo por envío" (Capa 1b / GS0248) ────────────
+SKU_CARGO_ENVIO  = os.environ.get("SKU_CARGO_ENVIO", "00400000000000")
+# Frases (sin acentos, mayúsculas) que identifican el concepto en la descripción
+DESC_CARGO_ENVIO = tuple(
+    s.strip() for s in os.environ.get("DESC_CARGO_ENVIO", "CARGO POR ENVIO").split("|") if s.strip()
+)
+
 # ── Sucursales válidas ───────────────────────────────────────────
 SUCURSALES_VALIDAS       = {"GDL", "CDMX", "MTY", "CUN", "PVR", "SJD"}
 SUCURSAL_ORIGEN_DISPERSION = "GDL"
+
+# RFCs internos GPA que disparan DISPERSIÓN_INTERNA (Capa 1a) por igualdad exacta.
+# Configurable vía env RECEPTORES_INTERNOS_GPA="RFC1,RFC2". Vacío por defecto:
+# la dispersión se detecta entonces solo por el código SAP (SAP_DISPERSION).
+RECEPTORES_INTERNOS_GPA = {
+    r.strip().upper()
+    for r in os.environ.get("RECEPTORES_INTERNOS_GPA", "").split(",")
+    if r.strip()
+}
 
 # Mapeo código postal SAP → sucursal
 MAPEO_CP_SUCURSAL = {
@@ -75,6 +112,14 @@ def evaluar_destino(estado: str, ciudad: str = "") -> str:
     return "R-301"
 
 
+def es_cargo_envio(sku_id: Optional[str], descripcion: Optional[str]) -> bool:
+    """Capa 1b (GS0248): detecta 'cargo por envío' tolerando acentos/espacios/sinónimos."""
+    if sku_id != SKU_CARGO_ENVIO:
+        return False
+    desc = _normalizar(descripcion or "")
+    return any(frase in desc for frase in DESC_CARGO_ENVIO)
+
+
 # ── Fleteras autorizadas (RFC) ───────────────────────────────────
 FLETERAS_AUTORIZADAS = {
     "ACT68080665A",  # Tres Guerras (Tresguerras)
@@ -107,7 +152,7 @@ SKU_CATEGORIAS: dict[str, str] = {
     "30131704": "RECUBRIMIENTO",  # Vetro Venezia / azulejo pool
     # MATERIAL_INSTALACION
     "30111601": "MATERIAL_INSTALACION",  # Pega Veneciana
-    # EXCLUIDO_GRANDE (≥25kg / ≥50L)
+    # EXCLUIDO_GRANDE (>25kg / >50L — el límite 25/50 es inclusivo a PEQUEÑO)
     "49241712": "EXCLUIDO_GRANDE",  # Tricloro/Dicloro 50kg
     "62815740": "EXCLUIDO_GRANDE",  # Cloro en polvo CILI
     "62815880": "EXCLUIDO_GRANDE",  # Cloro (Z)

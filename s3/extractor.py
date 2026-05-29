@@ -24,18 +24,40 @@ import json
 import boto3
 import logging
 from urllib.parse import unquote_plus
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
 S3_CLIENT   = boto3.client("s3")
 S3_BUCKET   = os.environ.get("S3_BUCKET", "gpa-documentos-dev")
-TABLE_NAME  = os.environ.get("DYNAMO_TABLE", "gpa_fletes_dev")
+
+# Tipo de cambio de respaldo cuando el upload no trae el metadato (configurable).
+TIPO_CAMBIO_DEFAULT = float(os.environ.get("TIPO_CAMBIO_DEFAULT", "17.35"))
 
 # Prefijos que identifican tipo de documento
-RE_FV  = re.compile(r"^(FA|FC|FM|FLC|FMT|FL)\d", re.IGNORECASE)
-RE_CP  = re.compile(r"^\d{9,}", re.IGNORECASE)
-RE_PTX = re.compile(r"^(GCCR|GCR)", re.IGNORECASE)
-RE_CFD = re.compile(r"^(FAC|GDL|ACRED)", re.IGNORECASE)
+RE_FV    = re.compile(r"^(FA|FC|FM|FLC|FMT|FL)\d", re.IGNORECASE)
+RE_CP    = re.compile(r"^\d{9,}", re.IGNORECASE)
+RE_PTX   = re.compile(r"^(GCCR|GCR)", re.IGNORECASE)
+RE_CFD   = re.compile(r"^(FAC|GDL|ACRED)", re.IGNORECASE)
+RE_FECHA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _to_float(valor, default: float = 0.0) -> float:
+    """Convierte un metadato S3 (texto arbitrario) a float sin lanzar excepción.
+
+    Tolera símbolo de moneda, espacios y valores vacíos; ante texto no numérico
+    registra una advertencia y devuelve el default en vez de propagar ValueError.
+    """
+    if valor is None:
+        return default
+    s = str(valor).strip().replace("$", "").replace(" ", "")
+    if not s:
+        return default
+    try:
+        return float(s)
+    except ValueError:
+        logger.warning("Metadato numérico inválido %r → usando %s", valor, default)
+        return default
 
 
 def clasificar_folio(filename: str) -> str:
@@ -74,7 +96,7 @@ def listar_pendientes(bucket: str, prefix: str = "pendientes/") -> list[dict]:
                 "key":   key,
                 "tipo":  tipo,
                 "folio": folio,
-                "ext":   fname.split(".")[-1].lower(),
+                "ext":   os.path.splitext(fname)[1].lstrip(".").lower(),
             })
 
     return [
@@ -94,6 +116,18 @@ def agrupar_por_cp(archivos: list[dict]) -> list[dict]:
     cps   = [a for a in archivos if a["tipo"] in ("CP", "CFDI4")]
     fvs   = {a["folio"]: a for a in archivos if a["tipo"] == "FV"}
     ptxs  = [a for a in archivos if a["tipo"] == "PTX"]
+
+    # La asociación FV→CP por folio de guía aún no está implementada: se asignan
+    # todas las FVs de la carpeta a cada ancla. Eso es correcto solo si hay un
+    # único CP/PTX por carpeta. Avisar cuando hay ambigüedad para no inflar montos
+    # ni bloquear FVs de otros CP por R-091.
+    anclas = len(cps) + len(ptxs)
+    if anclas > 1 and fvs:
+        logger.warning(
+            "Carpeta con %d CP/PTX comparten %d FV(s): asociación FV→CP ambigua. "
+            "Revisar emparejamiento por folio de guía antes de evaluar.",
+            anclas, len(fvs),
+        )
 
     grupos = []
 
@@ -127,18 +161,29 @@ def extraer_metadatos_s3(bucket: str, key: str) -> dict:
         x-amz-meta-fleta-rfc: ACT68080665A
         x-amz-meta-fecha-emision: 2026-04-22
     """
-    resp = S3_CLIENT.head_object(Bucket=bucket, Key=key)
-    meta = resp.get("Metadata", {})
+    try:
+        resp = S3_CLIENT.head_object(Bucket=bucket, Key=key)
+        meta = resp.get("Metadata", {})
+    except ClientError as e:
+        logger.warning("No se pudieron leer metadatos de s3://%s/%s: %s", bucket, key, e)
+        meta = {}
+
+    # Fecha de respaldo desde el path (pendientes/{fecha}/archivo) si es válida.
+    partes = key.split("/")
+    fecha_fallback = partes[1] if len(partes) > 1 and RE_FECHA.match(partes[1]) else ""
+
     return {
-        "origenSucursal":  meta.get("origen-sucursal", "GDL"),
+        # Vacío en vez de "GDL": no inventar una sucursal real; el motor lo tratará
+        # como sucursal no válida (R-401-S) y forzará revisión, en lugar de asumir GDL.
+        "origenSucursal":  meta.get("origen-sucursal", ""),
         "codigoSAP":       meta.get("codigo-sap", ""),
         "fletaRFC":        meta.get("fleta-rfc", ""),
         "destinoEstado":   meta.get("destino-estado", ""),
         "destinoCiudad":   meta.get("destino-ciudad", ""),
-        "tipoCambioRef":   float(meta.get("tipo-cambio", "17.35")),
-        "fechaEmision":    meta.get("fecha-emision", key.split("/")[1]),
-        "fleteBaseMXN":    float(meta.get("flete-mxn", "0")),
-        "ferryMXN":        float(meta.get("ferry-mxn", "0")),
+        "tipoCambioRef":   _to_float(meta.get("tipo-cambio"), TIPO_CAMBIO_DEFAULT),
+        "fechaEmision":    meta.get("fecha-emision", fecha_fallback),
+        "fleteBaseMXN":    _to_float(meta.get("flete-mxn"), 0.0),
+        "ferryMXN":        _to_float(meta.get("ferry-mxn"), 0.0),
         "esCFDI4":         meta.get("es-cfdi4", "false").lower() == "true",
     }
 
@@ -157,18 +202,22 @@ def extraer_documentos_lote(bucket: str, key: str) -> list[dict]:
     # Obtener metadatos del objeto disparador
     meta = extraer_metadatos_s3(bucket, key)
 
-    # Determinar la carpeta-fecha del objeto
+    # Determinar la carpeta-fecha del objeto. Solo procesamos el layout
+    # canónico pendientes/{fecha}/archivo; cualquier otro key se ignora
+    # (evita construir prefijos sin sentido y listar carpetas inexistentes).
     partes = key.split("/")
-    if len(partes) < 2:
-        logger.warning("Key inesperado: %s", key)
+    if partes[0] != "pendientes" or len(partes) < 3:
+        logger.warning("Key fuera del layout esperado pendientes/{fecha}/archivo: %s", key)
         return []
 
-    fecha_carpeta = partes[1] if partes[0] == "pendientes" else partes[0]
+    fecha_carpeta = partes[1]
 
-    # Listar todos los archivos de esa carpeta
+    # Listar TODOS los archivos de esa carpeta (paginado, sin truncar a 1000)
     prefijo_carpeta = f"pendientes/{fecha_carpeta}/"
-    resp = S3_CLIENT.list_objects_v2(Bucket=bucket, Prefix=prefijo_carpeta)
-    archivos_raw = resp.get("Contents", [])
+    paginator = S3_CLIENT.get_paginator("list_objects_v2")
+    archivos_raw = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefijo_carpeta):
+        archivos_raw.extend(page.get("Contents", []))
 
     archivos = []
     for obj in archivos_raw:
@@ -190,7 +239,8 @@ def extraer_documentos_lote(bucket: str, key: str) -> list[dict]:
             **meta,
             # Campos mínimos para el motor (partidas vacías → motor usará FV)
             "partidas":      [],
-            "esCFDI4":       grupo["tipoCP"] == "CFDI4",
+            # Una sola fuente de verdad: metadato es-cfdi4 OR clasificación por archivo
+            "esCFDI4":       bool(meta.get("esCFDI4")) or grupo["tipoCP"] == "CFDI4",
         }
         solicitudes.append(sol)
         logger.info(
@@ -206,30 +256,35 @@ def mover_a_procesados(bucket: str, key: str, sol_id: str, resultado: dict):
     Mueve el documento de pendientes/ a procesados/ después de evaluarlo.
     También escribe el JSON de resultado junto al documento.
     """
-    fname = key.split("/")[-1]
-    fecha = key.split("/")[1] if len(key.split("/")) > 1 else "unknown"
-    anio, mes = fecha[:4], fecha[5:7]
+    partes = key.split("/")
+    fname = partes[-1]
+    # Validar que el segmento sea una fecha real; si no, cuarentena en sin-fecha/
+    fecha = partes[1] if len(partes) > 1 and RE_FECHA.match(partes[1]) else ""
+    anio, mes = (fecha[:4], fecha[5:7]) if fecha else ("sin-fecha", "00")
 
     destino_key = f"procesados/{anio}/{mes}/{sol_id}/{fname}"
+    resultado_key = f"procesados/{anio}/{mes}/{sol_id}/resultado_{os.path.splitext(fname)[0]}.json"
 
-    # Copiar
-    S3_CLIENT.copy_object(
-        Bucket=bucket,
-        CopySource={"Bucket": bucket, "Key": key},
-        Key=destino_key,
-    )
+    # Copiar + escribir resultado, y solo borrar el original si la copia se confirma.
+    # Si algo falla, se conserva el documento en pendientes/ (no se pierde).
+    try:
+        S3_CLIENT.copy_object(
+            Bucket=bucket,
+            CopySource={"Bucket": bucket, "Key": key},
+            Key=destino_key,
+        )
+        S3_CLIENT.put_object(
+            Bucket=bucket,
+            Key=resultado_key,
+            Body=json.dumps(resultado, ensure_ascii=False, default=str),
+            ContentType="application/json",
+        )
+        # Verificar que la copia exista antes del borrado irreversible
+        S3_CLIENT.head_object(Bucket=bucket, Key=destino_key)
+    except ClientError as e:
+        logger.error("No se movió %s (se conserva el original): %s", key, e)
+        raise
 
-    # Escribir resultado JSON
-    resultado_key = f"procesados/{anio}/{mes}/{sol_id}/resultado_{fname.split('.')[0]}.json"
-    S3_CLIENT.put_object(
-        Bucket=bucket,
-        Key=resultado_key,
-        Body=json.dumps(resultado, ensure_ascii=False, default=str),
-        ContentType="application/json",
-    )
-
-    # Eliminar de pendientes
     S3_CLIENT.delete_object(Bucket=bucket, Key=key)
-
     logger.info("Movido: %s → %s", key, destino_key)
     return destino_key

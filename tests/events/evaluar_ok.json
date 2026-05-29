@@ -3,7 +3,7 @@
     "http": { "method": "POST", "path": "/evaluar" },
     "authorizer": {
       "jwt": {
-        "claims": { "email": "oscar@gpa.com.mx", "cognito:groups": ["aprobador1"] }
+        "claims": { "email": "tester@example.com", "cognito:groups": ["aprobador1"] }
       }
     }
   },

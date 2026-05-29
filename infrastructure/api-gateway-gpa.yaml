@@ -264,8 +264,9 @@ Resources:
       IdentitySource:
         - $request.header.Authorization
       JwtConfiguration:
+        # El claim aud de Cognito contiene el ID del App Client, no un nombre fijo.
         Audience:
-          - !Sub gpa-motor-${Env}
+          - !Ref GpaUserPoolClient
         Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${GpaUserPool}
 
   # ─────────────────────────────────────────────────────────────────
