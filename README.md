@@ -209,6 +209,18 @@ make crear-usuario ENV=prod
 
 ## Tests
 
+### Unitarios (pytest) — motor v2.4
+
+Suite de 62 pruebas sobre el motor (sin AWS): catálogos, las 6 capas, C1–C5,
+regresiones de bugs corregidos y validación de entrada del handler.
+
+```bash
+pip install pytest boto3
+pytest tests/ -v        # o: make test
+```
+
+### Invocación local con SAM (requiere Docker)
+
 ```bash
 # Invocar Lambda localmente con SAM
 sam local invoke MotorFletesFn --event tests/events/evaluar_ok.json --env-vars tests/env.json
