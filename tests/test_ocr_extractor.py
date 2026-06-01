@@ -2,7 +2,10 @@
 # No requieren AWS/Bedrock ni PyMuPDF (se prueba la lógica pura con páginas mock).
 import pytest
 
-from s3.ocr_extractor import clasificar_por_rfc, armar_caso, _parse_json
+from s3.ocr_extractor import (
+    clasificar_por_rfc, armar_caso, _parse_json,
+    emparejar_casos, _folios_referenciados, _fv_coincide,
+)
 from motor.catalogos import RFC_GPA
 
 CARRIER = "ACT680806665A"
@@ -108,3 +111,71 @@ def test_parse_json_extrae_objeto_con_prosa():
 def test_parse_json_sin_json_lanza():
     with pytest.raises(ValueError):
         _parse_json("no hay json aquí")
+
+
+# ── Emparejamiento multi-caso (varios CP/FV en un PDF) ────────────
+HORMIK = "TCH170824TH2"
+
+
+def cp_doc(folio, subtotal, ref_fv, destino="Guerrero"):
+    return {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": folio,
+            "subtotal": subtotal, "moneda": "MXN", "fletaRFC": HORMIK,
+            "comentarios": f"F-{ref_fv}/ COBRO AL REGRESO/ DOMICILIO",
+            "destinoEstado": destino, "destinoCiudad": "Acapulco", "partidas": []}
+
+
+def fv_doc(folio, subtotal, partidas=None):
+    return {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": folio,
+            "subtotal": subtotal, "moneda": "USD", "tipoCambio": 17.55,
+            "partidas": partidas or [{"claveSat": "49241712", "descripcion": "TRICLORO",
+                                      "cantidad": 1, "importe": subtotal}]}
+
+
+def test_folios_referenciados():
+    assert _folios_referenciados("F-40086093/ COBRO AL REGRESO") == ["40086093"]
+    assert _folios_referenciados("F 40086102 y F-40086200") == ["40086102", "40086200"]
+    assert _folios_referenciados(None) == []
+
+
+def test_fv_coincide_por_digitos():
+    assert _fv_coincide("FM40086093", ["40086093"]) is True
+    assert _fv_coincide("FM40086093", ["99999999"]) is False
+    assert _fv_coincide(None, ["40086093"]) is False
+
+
+def test_emparejar_dos_casos_reales():
+    # Bundle real FAC4927-FAC4935: 2 CP + 2 FV, cada CP referencia su FV.
+    paginas = [
+        cp_doc("FAC04927", 3330.00, "40086093"),
+        fv_doc("FM40086093", 3852.25),
+        cp_doc("FAC04935", 390.00, "40086102"),
+        fv_doc("FM40086102", 15.55),
+    ]
+    res = emparejar_casos(paginas, folio_archivo="FAC4927-FAC4935")
+    assert res["totalCP"] == 2 and res["totalFV"] == 2
+    assert len(res["casos"]) == 2
+    c1, c2 = res["casos"]
+    assert c1["status"] == "OK" and c1["folioCP"] == "FAC04927"
+    assert c1["foliosFV"] == ["FM40086093"]
+    assert c1["fleteSinIvaMXN"] == pytest.approx(3330.00)
+    assert c1["montoVentaFV"] == pytest.approx(3852.25)
+    assert c2["foliosFV"] == ["FM40086102"]
+    assert res["fvsSinCP"] == []
+
+
+def test_emparejar_cp_sin_fv_es_error():
+    paginas = [cp_doc("FAC04927", 3330.00, "99999999"), fv_doc("FM40086093", 100.0)]
+    res = emparejar_casos(paginas)
+    assert res["casos"][0]["status"] == "ERROR"
+    assert res["casos"][0]["error"] == "SIN_FV_VINCULADA"
+    assert res["fvsSinCP"] == ["FM40086093"]   # la FV quedó sin emparejar
+
+
+def test_emparejar_suma_varias_fv_a_un_cp():
+    cp = cp_doc("FAC04927", 3330.00, "40086093")
+    cp["comentarios"] = "F-40086093 y F-40086200"   # dos FV para un CP
+    paginas = [cp, fv_doc("FM40086093", 3000.0), fv_doc("FM40086200", 852.25)]
+    res = emparejar_casos(paginas)
+    caso = res["casos"][0]
+    assert caso["montoVentaFV"] == pytest.approx(3852.25)
+    assert caso["foliosFV"] == ["FM40086093", "FM40086200"]

@@ -38,15 +38,21 @@ PROMPT_OCR = (
     "Eres un extractor de datos de comprobantes fiscales mexicanos (CFDI 4.0). "
     "La imagen es UNA página de un comprobante escaneado (carta porte o factura). "
     "Devuelve EXCLUSIVAMENTE un objeto JSON, sin texto adicional, con estas claves:\n"
-    '  "rfcEmisor": string|null  (RFC de quien EMITE el comprobante)\n'
-    '  "rfcReceptor": string|null  (RFC de quien RECIBE)\n'
+    '  "rfcEmisor": string|null   (RFC de quien EMITE el comprobante)\n'
+    '  "rfcReceptor": string|null (RFC de quien RECIBE)\n'
     '  "tipoDocumento": "CARTA_PORTE"|"FACTURA"|"CFDI"|"OTRO"\n'
-    '  "subtotal": number|null  (Sub-Total SIN IVA, solo el número)\n'
+    '  "subtotal": number|null    (Sub-Total SIN IVA, solo el número)\n'
     '  "moneda": "MXN"|"USD"|null\n'
     '  "tipoCambio": number|null  (si aparece "Tipo de Cambio")\n'
-    '  "folio": string|null  (folio o serie-folio del comprobante)\n'
+    '  "folio": string|null       (folio o serie-folio del comprobante)\n'
+    '  "comentarios": string|null (texto del campo Comentarios; suele enlazar la FV: "F-40086093")\n'
+    '  "origenEstado": string|null, "origenCiudad": string|null\n'
+    '  "destinoEstado": string|null, "destinoCiudad": string|null\n'
+    '  "fletaRFC": string|null    (RFC de la fletera/transportista, = emisor del CP)\n'
+    '  "partidas": [ {"claveSat": string|null, "descripcion": string, '
+    '"cantidad": number, "importe": number} ]  (renglones de productos; [] si no aplica)\n'
     "Si la página no es un comprobante (anexo, acuse, etc.), usa tipoDocumento=OTRO "
-    "y los demás en null."
+    "y los demás en null/[]."
 )
 
 
@@ -164,6 +170,75 @@ def armar_caso(paginas: list[dict], folio_archivo: str = "") -> dict:
         "paginasFV": len(fvs),
         "paginasError": len(ajenas),
     }
+
+
+# ── Varios CP/FV en un PDF → varios casos (1 caso por CP) ─────────
+def _folios_referenciados(comentarios: Optional[str]) -> list[str]:
+    """Folios de FV referenciados en Comentarios del CP (p.ej. 'F-40086093')."""
+    if not comentarios:
+        return []
+    return re.findall(r"F[-\s]?0*(\d{4,})", comentarios.upper())
+
+
+def _digitos(s: Optional[str]) -> str:
+    return re.sub(r"\D", "", s or "")
+
+
+def _fv_coincide(fv_folio: Optional[str], refs: list[str]) -> bool:
+    d = _digitos(fv_folio)
+    if not d or not refs:
+        return False
+    return any(d == r or d.endswith(r) or r.endswith(d) for r in refs)
+
+
+def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
+    if not fvs:
+        return {"status": "ERROR", "error": "SIN_FV_VINCULADA",
+                "detalle": f"El CP {cp.get('folio')} no tiene FV de GPA emparejada.",
+                "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
+    partidas = [pt for fv in fvs for pt in (fv.get("partidas") or [])]
+    fv0 = fvs[0]
+    return {
+        "status": "OK",
+        "folioCP": str(cp.get("folio") or folio_archivo),
+        "foliosFV": [str(fv.get("folio") or "") for fv in fvs],
+        "fletaRFC": cp.get("fletaRFC") or cp.get("rfcEmisor"),
+        "fleteSinIvaMXN": _num(cp.get("subtotal")),
+        "montoVentaFV": sum(_num(fv.get("subtotal")) for fv in fvs),
+        "monedaFV": (fv0.get("moneda") or "USD").upper(),
+        "tipoCambioRef": _num(fv0.get("tipoCambio")) or None,
+        "origenEstado": cp.get("origenEstado"),
+        "origenCiudad": cp.get("origenCiudad"),
+        "destinoEstado": cp.get("destinoEstado"),
+        "destinoCiudad": cp.get("destinoCiudad"),
+        "partidas": partidas,
+    }
+
+
+def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
+    """
+    De las páginas OCR de UN PDF (que puede traer varios CP y varias FV) arma
+    UN caso por cada CP, emparejando su(s) FV por el folio del campo Comentarios.
+    """
+    cps, fvs, ajenas = [], [], []
+    for p in paginas:
+        clase = clasificar_por_rfc(p.get("rfcEmisor"), p.get("rfcReceptor"))
+        (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
+
+    casos, usadas = [], set()
+    for cp in cps:
+        refs = _folios_referenciados(cp.get("comentarios"))
+        match = []
+        for i, fv in enumerate(fvs):
+            if _fv_coincide(fv.get("folio"), refs):
+                match.append(fv)
+                usadas.add(i)
+        casos.append(_construir_caso(cp, match, folio_archivo))
+
+    fvs_sin_cp = [fvs[i].get("folio") for i in range(len(fvs)) if i not in usadas]
+    return {"casos": casos, "totalCP": len(cps), "totalFV": len(fvs),
+            "fvsSinCP": fvs_sin_cp, "paginasAjenas": len(ajenas),
+            "folioArchivo": folio_archivo}
 
 
 # ── Orquestación end-to-end (S3 → OCR → caso) ─────────────────────
