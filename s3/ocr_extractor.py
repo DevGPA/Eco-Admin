@@ -23,7 +23,7 @@ from typing import Optional
 
 import boto3
 
-from motor.catalogos import RFC_GPA
+from motor.catalogos import RFC_GPA, sucursal_de_origen
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,12 @@ PROMPT_OCR = (
     '  "origenEstado": string|null, "origenCiudad": string|null\n'
     '  "destinoEstado": string|null, "destinoCiudad": string|null\n'
     '  "fletaRFC": string|null    (RFC de la fletera/transportista, = emisor del CP)\n'
-    '  "partidas": [ {"claveSat": string|null, "descripcion": string, '
-    '"cantidad": number, "importe": number} ]  (renglones de productos; [] si no aplica)\n'
+    '  "partidas": [ {"descripcion": string, "cantidad": number, "importe": number, '
+    '"pesoKg": number|null, "volumenL": number|null, "presentacion": string|null, '
+    '"claveSat": string|null} ]  (renglones de productos; [] si no aplica)\n'
+    "    pesoKg/volumenL/presentacion = tamaño/presentación de UNA unidad del producto "
+    '(p.ej. "50 KGS", "20 L"); es el factor que define si el producto es excluido por '
+    "tamaño. Extrae el número del peso/volumen de la descripción si viene ahí.\n"
     "Si la página no es un comprobante (anexo, acuse, etc.), usa tipoDocumento=OTRO "
     "y los demás en null/[]."
 )
@@ -209,6 +213,8 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
         "tipoCambioRef": _num(fv0.get("tipoCambio")) or None,
         "origenEstado": cp.get("origenEstado"),
         "origenCiudad": cp.get("origenCiudad"),
+        # Sucursal derivada del ORIGEN real (no de la facturación); '' si no es plaza GPA
+        "origenSucursal": sucursal_de_origen(cp.get("origenCiudad"), cp.get("origenEstado")),
         "destinoEstado": cp.get("destinoEstado"),
         "destinoCiudad": cp.get("destinoCiudad"),
         "partidas": partidas,

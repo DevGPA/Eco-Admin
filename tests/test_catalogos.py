@@ -3,47 +3,52 @@ import pytest
 
 from motor.catalogos import (
     categoria_partida, evaluar_destino, es_cargo_envio, _normalizar,
-    PESO_MAX_EXCLUIDO_P,
+    sucursal_de_origen, PESO_EXCLUIDO_KG, VOLUMEN_EXCLUIDO_L,
 )
 
 
-# ── categoria_partida ─────────────────────────────────────────────
-@pytest.mark.parametrize("sku,esperado", [
-    ("39111611", "EQUIPO"),
-    ("40151510", "EQUIPO"),
-    ("30131704", "RECUBRIMIENTO"),
-    ("30111601", "MATERIAL_INSTALACION"),
-    ("49241712", "EXCLUIDO_GRANDE"),
-    ("11111607", "EXCLUIDO_PEQUENO"),
-])
-def test_categoria_por_sku_catalogo(sku, esperado):
-    assert categoria_partida(sku) == esperado
+# ── categoria_partida: por presentación/tamaño (la clave SAT NO decide) ──
+def test_categoria_elegible_si_menor_25():
+    assert categoria_partida(peso_kg=10) == "EQUIPO"
 
 
-def test_categoria_por_peso_grande():
-    assert categoria_partida("SKU-DESCONOCIDO", peso_kg=30) == "EXCLUIDO_GRANDE"
+def test_categoria_excluido_en_25_inclusivo():
+    # 25 exacto se EXCLUYE (límite inclusivo)
+    assert categoria_partida(peso_kg=PESO_EXCLUIDO_KG) == "EXCLUIDO_GRANDE"
+    assert categoria_partida(volumen_l=VOLUMEN_EXCLUIDO_L) == "EXCLUIDO_GRANDE"
 
 
-def test_categoria_por_volumen_grande():
-    assert categoria_partida("SKU-DESCONOCIDO", volumen_l=60) == "EXCLUIDO_GRANDE"
+def test_categoria_excluido_si_mayor_25():
+    assert categoria_partida(peso_kg=50) == "EXCLUIDO_GRANDE"
 
 
-def test_categoria_por_peso_pequeno():
-    assert categoria_partida("SKU-DESCONOCIDO", peso_kg=10) == "EXCLUIDO_PEQUENO"
+def test_categoria_justo_debajo_de_25_es_elegible():
+    assert categoria_partida(peso_kg=24.99) == "EQUIPO"
 
 
-def test_categoria_fallback_equipo_sin_datos():
-    # SKU desconocido sin peso ni volumen → fallback elegible (EQUIPO)
-    assert categoria_partida("SKU-DESCONOCIDO") == "EQUIPO"
+def test_categoria_sin_tamano_es_elegible():
+    assert categoria_partida() == "EQUIPO"
 
 
-def test_categoria_limite_25kg_es_pequeno_inclusivo():
-    # El límite 25 kg es inclusivo hacia PEQUEÑO (spec v2.3)
-    assert categoria_partida("X", peso_kg=PESO_MAX_EXCLUIDO_P) == "EXCLUIDO_PEQUENO"
+def test_clave_sat_no_determina_la_categoria():
+    # Mismo producto/clave SAT; lo que decide es la presentación.
+    assert categoria_partida("49241712", peso_kg=5) == "EQUIPO"            # chico → elegible
+    assert categoria_partida("49241712", peso_kg=50) == "EXCLUIDO_GRANDE"  # grande → excluido
 
 
-def test_categoria_limite_25kg_mas_uno_es_grande():
-    assert categoria_partida("X", peso_kg=PESO_MAX_EXCLUIDO_P + 0.01) == "EXCLUIDO_GRANDE"
+# ── sucursal_de_origen (origen real → código de sucursal) ─────────
+def test_sucursal_por_ciudad():
+    assert sucursal_de_origen("Guadalajara") == "GDL"
+    assert sucursal_de_origen("Iztapalapa") == "CDMX"
+    assert sucursal_de_origen("Cancún") == "CUN"
+
+
+def test_sucursal_por_estado_fallback():
+    assert sucursal_de_origen(ciudad="Ciudad X", estado="Nuevo León") == "MTY"
+
+
+def test_sucursal_desconocida_vacia():
+    assert sucursal_de_origen("Marte", "Marte") == ""
 
 
 # ── evaluar_destino ───────────────────────────────────────────────

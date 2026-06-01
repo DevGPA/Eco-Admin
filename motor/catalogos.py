@@ -25,9 +25,12 @@ MONTO_MIN_EQUIPO_COSTAL = float(os.environ.get("MONTO_MIN_EQUIPO_COSTAL", "500")
 MONTO_MIN_ACCESORIOS    = float(os.environ.get("MONTO_MIN_ACCESORIOS", "1000"))
 PROP_MIN_ELEGIBLE       = float(os.environ.get("PROP_MIN_ELEGIBLE", "0.50"))
 
-# ── Parámetros de excluidos ──────────────────────────────────────
-PESO_MAX_EXCLUIDO_P   = float(os.environ.get("PESO_MAX_EXCLUIDO_P", "25"))   # ≤ 25kg
-VOLUMEN_MAX_EXCLUIDO_P= float(os.environ.get("VOLUMEN_MAX_EXCLUIDO_P", "50")) # ≤ 50L
+# ── Umbral de elegibilidad por presentación/tamaño ───────────────
+# Regla de negocio (GPA): se EXCLUYE si el peso es ≥ 25 kg O el volumen es ≥ 25 L
+# (dos dimensiones independientes, lógica OR; NO es una unidad "kg/L"). El 25 es
+# inclusivo al excluido. La clave SAT NO es determinante; lo define la presentación.
+PESO_EXCLUIDO_KG    = float(os.environ.get("PESO_EXCLUIDO_KG", "25"))    # ≥ 25 kg → excluido
+VOLUMEN_EXCLUIDO_L  = float(os.environ.get("VOLUMEN_EXCLUIDO_L", "25"))  # ≥ 25 L  → excluido
 
 # ── Parámetros de proporción ─────────────────────────────────────
 UMBRAL_FLETE_WARN      = float(os.environ.get("UMBRAL_FLETE_WARN", "0.15"))
@@ -169,21 +172,48 @@ SKU_CATEGORIAS: dict[str, str] = {
 }
 
 
-def categoria_partida(sku: str, peso_kg: float = 0,
+def categoria_partida(sku: str = "", peso_kg: float = 0,
                       volumen_l: float = 0) -> str:
     """
-    Categoriza una partida de la FV.
-    Prioridad: SKU fijo → peso/volumen → fallback EQUIPO.
+    Categoriza una partida por su PRESENTACIÓN/tamaño.
+
+    Regla de negocio GPA: la clave SAT NO es determinante (no distingue tamaño).
+    Lo que define la elegibilidad es la presentación (peso O volumen, independientes):
+      - peso ≥ 25 kg  O  volumen ≥ 25 L  → EXCLUIDO_GRANDE (no elegible)
+      - en otro caso                     → EQUIPO          (elegible)
     """
-    cat = SKU_CATEGORIAS.get(sku)
-    if cat:
-        return cat
-    # Por peso/volumen
-    if peso_kg > PESO_MAX_EXCLUIDO_P or volumen_l > VOLUMEN_MAX_EXCLUIDO_P:
+    if peso_kg >= PESO_EXCLUIDO_KG or volumen_l >= VOLUMEN_EXCLUIDO_L:
         return "EXCLUIDO_GRANDE"
-    if 0 < peso_kg <= PESO_MAX_EXCLUIDO_P or 0 < volumen_l <= VOLUMEN_MAX_EXCLUIDO_P:
-        return "EXCLUIDO_PEQUENO"
-    return "EQUIPO"  # fallback: asumir elegible
+    return "EQUIPO"
+
+
+# ── Mapeo ciudad/municipio de ORIGEN → código de sucursal ─────────
+# El envío debe originarse en una de las 6 plazas-sucursal (se valida por el
+# ORIGEN real de la carta porte, no por la sucursal de facturación).
+SUCURSAL_POR_CIUDAD = {
+    "GUADALAJARA": "GDL", "ZAPOPAN": "GDL", "TLAQUEPAQUE": "GDL", "TLAJOMULCO": "GDL",
+    "CIUDAD DE MEXICO": "CDMX", "MEXICO": "CDMX", "CDMX": "CDMX",
+    "IZTAPALAPA": "CDMX", "DISTRITO FEDERAL": "CDMX",
+    "MONTERREY": "MTY", "GUADALUPE": "MTY", "SAN NICOLAS": "MTY", "APODACA": "MTY",
+    "CANCUN": "CUN", "BENITO JUAREZ": "CUN",
+    "PUERTO VALLARTA": "PVR",
+    "LOS CABOS": "SJD", "SAN JOSE DEL CABO": "SJD", "CABO SAN LUCAS": "SJD",
+}
+
+
+def sucursal_de_origen(ciudad: Optional[str] = None,
+                       estado: Optional[str] = None) -> str:
+    """Mapea la ciudad (o estado) de origen a un código de sucursal GPA, o '' si no aplica."""
+    c = _normalizar(ciudad)
+    if c in SUCURSAL_POR_CIUDAD:
+        return SUCURSAL_POR_CIUDAD[c]
+    for ciu, suc in SUCURSAL_POR_CIUDAD.items():   # coincidencia parcial
+        if ciu in c:
+            return suc
+    # Fallback por estado (solo estados con una única sucursal inequívoca)
+    e = _normalizar(estado)
+    return {"NUEVO LEON": "MTY", "QUINTANA ROO": "CUN",
+            "BAJA CALIFORNIA SUR": "SJD"}.get(e, "")
 
 
 # ── Códigos R-xxx → concepto ──────────────────────────────────────
