@@ -54,6 +54,13 @@ DESC_CARGO_ENVIO = tuple(
     s.strip() for s in os.environ.get("DESC_CARGO_ENVIO", "CARGO POR ENVIO").split("|") if s.strip()
 )
 
+# ── Identidad fiscal de GPA ──────────────────────────────────────
+# RFC de General de Productos para el Agua. Define el rol en cada CFDI:
+#   GPA emisor   → Factura de Venta (FV)
+#   GPA receptor → Carta Porte / documento del proveedor (CP)
+#   GPA en ninguno → documento ajeno → ERROR
+RFC_GPA = os.environ.get("RFC_GPA", "GPA8402219Y1").strip().upper()
+
 # ── Sucursales válidas ───────────────────────────────────────────
 SUCURSALES_VALIDAS       = {"GDL", "CDMX", "MTY", "CUN", "PVR", "SJD"}
 SUCURSAL_ORIGEN_DISPERSION = "GDL"
