@@ -63,7 +63,8 @@ Globals:
         UMBRAL_TARIFA_DISP:       !Ref UmbralTarifaDisp
         UMBRAL_CARGO_ENVIO:       !Ref UmbralCargoEnvio
         BACKORDER_ENABLED:        !Ref BackorderEnabled
-        # OCR (Bedrock) e identidad fiscal de GPA
+        # OCR e identidad fiscal de GPA
+        OCR_BACKEND:              !Ref OcrBackend
         BEDROCK_MODEL_ID:         !Ref BedrockModelId
         OCR_DPI:                  '200'
         RFC_GPA:                  !Ref RfcGpa
@@ -153,10 +154,16 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description:   Habilitar procesamiento de Back Orders GS0229
 
+  OcrBackend:
+    Type:          String
+    Default:       textract
+    AllowedValues: [textract, bedrock]
+    Description:   Motor de OCR (textract = nativo AWS, recomendado)
+
   BedrockModelId:
     Type:    String
     Default: us.anthropic.claude-sonnet-4-20250514-v1:0
-    Description: Modelo / inference-profile de Claude en Bedrock para el OCR de documentos
+    Description: Modelo / inference-profile de Claude en Bedrock (solo si OcrBackend=bedrock)
 
   RfcGpa:
     Type:    String
@@ -331,7 +338,13 @@ Resources:
                 - xray:PutTelemetryRecords
                 - xray:GetSamplingRules
               Resource: '*'
-        # Bedrock — OCR de documentos escaneados con Claude (visión)
+        # Textract — OCR de documentos escaneados (backend por defecto)
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:AnalyzeDocument
+              Resource: '*'
+        # Bedrock — OCR alternativo con Claude (visión) si OCR_BACKEND=bedrock
         - Statement:
             - Effect: Allow
               Action:

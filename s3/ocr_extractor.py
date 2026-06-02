@@ -33,6 +33,26 @@ BEDROCK_MODEL_ID = os.environ.get(
 )
 OCR_DPI = int(os.environ.get("OCR_DPI", "200"))
 
+# Motor de OCR: "textract" (nativo AWS, recomendado) o "bedrock" (Claude visión).
+OCR_BACKEND = os.environ.get("OCR_BACKEND", "textract").lower()
+
+# Preguntas Textract (alias → pregunta) para los campos escalares del comprobante.
+# (máx. 15 por análisis; los renglones de productos salen de las TABLAS.)
+TEXTRACT_QUERIES = [
+    ("rfcEmisor",    "¿Cuál es el RFC del emisor?"),
+    ("rfcReceptor",  "¿Cuál es el RFC del receptor?"),
+    ("subtotal",     "¿Cuál es el subtotal sin IVA?"),
+    ("moneda",       "¿Cuál es la moneda?"),
+    ("tipoCambio",   "¿Cuál es el tipo de cambio?"),
+    ("folio",        "¿Cuál es el folio?"),
+    ("fecha",        "¿Cuál es la fecha de emisión?"),
+    ("comentarios",  "¿Cuáles son los comentarios?"),
+    ("origenEstado", "¿Cuál es el estado de origen?"),
+    ("origenCiudad", "¿Cuál es la ciudad o municipio de origen?"),
+    ("destinoEstado", "¿Cuál es el estado de destino?"),
+    ("destinoCiudad", "¿Cuál es la ciudad o municipio de destino?"),
+]
+
 # Instrucción de extracción para Claude. Pide JSON estricto por página.
 PROMPT_OCR = (
     "Eres un extractor de datos de comprobantes fiscales mexicanos (CFDI 4.0). "
@@ -76,14 +96,109 @@ def render_paginas_pdf(pdf_bytes: bytes, dpi: int = OCR_DPI) -> list[bytes]:
     return paginas
 
 
-# ── OCR de una página con Claude (Bedrock) ────────────────────────
-def _bedrock_client():
-    return boto3.client("bedrock-runtime")
+# ── OCR de una página — backend conmutable (OCR_BACKEND) ──────────
+def ocr_pagina(imagen_png: bytes, client=None) -> dict:
+    """Extrae los campos del comprobante de UNA página (Textract o Bedrock)."""
+    if OCR_BACKEND == "bedrock":
+        return _ocr_bedrock(imagen_png, client=client)
+    return _ocr_textract(imagen_png, client=client)
 
 
-def ocr_pagina(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID) -> dict:
-    """Extrae los campos del comprobante de UNA página vía Bedrock/Claude."""
-    client = client or _bedrock_client()
+# --- Backend 1: Amazon Textract (nativo AWS, recomendado) ---------
+def _ocr_textract(imagen_png: bytes, client=None) -> dict:
+    client = client or boto3.client("textract")
+    resp = client.analyze_document(
+        Document={"Bytes": imagen_png},
+        FeatureTypes=["QUERIES", "TABLES"],
+        QueriesConfig={"Queries": [{"Text": t, "Alias": a} for a, t in TEXTRACT_QUERIES]},
+    )
+    return _parse_textract(resp)
+
+
+def _parse_textract(resp: dict) -> dict:
+    """Convierte la respuesta de Textract (QUERIES + TABLES) al dict de página."""
+    blocks = resp.get("Blocks", [])
+    by_id = {b["Id"]: b for b in blocks}
+
+    def _texto(block):
+        out = []
+        for rel in block.get("Relationships", []):
+            if rel["Type"] == "CHILD":
+                for cid in rel["Ids"]:
+                    w = by_id.get(cid, {})
+                    if w.get("BlockType") in ("WORD", "SELECTION_ELEMENT"):
+                        out.append(w.get("Text", ""))
+        return " ".join(out).strip()
+
+    # Campos escalares desde las QUERIES
+    campos = {}
+    for b in blocks:
+        if b.get("BlockType") == "QUERY":
+            ans = None
+            for rel in b.get("Relationships", []):
+                if rel["Type"] == "ANSWER":
+                    ans = by_id.get(rel["Ids"][0], {}).get("Text")
+            campos[b.get("Query", {}).get("Alias")] = ans
+
+    return {
+        "rfcEmisor":     campos.get("rfcEmisor"),
+        "rfcReceptor":   campos.get("rfcReceptor"),
+        "subtotal":      _num(campos.get("subtotal")),
+        "moneda":        (campos.get("moneda") or "").upper() or None,
+        "tipoCambio":    _num(campos.get("tipoCambio")) or None,
+        "folio":         campos.get("folio"),
+        "fecha":         campos.get("fecha"),
+        "comentarios":   campos.get("comentarios"),
+        "origenEstado":  campos.get("origenEstado"),
+        "origenCiudad":  campos.get("origenCiudad"),
+        "destinoEstado": campos.get("destinoEstado"),
+        "destinoCiudad": campos.get("destinoCiudad"),
+        "fletaRFC":      campos.get("rfcEmisor"),   # en un CP, la fletera es el emisor
+        "partidas":      _partidas_de_tablas(blocks, by_id, _texto),
+    }
+
+
+def _partidas_de_tablas(blocks, by_id, texto_celda) -> list[dict]:
+    """Extrae renglones de productos de las TABLAS de conceptos de Textract."""
+    partidas = []
+    for tbl in blocks:
+        if tbl.get("BlockType") != "TABLE":
+            continue
+        filas = {}
+        for rel in tbl.get("Relationships", []):
+            if rel["Type"] != "CHILD":
+                continue
+            for cid in rel["Ids"]:
+                c = by_id.get(cid, {})
+                if c.get("BlockType") == "CELL":
+                    filas.setdefault(c["RowIndex"], {})[c["ColumnIndex"]] = texto_celda(c)
+        # Mapear columnas por la cabecera (fila 1)
+        col = {}
+        for idx, txt in filas.get(1, {}).items():
+            t = txt.upper()
+            if "DESCRIP" in t or "CONCEPTO" in t:   col["descripcion"] = idx
+            elif "CANT" in t:                       col["cantidad"] = idx
+            elif "IMPORTE" in t or "TOTAL" in t:    col["importe"] = idx
+        if "descripcion" not in col or "importe" not in col:
+            continue   # no parece una tabla de conceptos
+        for r in sorted(filas):
+            if r == 1:
+                continue
+            row = filas[r]
+            desc = (row.get(col["descripcion"]) or "").strip()
+            if not desc:
+                continue
+            partidas.append({
+                "descripcion": desc,
+                "cantidad": _num(row.get(col.get("cantidad"))) or 1,
+                "importe": _num(row.get(col.get("importe"))),
+            })
+    return partidas
+
+
+# --- Backend 2: Amazon Bedrock (Claude visión) --------------------
+def _ocr_bedrock(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID) -> dict:
+    client = client or boto3.client("bedrock-runtime")
     resp = client.converse(
         modelId=model_id,
         messages=[{
@@ -100,7 +215,7 @@ def ocr_pagina(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID)
 
 
 def _parse_json(texto: str) -> dict:
-    """Extrae el primer objeto JSON de la respuesta del modelo."""
+    """Extrae el primer objeto JSON de la respuesta del modelo (Bedrock)."""
     ini, fin = texto.find("{"), texto.rfind("}")
     if ini == -1 or fin == -1 or fin < ini:
         raise ValueError(f"OCR no devolvió JSON: {texto[:200]!r}")
@@ -122,9 +237,15 @@ def clasificar_por_rfc(rfc_emisor: Optional[str], rfc_receptor: Optional[str],
 
 
 def _num(valor) -> float:
-    try:
+    """Convierte a float tolerando montos con $, comas y espacios ("$3,330.00")."""
+    if valor is None:
+        return 0.0
+    if isinstance(valor, (int, float)):
         return float(valor)
-    except (TypeError, ValueError):
+    s = str(valor).strip().replace("$", "").replace(",", "").replace(" ", "")
+    try:
+        return float(s)
+    except ValueError:
         return 0.0
 
 

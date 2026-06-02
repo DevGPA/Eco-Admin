@@ -185,22 +185,82 @@ def test_emparejar_suma_varias_fv_a_un_cp():
     assert caso["foliosFV"] == ["FM40086093", "FM40086200"]
 
 
-# ── OCR / orquestación con Bedrock simulado ───────────────────────
-class FakeBedrock:
-    """Cliente Bedrock falso: devuelve, por página, el dict que se le pasa como JSON."""
-    def __init__(self, *respuestas):
-        self._r = list(respuestas)
-        self._i = 0
+# ── OCR backend: Amazon Textract (por defecto) ───────────────────
+def _textract_resp(queries: dict, tabla=None) -> dict:
+    """Construye una respuesta sintética de Textract (QUERIES + opcional TABLA)."""
+    blocks, c = [], [0]
+    def nid():
+        c[0] += 1
+        return f"b{c[0]}"
+    for alias, answer in queries.items():
+        qid, aid = nid(), nid()
+        blocks.append({"BlockType": "QUERY", "Id": qid, "Query": {"Alias": alias, "Text": alias},
+                       "Relationships": [{"Type": "ANSWER", "Ids": [aid]}]})
+        blocks.append({"BlockType": "QUERY_RESULT", "Id": aid, "Text": answer})
+    if tabla:
+        cells, cell_ids = [], []
+        for ri, row in enumerate(tabla, start=1):
+            for ci, txt in enumerate(row, start=1):
+                wid, cid = nid(), nid()
+                blocks.append({"BlockType": "WORD", "Id": wid, "Text": txt})
+                cells.append({"BlockType": "CELL", "Id": cid, "RowIndex": ri, "ColumnIndex": ci,
+                              "Relationships": [{"Type": "CHILD", "Ids": [wid]}]})
+                cell_ids.append(cid)
+        tid = nid()
+        blocks.append({"BlockType": "TABLE", "Id": tid,
+                       "Relationships": [{"Type": "CHILD", "Ids": cell_ids}]})
+        blocks.extend(cells)
+    return {"Blocks": blocks}
 
+
+class FakeTextract:
+    def __init__(self, resp):
+        self.resp, self.kw = resp, None
+    def analyze_document(self, **kw):
+        self.kw = kw
+        return self.resp
+
+
+def test_parse_textract_cp_con_tabla():
+    resp = _textract_resp(
+        {"rfcEmisor": "TCH170824TH2", "rfcReceptor": RFC_GPA, "subtotal": "$3,330.00",
+         "moneda": "MXN", "folio": "FAC04927", "comentarios": "F-40086093",
+         "origenCiudad": "Iztapalapa", "destinoEstado": "Guerrero"},
+        tabla=[["Descripcion", "Cantidad", "Importe"],
+               ["TRICLORO 50 KGS", "40", "3653.20"],
+               ["CUERPO T", "2", "16.39"]],
+    )
+    p = ocr._parse_textract(resp)
+    assert p["rfcEmisor"] == "TCH170824TH2"
+    assert clasificar_por_rfc(p["rfcEmisor"], p["rfcReceptor"]) == "CP"
+    assert p["subtotal"] == pytest.approx(3330.00)   # "$3,330.00" parseado
+    assert p["folio"] == "FAC04927"
+    assert p["fletaRFC"] == "TCH170824TH2"
+    assert len(p["partidas"]) == 2
+    assert p["partidas"][0]["descripcion"] == "TRICLORO 50 KGS"
+    assert p["partidas"][0]["importe"] == pytest.approx(3653.20)
+
+
+def test_ocr_textract_envia_queries_y_documento():
+    fake = FakeTextract(_textract_resp({"rfcEmisor": RFC_GPA, "subtotal": "100"}))
+    p = ocr._ocr_textract(b"png-bytes", client=fake)
+    assert p["rfcEmisor"] == RFC_GPA
+    assert fake.kw["FeatureTypes"] == ["QUERIES", "TABLES"]
+    assert fake.kw["Document"] == {"Bytes": b"png-bytes"}
+
+
+# ── OCR backend: Bedrock (Claude) ─────────────────────────────────
+class FakeBedrock:
+    def __init__(self, *respuestas):
+        self._r, self._i = list(respuestas), 0
     def converse(self, **kwargs):
-        out = self._r[self._i]
-        self._i += 1
+        out = self._r[self._i]; self._i += 1
         return {"output": {"message": {"content": [{"text": json.dumps(out)}]}}}
 
 
-def test_ocr_pagina_parsea_respuesta():
+def test_ocr_bedrock_parsea_json():
     fake = FakeBedrock({"rfcEmisor": RFC_GPA, "subtotal": 4.41})
-    d = ocr.ocr_pagina(b"png", client=fake)
+    d = ocr._ocr_bedrock(b"png", client=fake)
     assert d["rfcEmisor"] == RFC_GPA and d["subtotal"] == 4.41
 
 
@@ -224,9 +284,9 @@ def test_caso_a_solicitud_mapea_campos():
 
 
 def test_procesar_pdf_orquesta(monkeypatch):
-    # render simulado: 4 "páginas"; FakeBedrock: 2 CP + 2 FV
+    # render simulado: 4 "páginas"; OCR simulado (independiente del backend): 2 CP + 2 FV
     monkeypatch.setattr(ocr, "render_paginas_pdf", lambda b, dpi=None: [b"", b"", b"", b""])
-    fake = FakeBedrock(
+    paginas = iter([
         {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "FAC04927",
          "subtotal": 3330.0, "comentarios": "F-40086093", "fletaRFC": HORMIK,
          "origenCiudad": "Iztapalapa", "destinoEstado": "Guerrero"},
@@ -237,8 +297,9 @@ def test_procesar_pdf_orquesta(monkeypatch):
          "origenCiudad": "Iztapalapa", "destinoEstado": "Guerrero"},
         {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086102",
          "subtotal": 15.55, "moneda": "USD", "tipoCambio": 17.55, "partidas": []},
-    )
-    res = ocr.procesar_pdf(b"pdf", folio_archivo="FAC4927-FAC4935", client=fake)
+    ])
+    monkeypatch.setattr(ocr, "ocr_pagina", lambda img, client=None: next(paginas))
+    res = ocr.procesar_pdf(b"pdf", folio_archivo="FAC4927-FAC4935")
     assert len(res["casos"]) == 2
     assert res["casos"][0]["origenSucursal"] == "CDMX"   # Iztapalapa → CDMX
     assert res["casos"][0]["foliosFV"] == ["FM40086093"]
