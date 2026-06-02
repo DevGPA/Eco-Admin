@@ -36,7 +36,7 @@ class Partida:
 
     @property
     def categoria(self) -> str:
-        return categoria_partida(self.sku, self.peso_unitario_kg,
+        return categoria_partida(self.descripcion, self.peso_unitario_kg,
                                   self.volumen_unitario_l)
 
 
@@ -323,7 +323,7 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     costal_g_usd = sum(p.importe_usd for p in todas_partidas
                        if p.categoria == "EXCLUIDO_GRANDE")
     accs_usd   = sum(p.importe_usd for p in todas_partidas
-                     if p.categoria in ("MATERIAL_INSTALACION", "EXCLUIDO_PEQUENO"))
+                     if p.categoria == "EXCLUIDO_RESTRINGIDO")
     tiene_costal = costal_g_usd > 0
     tiene_accs   = accs_usd > 0
     tiene_elig   = equipo_usd > 0

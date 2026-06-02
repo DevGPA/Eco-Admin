@@ -5,6 +5,7 @@
 # Las constantes aquí son el fallback si SSM no está disponible.
 
 import os
+import re
 import unicodedata
 from typing import Optional
 
@@ -145,46 +146,55 @@ FLETERAS_AUTORIZADAS = {
 }
 
 # ── Categorías de producto ────────────────────────────────────────
-# Asignación por SKU. La fuente de verdad es siempre la FV.
-SKU_CATEGORIAS: dict[str, str] = {
-    # EQUIPO
-    "40151510": "EQUIPO",   # Motobomba
-    "40161528": "EQUIPO",   # Filtro IW Pacific
-    "39111611": "EQUIPO",   # Reflector LED Nova
-    "40101806": "EQUIPO",   # Bomba de calor Inter Heat
-    "40101807": "EQUIPO",   # Calefactor solar
-    "49241711": "EQUIPO",   # Cubierta solar spa
-    "40141731": "EQUIPO",   # Boquilla
-    "41112501": "EQUIPO",   # Flujómetro
-    "40161527": "EQUIPO",   # Filtro
-    "40141607": "EQUIPO",   # Valvula bola
-    # RECUBRIMIENTO
-    "30131704": "RECUBRIMIENTO",  # Vetro Venezia / azulejo pool
-    # MATERIAL_INSTALACION
-    "30111601": "MATERIAL_INSTALACION",  # Pega Veneciana
-    # EXCLUIDO_GRANDE (>25kg / >50L — el límite 25/50 es inclusivo a PEQUEÑO)
-    "49241712": "EXCLUIDO_GRANDE",  # Tricloro/Dicloro 50kg
-    "62815740": "EXCLUIDO_GRANDE",  # Cloro en polvo CILI
-    "62815880": "EXCLUIDO_GRANDE",  # Cloro (Z)
-    # EXCLUIDO_PEQUEÑO (≤25kg / ≤50L)
-    "11111607": "EXCLUIDO_PEQUENO",  # Zeolita 25kg
-    "12161503": "EXCLUIDO_PEQUENO",  # Kit reactivos
-}
+# Productos RESTRINGIDOS (no elegibles) por TIPO — palabras clave que aparecen
+# en la descripción. Lista del negocio (configurable con env PALABRAS_RESTRINGIDAS):
+#   químicos BlueQuim, cuñetes de cloro, material filtrante, sal, adhesivos/morteros
+#   (Pega Veneciano, Imper Crest y similares), Diamond Brite, River Rock.
+PALABRAS_RESTRINGIDAS = tuple(s.strip() for s in os.environ.get(
+    "PALABRAS_RESTRINGIDAS",
+    "BLUEQUIM|QUIMICO|CLORO|CUÑETE|CUNETE|MATERIAL FILTRANTE|ADHESIVO|MORTERO|"
+    "PEGA|IMPER CREST|IMPERCREST|DIAMOND BRITE|RIVER ROCK"
+).split("|") if s.strip())
+
+_RE_PESO_DESC = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:KGS?|KILOS?)\b")
+_RE_VOL_DESC  = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:LTS?|LITROS?|L)\b")
 
 
-def categoria_partida(sku: str = "", peso_kg: float = 0,
+def tamano_de_descripcion(descripcion: str):
+    """Extrae (peso_kg, volumen_l) del texto de la descripción (siempre trae el tamaño)."""
+    d = _normalizar(descripcion)
+    pesos = [float(m.group(1).replace(",", ".")) for m in _RE_PESO_DESC.finditer(d)]
+    vols  = [float(m.group(1).replace(",", ".")) for m in _RE_VOL_DESC.finditer(d)]
+    return (max(pesos) if pesos else 0.0), (max(vols) if vols else 0.0)
+
+
+def es_restringido_por_tipo(descripcion: str) -> bool:
+    """True si la descripción corresponde a un producto restringido por tipo."""
+    d = _normalizar(descripcion)
+    if any(k in d for k in PALABRAS_RESTRINGIDAS):
+        return True
+    return "SAL" in d.split()   # 'sal' como palabra completa (evita 'salida', etc.)
+
+
+def categoria_partida(descripcion: str = "", peso_kg: float = 0,
                       volumen_l: float = 0) -> str:
     """
-    Categoriza una partida por su PRESENTACIÓN/tamaño.
-
-    Regla de negocio GPA: la clave SAT NO es determinante (no distingue tamaño).
-    Lo que define la elegibilidad es la presentación (peso O volumen, independientes):
-      - peso ≥ 25 kg  O  volumen ≥ 25 L  → EXCLUIDO_GRANDE (no elegible)
-      - en otro caso                     → EQUIPO          (elegible)
+    Categoriza una partida para decidir elegibilidad (regla de negocio GPA).
+    NO elegible (restringido) si CUALQUIERA:
+      - peso ≥ 25 kg  O  volumen ≥ 25 L  (por tamaño)        → EXCLUIDO_GRANDE
+      - es producto restringido por tipo (químicos, cuñetes de cloro, material
+        filtrante, sal, adhesivos/morteros, Diamond Brite, River Rock) → EXCLUIDO_RESTRINGIDO
+    En otro caso es elegible → EQUIPO.
+    El tamaño se toma de los argumentos; si no vienen, se lee de la descripción
+    (la presentación siempre aparece en el texto, p.ej. "50 KGS").
     """
+    if not peso_kg and not volumen_l:
+        peso_kg, volumen_l = tamano_de_descripcion(descripcion)
     if peso_kg >= PESO_EXCLUIDO_KG or volumen_l >= VOLUMEN_EXCLUIDO_L:
-        return "EXCLUIDO_GRANDE"
-    return "EQUIPO"
+        return "EXCLUIDO_GRANDE"        # restringido por tamaño (costal)
+    if es_restringido_por_tipo(descripcion):
+        return "EXCLUIDO_RESTRINGIDO"   # restringido por tipo (no elegible)
+    return "EQUIPO"                     # elegible
 
 
 # ── Mapeo ciudad/municipio de ORIGEN → código de sucursal ─────────

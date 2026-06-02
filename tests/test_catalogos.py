@@ -7,33 +7,44 @@ from motor.catalogos import (
 )
 
 
-# ── categoria_partida: por presentación/tamaño (la clave SAT NO decide) ──
-def test_categoria_elegible_si_menor_25():
-    assert categoria_partida(peso_kg=10) == "EQUIPO"
+# ── categoria_partida: elegible (equipo) vs no elegible (restringido) ──
+def test_equipo_pequeno_es_elegible():
+    assert categoria_partida("Reflector LED", peso_kg=5) == "EQUIPO"
 
 
-def test_categoria_excluido_en_25_inclusivo():
-    # 25 exacto se EXCLUYE (límite inclusivo)
-    assert categoria_partida(peso_kg=PESO_EXCLUIDO_KG) == "EXCLUIDO_GRANDE"
-    assert categoria_partida(volumen_l=VOLUMEN_EXCLUIDO_L) == "EXCLUIDO_GRANDE"
+def test_excluido_por_tamano_25_inclusivo():
+    # 25 exacto se EXCLUYE (límite inclusivo), peso o volumen
+    assert categoria_partida("Bomba de calor", peso_kg=PESO_EXCLUIDO_KG) == "EXCLUIDO_GRANDE"
+    assert categoria_partida("Cubeta", volumen_l=VOLUMEN_EXCLUIDO_L) == "EXCLUIDO_GRANDE"
 
 
-def test_categoria_excluido_si_mayor_25():
-    assert categoria_partida(peso_kg=50) == "EXCLUIDO_GRANDE"
+def test_equipo_justo_debajo_de_25_es_elegible():
+    assert categoria_partida("Filtro de arena", peso_kg=24.99) == "EQUIPO"
 
 
-def test_categoria_justo_debajo_de_25_es_elegible():
-    assert categoria_partida(peso_kg=24.99) == "EQUIPO"
+def test_equipo_grande_tambien_se_excluye_por_tamano():
+    # Regla OR: un equipo ≥ 25 kg también se excluye por tamaño
+    assert categoria_partida("Bomba para filtro 30 KGS") == "EXCLUIDO_GRANDE"
 
 
-def test_categoria_sin_tamano_es_elegible():
-    assert categoria_partida() == "EQUIPO"
+def test_restringido_por_tipo_aunque_sea_chico():
+    # Restringidos por tipo aunque pesen < 25 kg/L
+    assert categoria_partida("PEGA VENECIANO 5 KG") == "EXCLUIDO_RESTRINGIDO"
+    assert categoria_partida("Adhesivo Imper Crest", peso_kg=2) == "EXCLUIDO_RESTRINGIDO"
+    assert categoria_partida("Diamond Brite cubeta", peso_kg=10) == "EXCLUIDO_RESTRINGIDO"
+    assert categoria_partida("River Rock", peso_kg=10) == "EXCLUIDO_RESTRINGIDO"
+    assert categoria_partida("Quimico BlueQuim", peso_kg=1) == "EXCLUIDO_RESTRINGIDO"
+    assert categoria_partida("SAL para alberca", peso_kg=10) == "EXCLUIDO_RESTRINGIDO"
 
 
-def test_clave_sat_no_determina_la_categoria():
-    # Mismo producto/clave SAT; lo que decide es la presentación.
-    assert categoria_partida("49241712", peso_kg=5) == "EQUIPO"            # chico → elegible
-    assert categoria_partida("49241712", peso_kg=50) == "EXCLUIDO_GRANDE"  # grande → excluido
+def test_tamano_se_lee_de_la_descripcion():
+    # Sin peso/volumen explícito, se extrae del texto
+    assert categoria_partida("TRICLORO MAX GRANULAR 50 KGS") == "EXCLUIDO_GRANDE"
+    assert categoria_partida("Producto generico 30 L") == "EXCLUIDO_GRANDE"
+
+
+def test_equipo_sin_tamano_ni_keyword_es_elegible():
+    assert categoria_partida("Equipo XYZ", peso_kg=5) == "EQUIPO"
 
 
 # ── sucursal_de_origen (origen real → código de sucursal) ─────────

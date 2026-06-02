@@ -1,5 +1,5 @@
 # Tests de la Capa 3 — venta cliente C1→C5 (motor/evaluador.py).
-from conftest import SKU_EQUIPO, SKU_COSTAL, SKU_ACCESORIO
+from conftest import SKU_EQUIPO, SKU_COSTAL
 
 
 # ── C1 Monto ──────────────────────────────────────────────────────
@@ -23,13 +23,21 @@ def test_c1_costal_equipo_insuficiente_r102(run_eval, make_fv, make_partida):
     assert res.codigo_motor == "R-102"
 
 
-# Nota: con la regla de tamaño (elegible <25 / excluido ≥25 kg ó L) desaparece la
-# categoría intermedia "accesorios", por lo que R-104/R-105 quedan INALCANZABLES.
-# Un accesorio chico (<25) ahora es elegible (EQUIPO).
-def test_accesorio_pequeno_es_elegible_no_r104(run_eval, make_fv, make_partida):
-    fv = make_fv(partidas=[make_partida(sku=SKU_ACCESORIO, precio=500.0, peso=2.0)])
+# Accesorio = producto restringido por tipo (<25 kg), p.ej. "PEGA VENECIANO".
+def test_c1_accesorios_sin_minimo_r104(run_eval, make_fv, make_partida):
+    fv = make_fv(partidas=[make_partida(descripcion="PEGA VENECIANO", precio=500.0, peso=2.0)])
     res = run_eval(fv=fv)
-    assert res.codigo_motor not in ("R-104", "R-105")
+    assert res.codigo_motor == "R-104"
+
+
+def test_c1_accesorios_proporcion_baja_r105(run_eval, make_fv, make_partida):
+    # monto 1000 (pasa R-104) pero elegible 40% < 50% → R-105
+    fv = make_fv(partidas=[
+        make_partida(descripcion="PEGA VENECIANO", precio=600.0, peso=2.0),  # restringido
+        make_partida(descripcion="Reflector LED", precio=400.0, peso=2.0),    # elegible
+    ])
+    res = run_eval(fv=fv)
+    assert res.codigo_motor == "R-105"
 
 
 # ── C2 Producto — documenta que C1 tiene precedencia ──────────────
