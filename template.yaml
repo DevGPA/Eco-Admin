@@ -63,6 +63,10 @@ Globals:
         UMBRAL_TARIFA_DISP:       !Ref UmbralTarifaDisp
         UMBRAL_CARGO_ENVIO:       !Ref UmbralCargoEnvio
         BACKORDER_ENABLED:        !Ref BackorderEnabled
+        # OCR (Bedrock) e identidad fiscal de GPA
+        BEDROCK_MODEL_ID:         !Ref BedrockModelId
+        OCR_DPI:                  '200'
+        RFC_GPA:                  !Ref RfcGpa
 
   # Nota: Globals.Api solo aplica a AWS::Serverless::Api (REST). El CORS efectivo
   # del HTTP API se define en GpaHttpApi.CorsConfiguration (única fuente de verdad).
@@ -148,6 +152,16 @@ Parameters:
     Default:       'true'
     AllowedValues: ['true', 'false']
     Description:   Habilitar procesamiento de Back Orders GS0229
+
+  BedrockModelId:
+    Type:    String
+    Default: us.anthropic.claude-sonnet-4-20250514-v1:0
+    Description: Modelo / inference-profile de Claude en Bedrock para el OCR de documentos
+
+  RfcGpa:
+    Type:    String
+    Default: GPA8402219Y1
+    Description: RFC de GPA (define el rol emisor=FV / receptor=CP en cada CFDI)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -317,6 +331,12 @@ Resources:
                 - xray:PutTelemetryRecords
                 - xray:GetSamplingRules
               Resource: '*'
+        # Bedrock — OCR de documentos escaneados con Claude (visión)
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'   # los inference-profiles abarcan varias regiones
 
       Tags:
         Proyecto: GPA-Admin

@@ -2,9 +2,13 @@
 # No requieren AWS/Bedrock ni PyMuPDF (se prueba la lógica pura con páginas mock).
 import pytest
 
+import json
+
+import s3.ocr_extractor as ocr
 from s3.ocr_extractor import (
     clasificar_por_rfc, armar_caso, _parse_json,
     emparejar_casos, _folios_referenciados, _fv_coincide,
+    caso_a_solicitud,
 )
 from motor.catalogos import RFC_GPA
 
@@ -179,3 +183,62 @@ def test_emparejar_suma_varias_fv_a_un_cp():
     caso = res["casos"][0]
     assert caso["montoVentaFV"] == pytest.approx(3852.25)
     assert caso["foliosFV"] == ["FM40086093", "FM40086200"]
+
+
+# ── OCR / orquestación con Bedrock simulado ───────────────────────
+class FakeBedrock:
+    """Cliente Bedrock falso: devuelve, por página, el dict que se le pasa como JSON."""
+    def __init__(self, *respuestas):
+        self._r = list(respuestas)
+        self._i = 0
+
+    def converse(self, **kwargs):
+        out = self._r[self._i]
+        self._i += 1
+        return {"output": {"message": {"content": [{"text": json.dumps(out)}]}}}
+
+
+def test_ocr_pagina_parsea_respuesta():
+    fake = FakeBedrock({"rfcEmisor": RFC_GPA, "subtotal": 4.41})
+    d = ocr.ocr_pagina(b"png", client=fake)
+    assert d["rfcEmisor"] == RFC_GPA and d["subtotal"] == 4.41
+
+
+def test_caso_a_solicitud_mapea_campos():
+    caso = {
+        "status": "OK", "folioCP": "FAC04927", "foliosFV": ["FM40086093"],
+        "fletaRFC": HORMIK, "fleteSinIvaMXN": 3330.0, "tipoCambioRef": 17.55,
+        "origenSucursal": "CDMX", "destinoEstado": "Guerrero", "destinoCiudad": "Acapulco",
+        "fechaEmision": "2026-05-07",
+        "partidas": [{"descripcion": "TRICLORO 50 KGS", "cantidad": 40,
+                      "importe": 3653.20, "pesoKg": 50, "volumenL": 0}],
+    }
+    sol = caso_a_solicitud(caso)
+    assert sol["folioCP"] == "FAC04927"
+    assert sol["fleteBaseMXN"] == 3330.0
+    assert sol["tipoCambioRef"] == 17.55
+    assert sol["origenSucursal"] == "CDMX"
+    assert sol["fechaEmision"] == "2026-05-07"
+    assert sol["partidas"][0]["precioUnitarioUSD"] == pytest.approx(3653.20 / 40)
+    assert sol["partidas"][0]["pesoKg"] == 50
+
+
+def test_procesar_pdf_orquesta(monkeypatch):
+    # render simulado: 4 "páginas"; FakeBedrock: 2 CP + 2 FV
+    monkeypatch.setattr(ocr, "render_paginas_pdf", lambda b, dpi=None: [b"", b"", b"", b""])
+    fake = FakeBedrock(
+        {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "FAC04927",
+         "subtotal": 3330.0, "comentarios": "F-40086093", "fletaRFC": HORMIK,
+         "origenCiudad": "Iztapalapa", "destinoEstado": "Guerrero"},
+        {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086093",
+         "subtotal": 3852.25, "moneda": "USD", "tipoCambio": 17.55, "partidas": []},
+        {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "FAC04935",
+         "subtotal": 390.0, "comentarios": "F-40086102", "fletaRFC": HORMIK,
+         "origenCiudad": "Iztapalapa", "destinoEstado": "Guerrero"},
+        {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086102",
+         "subtotal": 15.55, "moneda": "USD", "tipoCambio": 17.55, "partidas": []},
+    )
+    res = ocr.procesar_pdf(b"pdf", folio_archivo="FAC4927-FAC4935", client=fake)
+    assert len(res["casos"]) == 2
+    assert res["casos"][0]["origenSucursal"] == "CDMX"   # Iztapalapa → CDMX
+    assert res["casos"][0]["foliosFV"] == ["FM40086093"]

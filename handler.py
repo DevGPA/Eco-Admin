@@ -28,7 +28,7 @@ from db.escritura    import guardar_solicitud, cambiar_estado
 from db.queries      import (get_cola_revision, get_por_rango_fecha, get_kpis_mes,
                               get_solicitud_completa, get_por_fletera,
                               get_por_sucursal, get_por_destino)
-from s3.extractor    import extraer_documentos_lote
+from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -278,13 +278,20 @@ def _route_health(event):
 
 # ── S3 / SQS triggers ────────────────────────────────────────────
 def _handle_s3(event):
+    # OCR del PDF (escaneo) → casos (1 por CP) → evaluar cada uno.
     resultados=[]
     for r in event["Records"]:
         bucket=r["s3"]["bucket"]["name"]; key=r["s3"]["object"]["key"]
         try:
-            for sol in extraer_documentos_lote(bucket,key):
+            res=procesar_objeto_s3(bucket,key)
+            for caso in res.get("casos",[]):
+                if caso.get("status")!="OK":
+                    logger.warning("S3 %s caso %s: %s",key,caso.get("folioCP"),caso.get("error"))
+                    resultados.append({"key":key,"folioCP":caso.get("folioCP"),"error":caso.get("error")})
+                    continue
+                sol=caso_a_solicitud(caso)
                 resp=_route_evaluar({"requestContext":{},"path":"/evaluar","httpMethod":"POST","body":json.dumps(sol)})
-                resultados.append({"key":key,"status":resp["statusCode"],"body":json.loads(resp["body"])})
+                resultados.append({"key":key,"folioCP":caso["folioCP"],"status":resp["statusCode"],"body":json.loads(resp["body"])})
         except Exception as exc:
             logger.error("S3 %s: %s",key,exc); resultados.append({"key":key,"error":str(exc)})
     return {"batchItemFailures":[],"resultados":resultados}

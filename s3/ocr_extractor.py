@@ -45,6 +45,7 @@ PROMPT_OCR = (
     '  "moneda": "MXN"|"USD"|null\n'
     '  "tipoCambio": number|null  (si aparece "Tipo de Cambio")\n'
     '  "folio": string|null       (folio o serie-folio del comprobante)\n'
+    '  "fecha": string|null        (fecha de emisión en formato YYYY-MM-DD)\n'
     '  "comentarios": string|null (texto del campo Comentarios; suele enlazar la FV: "F-40086093")\n'
     '  "origenEstado": string|null, "origenCiudad": string|null\n'
     '  "destinoEstado": string|null, "destinoCiudad": string|null\n'
@@ -92,7 +93,7 @@ def ocr_pagina(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID)
                 {"image": {"format": "png", "source": {"bytes": imagen_png}}},
             ],
         }],
-        inferenceConfig={"maxTokens": 1024, "temperature": 0},
+        inferenceConfig={"maxTokens": 4096, "temperature": 0},
     )
     texto = resp["output"]["message"]["content"][0]["text"]
     return _parse_json(texto)
@@ -217,6 +218,7 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
         "origenSucursal": sucursal_de_origen(cp.get("origenCiudad"), cp.get("origenEstado")),
         "destinoEstado": cp.get("destinoEstado"),
         "destinoCiudad": cp.get("destinoCiudad"),
+        "fechaEmision": cp.get("fecha") or fv0.get("fecha") or "",
         "partidas": partidas,
     }
 
@@ -247,15 +249,51 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
             "folioArchivo": folio_archivo}
 
 
-# ── Orquestación end-to-end (S3 → OCR → caso) ─────────────────────
+# ── Caso → entrada del endpoint /evaluar ──────────────────────────
+def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
+    """Convierte un caso OK (de emparejar_casos) al dict plano para POST /evaluar."""
+    partidas = []
+    for p in caso.get("partidas", []):
+        cant = _num(p.get("cantidad")) or 1.0
+        partidas.append({
+            "descripcion": p.get("descripcion", ""),
+            "cantidad": cant,
+            "precioUnitarioUSD": _num(p.get("importe")) / cant,
+            "pesoKg": _num(p.get("pesoKg")),
+            "volumenL": _num(p.get("volumenL")),
+        })
+    return {
+        "folioCP": caso["folioCP"],
+        "foliosFV": caso["foliosFV"],
+        "origenSucursal": caso.get("origenSucursal", ""),
+        "destinoEstado": caso.get("destinoEstado") or "",
+        "destinoCiudad": caso.get("destinoCiudad") or "",
+        "fletaRFC": caso.get("fletaRFC") or "",
+        "partidas": partidas,
+        "fleteBaseMXN": caso.get("fleteSinIvaMXN", 0.0),
+        "tipoCambioRef": caso.get("tipoCambioRef") or 1.0,
+        "campoEntregaFV": "ENTREGA_DOMICILIO",
+        "fechaEmision": fecha_emision or caso.get("fechaEmision") or "",
+    }
+
+
+# ── Orquestación end-to-end (S3 → OCR → casos) ────────────────────
 def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict:
-    """Renderiza el PDF, hace OCR de cada página y arma el caso."""
+    """Renderiza el PDF, hace OCR de cada página y arma los casos (1 por CP)."""
     paginas_img = render_paginas_pdf(pdf_bytes)
     paginas = []
     for i, img in enumerate(paginas_img):
         try:
             paginas.append(ocr_pagina(img, client=client))
-        except Exception as exc:   # una página ilegible no tumba el caso
+        except Exception as exc:   # una página ilegible no tumba el lote
             logger.warning("OCR falló en página %d de %s: %s", i + 1, folio_archivo, exc)
             paginas.append({"tipoDocumento": "OTRO"})
-    return armar_caso(paginas, folio_archivo)
+    return emparejar_casos(paginas, folio_archivo)
+
+
+def procesar_objeto_s3(bucket: str, key: str, s3_client=None, bedrock_client=None) -> dict:
+    """Descarga el PDF de S3 y devuelve los casos (emparejar_casos)."""
+    s3 = s3_client or boto3.client("s3")
+    pdf_bytes = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+    folio = key.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return procesar_pdf(pdf_bytes, folio_archivo=folio, client=bedrock_client)
