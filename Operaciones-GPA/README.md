@@ -14,7 +14,7 @@ de infraestructura (AWS SAM).
 ## Arquitectura
 
 ```
-Celular (PWA)  ──HTTPS──>  CloudFront ──> S3 (frontend)
+Celular (PWA)  ──HTTPS──>  AWS Amplify Hosting  (build desde la branch de GitHub)
      │
      │ login (Cognito JWT) + API REST
      ▼
@@ -23,9 +23,9 @@ API Gateway (HTTP API) ──> Lambda (Python) ──> DynamoDB (datos)
                                           └──> SNS (avisos por correo)
 ```
 
-- **Frontend** (`frontend/`): app React servida como estáticos + PWA (instalable en el celular). No usa `localStorage` para datos: todo va a la API.
-- **Backend** (`handler.py`, `db/`, `s3/`): Lambda con router por ruta.
-- **Infra** (`template.yaml`): DynamoDB, Cognito, 2 buckets S3 (evidencias + web), CloudFront, SNS.
+- **Frontend** (`frontend/`): app React servida como estáticos + PWA (instalable en el celular). Se hospeda en **AWS Amplify**, conectado a la branch de GitHub (CI/CD: cada push se publica). No usa `localStorage` para datos: todo va a la API.
+- **Backend** (`handler.py`, `db/`, `s3/`): Lambda con router por ruta — se despliega con SAM.
+- **Infra** (`template.yaml`): DynamoDB, Cognito, S3 de evidencias, SNS. (El hosting web NO está aquí: lo maneja Amplify, ver `amplify.yml`.)
 - **Roles** (Cognito): `operador` (captura lo suyo), `supervisor` (su sucursal + autoriza), `analista` (lee todo + cambia estado), `admin` (todo + panel).
 - **Panel Admin** (rol `admin`): alta/edición de vehículos, responsables, sucursales, correos de notificación y **cuentas de acceso** (crear logins, asignar rol/sucursal, resetear contraseña, activar/desactivar — opera contra Cognito).
 
@@ -50,12 +50,20 @@ make seed ENV=dev
 #    Para crear además un login por cada chofer:
 #    make seed-operadores ENV=dev
 
-# 4) Publicar el frontend (genera config.js, sube a S3 e invalida CloudFront)
-make deploy-web ENV=dev
-
-# 5) Abrir en el celular la URL "WebUrl" que muestra:
-make outputs ENV=dev
+# 4) Ver las variables para Amplify (API_URL, POOL_ID, CLIENT_ID)
+make amplify-vars ENV=dev
 ```
+
+### Publicar el frontend en AWS Amplify (una vez)
+
+1. Consola de **AWS Amplify** → **Create new app** → **Host web app** → **GitHub**, autoriza y elige el repo `DevGPA/Eco-Admin`, branch **`Operaciones-GPA`**.
+2. Amplify detecta el `amplify.yml` (monorepo, `appRoot: Operaciones-GPA`). Si pregunta por el directorio raíz, indica `Operaciones-GPA`.
+3. En **App settings → Environment variables** captura lo que imprime `make amplify-vars`:
+   `API_URL`, `POOL_ID`, `CLIENT_ID`, `APP_ENV`.
+4. **Save and deploy.** Amplify genera `config.js` en el build y publica. Te da una URL `https://operaciones-gpa.xxxx.amplifyapp.com`.
+5. (Opcional) Agrega una regla de *redirects/rewrites* `/<*>` → `/index.html` (200) para que el refresco siempre cargue la app.
+
+Desde entonces, **cada push a la branch `Operaciones-GPA` se publica solo**.
 
 > **Importante (SNS):** al desplegar, AWS envía un correo de confirmación a
 > `logisticaalmacenes@gpa.com.mx` y `admonriesgos@gpa.com.mx`. Hay que aceptar la
@@ -69,16 +77,17 @@ cámbiala en prod con `PASSWORD=...`). Cuenta admin por defecto:
 
 ### Instalar como app en el celular
 
-Abre la `WebUrl` en Chrome/Safari → menú → **“Agregar a pantalla de inicio”**.
+Abre la URL de Amplify en Chrome/Safari → menú → **“Agregar a pantalla de inicio”**.
 Queda como una app (PWA) a pantalla completa.
 
 ## Estructura
 
 ```
 Operaciones-GPA/
-├── template.yaml          # Infraestructura SAM
+├── template.yaml          # Infraestructura SAM (backend)
+├── amplify.yml            # Build spec de AWS Amplify (frontend)
 ├── samconfig.toml         # Config de deploy por ambiente
-├── Makefile               # build / deploy / seed / deploy-web
+├── Makefile               # build / deploy / seed / amplify-vars
 ├── handler.py             # Lambda (router)
 ├── db/                    # modelos, escritura y queries DynamoDB
 ├── s3/                    # URLs prefirmadas de evidencias

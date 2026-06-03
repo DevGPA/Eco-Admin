@@ -6,8 +6,8 @@
 #   - API Gateway     HTTP API v2 + JWT Authorizer (Cognito)
 #   - DynamoDB        gpa_operaciones_{env}  (single-table, 3 GSIs)
 #   - S3 (evidencias) fotos y firmas — subida con URL prefirmada
-#   - S3 + CloudFront hosting de la PWA (HTTPS, instalable en celular)
 #   - Cognito         UserPool + Client + 4 grupos (roles)
+#   (El frontend/PWA se hospeda en AWS Amplify — ver amplify.yml)
 #   - SNS             Notificaciones por correo
 #   - CloudWatch      Log Groups
 #
@@ -59,7 +59,7 @@ Parameters:
     Type:    String
     Default: '*'
     Description: >
-      Origen CORS. En prod usar el dominio de CloudFront o uno propio.
+      Origen CORS. En prod usar el dominio de Amplify (o uno propio).
 
   EmailLogistica:
     Type:    String
@@ -325,78 +325,11 @@ Resources:
         - { Key: Env,      Value: !Ref Env }
 
   # ═══════════════════════════════════════════════════════════════
-  # 6. S3 + CLOUDFRONT — hosting de la PWA
+  # 6. HOSTING DEL FRONTEND
   # ═══════════════════════════════════════════════════════════════
-  WebBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy:      Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      BucketName: !Sub gpa-ops-web-${Env}-${AWS::AccountId}
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls:       true
-        BlockPublicPolicy:     true
-        IgnorePublicAcls:      true
-        RestrictPublicBuckets: true
-      Tags:
-        - { Key: Proyecto, Value: GPA-Operaciones }
-
-  WebOAC:
-    Type: AWS::CloudFront::OriginAccessControl
-    Properties:
-      OriginAccessControlConfig:
-        Name: !Sub gpa-ops-oac-${Env}
-        OriginAccessControlOriginType: s3
-        SigningBehavior: always
-        SigningProtocol: sigv4
-
-  WebDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: !Sub GPA Operaciones PWA (${Env})
-        DefaultRootObject: index.html
-        PriceClass: PriceClass_100
-        Origins:
-          - Id: WebS3Origin
-            DomainName: !GetAtt WebBucket.RegionalDomainName
-            OriginAccessControlId: !Ref WebOAC
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-        DefaultCacheBehavior:
-          TargetOriginId: WebS3Origin
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [GET, HEAD, OPTIONS]
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # Managed-CachingOptimized
-          Compress: true
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-      Tags:
-        - { Key: Proyecto, Value: GPA-Operaciones }
-
-  WebBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref WebBucket
-      PolicyDocument:
-        Statement:
-          - Sid: AllowCloudFrontRead
-            Effect: Allow
-            Principal: { Service: cloudfront.amazonaws.com }
-            Action: s3:GetObject
-            Resource: !Sub ${WebBucket.Arn}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}
+  # La PWA se hospeda en AWS Amplify, conectado a la branch de GitHub
+  # (ver amplify.yml y la guía del README). Amplify no se define en este
+  # template porque se administra desde la consola de Amplify / GitHub.
 
   # ═══════════════════════════════════════════════════════════════
   # 7. COGNITO — usuarios y roles
@@ -503,14 +436,8 @@ Resources:
 # ═══════════════════════════════════════════════════════════════════
 Outputs:
   ApiUrl:
-    Description: URL base de la API
+    Description: URL base de la API (ponla en Amplify como variable API_URL)
     Value: !Sub https://${OpsHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
-  WebUrl:
-    Description: URL pública de la PWA (abrir en el celular)
-    Value: !Sub https://${WebDistribution.DomainName}
-  WebBucketName:
-    Description: Bucket donde se sube el frontend (index.html, etc.)
-    Value: !Ref WebBucket
   EvidenciasBucketName:
     Value: !Ref EvidenciasBucket
   TableName:
