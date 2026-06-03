@@ -1,0 +1,523 @@
+# template.yaml
+# AWS SAM — GPA Operaciones (Combustible · Checklist Reparto · Montacargas)
+# ─────────────────────────────────────────────────────────────────
+# Recursos desplegados:
+#   - Lambda          gpa-operaciones-{env}
+#   - API Gateway     HTTP API v2 + JWT Authorizer (Cognito)
+#   - DynamoDB        gpa_operaciones_{env}  (single-table, 3 GSIs)
+#   - S3 (evidencias) fotos y firmas — subida con URL prefirmada
+#   - S3 + CloudFront hosting de la PWA (HTTPS, instalable en celular)
+#   - Cognito         UserPool + Client + 4 grupos (roles)
+#   - SNS             Notificaciones por correo
+#   - CloudWatch      Log Groups
+#
+# Deploy:
+#   sam build
+#   sam deploy --guided --config-env dev     (primera vez)
+#   sam deploy --config-env dev              (siguientes)
+# ─────────────────────────────────────────────────────────────────
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GPA Operaciones · Combustible, Checklist de Reparto y Montacargas
+  Infraestructura: Lambda · API Gateway HTTP API · DynamoDB · S3 · Cognito · SNS
+
+# ═══════════════════════════════════════════════════════════════════
+# GLOBALS
+# ═══════════════════════════════════════════════════════════════════
+Globals:
+  Function:
+    Runtime:       python3.12
+    Architectures: [arm64]
+    MemorySize:    512
+    Timeout:       30
+    Environment:
+      Variables:
+        DYNAMO_TABLE:        !Ref OperacionesTable
+        EVIDENCIAS_BUCKET:   !Sub gpa-ops-evidencias-${Env}-${AWS::AccountId}
+        SNS_NOTIF_ARN:       !Ref NotificacionesTopic
+        ALLOWED_ORIGIN:      !Ref AllowedOrigin
+        ENV:                 !Ref Env
+        EMAIL_LOGISTICA:     !Ref EmailLogistica
+        EMAIL_RIESGOS:       !Ref EmailRiesgos
+        URL_FIRMADA_TTL:     '900'
+        USER_POOL_ID:        !Ref CognitoUserPool
+
+# ═══════════════════════════════════════════════════════════════════
+# PARÁMETROS
+# ═══════════════════════════════════════════════════════════════════
+Parameters:
+
+  Env:
+    Type:          String
+    AllowedValues: [dev, staging, prod]
+    Default:       dev
+    Description:   Ambiente de despliegue
+
+  AllowedOrigin:
+    Type:    String
+    Default: '*'
+    Description: >
+      Origen CORS. En prod usar el dominio de CloudFront o uno propio.
+
+  EmailLogistica:
+    Type:    String
+    Default: logisticaalmacenes@gpa.com.mx
+    Description: Correo que recibe avisos de solicitudes de combustible
+
+  EmailRiesgos:
+    Type:    String
+    Default: admonriesgos@gpa.com.mx
+    Description: Correo que recibe avisos de checklists (reparto y montacargas)
+
+# ═══════════════════════════════════════════════════════════════════
+# CONDICIONES
+# ═══════════════════════════════════════════════════════════════════
+Conditions:
+  IsProd: !Equals [!Ref Env, prod]
+
+# ═══════════════════════════════════════════════════════════════════
+# RECURSOS
+# ═══════════════════════════════════════════════════════════════════
+Resources:
+
+  # ═══════════════════════════════════════════════════════════════
+  # 1. LAMBDA — función principal
+  # ═══════════════════════════════════════════════════════════════
+  OperacionesFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub gpa-operaciones-${Env}
+      Description:  GPA Operaciones — combustible, checklists, montacargas
+      Handler:      handler.lambda_handler
+      CodeUri:      ./
+      Layers:
+        - !Ref DependenciasLayer
+      Events:
+        # Catálogos (vehículos, responsables, sucursales, config)
+        Catalogos:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /catalogos }
+
+        # ── Combustible ──
+        CombustibleCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /combustible }
+        CombustibleListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /combustible }
+        CombustibleEstado:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /combustible/{id}/estado }
+
+        # ── Checklist de reparto ──
+        ChecklistCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /checklist }
+        ChecklistListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /checklist }
+
+        # ── Montacargas ──
+        MontacargasCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /montacargas }
+        MontacargasListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /montacargas }
+        MontacargasEstado:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /montacargas/{id}/estado }
+
+        # ── Evidencias (URL prefirmada de subida) ──
+        EvidenciaUpload:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /evidencias/url-subida }
+
+        # ── Admin (CRUD de catálogos) ──
+        AdminVehiculo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/vehiculo }
+        AdminResponsable:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/responsable }
+        AdminSucursal:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/sucursal }
+        AdminConfig:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/config }
+        AdminCuentasListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /admin/cuentas }
+        AdminCuenta:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/cuenta }
+
+        # Health (sin auth)
+        Health:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /health, Auth: { Authorizer: NONE } }
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OperacionesTable
+        - S3CrudPolicy:
+            BucketName: !Sub gpa-ops-evidencias-${Env}-${AWS::AccountId}
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt NotificacionesTopic.TopicName
+        # Administración de cuentas (Cognito) desde el panel admin
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt CognitoUserPool.Arn
+
+      Tags:
+        Proyecto: GPA-Operaciones
+        Env:      !Ref Env
+
+    Metadata:
+      BuildMethod: python3.12
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. LAYER — dependencias Python
+  # ═══════════════════════════════════════════════════════════════
+  DependenciasLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:   !Sub gpa-ops-deps-${Env}
+      Description: Dependencias Python — GPA Operaciones
+      ContentUri:  ./layer/
+      CompatibleRuntimes: [python3.12]
+      CompatibleArchitectures: [arm64]
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. API GATEWAY — HTTP API v2 + Cognito JWT
+  # ═══════════════════════════════════════════════════════════════
+  OpsHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Env
+      Description: GPA Operaciones — HTTP API
+      Auth:
+        DefaultAuthorizer: CognitoJWT
+        Authorizers:
+          CognitoJWT:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              audience:
+                - !Ref CognitoUserPoolClient
+              issuer: !Sub
+                - https://cognito-idp.${AWS::Region}.amazonaws.com/${PoolId}
+                - PoolId: !Ref CognitoUserPool
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowHeaders: [Content-Type, Authorization]
+        AllowMethods: [GET, POST, OPTIONS]
+        MaxAge: 300
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: !If [IsProd, 100, 20]
+        ThrottlingRateLimit:  !If [IsProd, 50, 10]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. DYNAMODB — single-table
+  # ═══════════════════════════════════════════════════════════════
+  # Modelo de claves:
+  #   Catálogos:  PK=CAT#VEHICLE  SK=VEH#{id}
+  #               PK=CAT#USER     SK=USR#{id}
+  #               PK=CAT#SUCURSAL SK=SUC#{nombre}
+  #               PK=CONFIG       SK=CONFIG
+  #   Registros:  PK={SOL|CL|MC}#{id}  SK=META
+  #     GSI1 (todos por tipo):     GSI1PK={SOL|CL|MC}              GSI1SK=fecha
+  #     GSI2 (por sucursal):       GSI2PK={SOL|CL|MC}#{sucursal}   GSI2SK=fecha
+  #     GSI3 (por cuenta):         GSI3PK={SOL|CL|MC}#{accountId}  GSI3SK=fecha
+  # ═══════════════════════════════════════════════════════════════
+  OperacionesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy:      !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:   !Sub gpa_operaciones_${Env}
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      DeletionProtectionEnabled: !If [IsProd, true, false]
+      AttributeDefinitions:
+        - { AttributeName: PK,     AttributeType: S }
+        - { AttributeName: SK,     AttributeType: S }
+        - { AttributeName: GSI1PK, AttributeType: S }
+        - { AttributeName: GSI1SK, AttributeType: S }
+        - { AttributeName: GSI2PK, AttributeType: S }
+        - { AttributeName: GSI2SK, AttributeType: S }
+        - { AttributeName: GSI3PK, AttributeType: S }
+        - { AttributeName: GSI3SK, AttributeType: S }
+      KeySchema:
+        - { AttributeName: PK, KeyType: HASH }
+        - { AttributeName: SK, KeyType: RANGE }
+      GlobalSecondaryIndexes:
+        - IndexName: tipo-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI1PK, KeyType: HASH }
+            - { AttributeName: GSI1SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: sucursal-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI2PK, KeyType: HASH }
+            - { AttributeName: GSI2SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: cuenta-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI3PK, KeyType: HASH }
+            - { AttributeName: GSI3SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+      Tags:
+        - { Key: Proyecto, Value: GPA-Operaciones }
+        - { Key: Env,      Value: !Ref Env }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 5. S3 — evidencias (fotos y firmas)
+  # ═══════════════════════════════════════════════════════════════
+  EvidenciasBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy:      !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      BucketName: !Sub gpa-ops-evidencias-${Env}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:       true
+        BlockPublicPolicy:     true
+        IgnorePublicAcls:      true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT]
+            AllowedOrigins: [!Ref AllowedOrigin]
+            MaxAge:         3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchivarEvidencias
+            Status: Enabled
+            Transitions:
+              - { TransitionInDays: 180, StorageClass: STANDARD_IA }
+      Tags:
+        - { Key: Proyecto, Value: GPA-Operaciones }
+        - { Key: Env,      Value: !Ref Env }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 6. S3 + CLOUDFRONT — hosting de la PWA
+  # ═══════════════════════════════════════════════════════════════
+  WebBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy:      Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub gpa-ops-web-${Env}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:       true
+        BlockPublicPolicy:     true
+        IgnorePublicAcls:      true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: Proyecto, Value: GPA-Operaciones }
+
+  WebOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub gpa-ops-oac-${Env}
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  WebDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub GPA Operaciones PWA (${Env})
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: WebS3Origin
+            DomainName: !GetAtt WebBucket.RegionalDomainName
+            OriginAccessControlId: !Ref WebOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: WebS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # Managed-CachingOptimized
+          Compress: true
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+      Tags:
+        - { Key: Proyecto, Value: GPA-Operaciones }
+
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub ${WebBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${WebDistribution}
+
+  # ═══════════════════════════════════════════════════════════════
+  # 7. COGNITO — usuarios y roles
+  # ═══════════════════════════════════════════════════════════════
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub gpa-ops-users-${Env}
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength:    8
+          RequireUppercase: false
+          RequireLowercase: true
+          RequireNumbers:   true
+          RequireSymbols:   false
+          TemporaryPasswordValidityDays: 30
+      MfaConfiguration: 'OFF'
+      Schema:
+        - { Name: email,    Required: true, Mutable: true }
+        - Name: rol
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '1', MaxLength: '20' }
+        - Name: sucursal
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '40' }
+        - Name: nombre
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '80' }
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - { Name: verified_email, Priority: 1 }
+      UserPoolTags:
+        Proyecto: GPA-Operaciones
+        Env:      !Ref Env
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName:     !Sub gpa-ops-client-${Env}
+      UserPoolId:     !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AccessTokenValidity:  12
+      IdTokenValidity:      12
+      RefreshTokenValidity: 30
+      TokenValidityUnits: { AccessToken: hours, IdToken: hours, RefreshToken: days }
+      PreventUserExistenceErrors: ENABLED
+
+  GrupoAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: admin, UserPoolId: !Ref CognitoUserPool, Description: Acceso total + panel admin, Precedence: 1 }
+  GrupoAnalista:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: analista, UserPoolId: !Ref CognitoUserPool, Description: Lectura total + cambio de estado, Precedence: 5 }
+  GrupoSupervisor:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: supervisor, UserPoolId: !Ref CognitoUserPool, Description: Su sucursal + autoriza, Precedence: 10 }
+  GrupoOperador:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: operador, UserPoolId: !Ref CognitoUserPool, Description: Captura sus propios registros, Precedence: 20 }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 8. SNS — notificaciones por correo
+  # ═══════════════════════════════════════════════════════════════
+  NotificacionesTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:   !Sub gpa-ops-notif-${Env}
+      DisplayName: GPA Operaciones
+
+  NotifLogisticaSub:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificacionesTopic
+      Protocol: email
+      Endpoint: !Ref EmailLogistica
+
+  NotifRiesgosSub:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificacionesTopic
+      Protocol: email
+      Endpoint: !Ref EmailRiesgos
+
+  # ═══════════════════════════════════════════════════════════════
+  # 9. CLOUDWATCH — logs
+  # ═══════════════════════════════════════════════════════════════
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:    !Sub /aws/lambda/gpa-operaciones-${Env}
+      RetentionInDays: !If [IsProd, 90, 14]
+
+# ═══════════════════════════════════════════════════════════════════
+# OUTPUTS
+# ═══════════════════════════════════════════════════════════════════
+Outputs:
+  ApiUrl:
+    Description: URL base de la API
+    Value: !Sub https://${OpsHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
+  WebUrl:
+    Description: URL pública de la PWA (abrir en el celular)
+    Value: !Sub https://${WebDistribution.DomainName}
+  WebBucketName:
+    Description: Bucket donde se sube el frontend (index.html, etc.)
+    Value: !Ref WebBucket
+  EvidenciasBucketName:
+    Value: !Ref EvidenciasBucket
+  TableName:
+    Value: !Ref OperacionesTable
+  UserPoolId:
+    Value: !Ref CognitoUserPool
+  UserPoolClientId:
+    Value: !Ref CognitoUserPoolClient
+  Region:
+    Value: !Ref AWS::Region

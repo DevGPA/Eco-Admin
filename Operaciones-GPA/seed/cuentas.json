@@ -1,0 +1,9 @@
+{
+  "_comentario": "Cuentas con rol especial. Los operadores se crean automáticamente desde catalogos.json (un login por cada responsable con correo @gpa.com.mx) cuando corres seed.py con --operadores. El email es el usuario de inicio de sesión.",
+  "cuentas": [
+    {"email": "administracion@gpa.com.mx", "nombre": "Gerencia Administrativa", "rol": "admin", "sucursal": ""},
+    {"email": "admonriesgos@gpa.com.mx", "nombre": "ORTIZ ARRATIA KARLA", "rol": "analista", "sucursal": ""},
+    {"email": "almty@gpa.com.mx", "nombre": "GONZALEZ LOPEZ SERGIO RENE", "rol": "supervisor", "sucursal": "Monterrey"},
+    {"email": "algdl@gpa.com.mx", "nombre": "CORONADO AVIÑA MIGUEL", "rol": "supervisor", "sucursal": "Guadalajara"}
+  ]
+}

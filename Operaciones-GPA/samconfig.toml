@@ -1,0 +1,38 @@
+# samconfig.toml — GPA Operaciones
+# Configuración de despliegue por ambiente. Uso:
+#   sam deploy --config-env dev
+version = 0.1
+
+[default.global.parameters]
+stack_name = "gpa-operaciones-dev"
+
+# ─── DEV ─────────────────────────────────────────────────────────
+[dev.deploy.parameters]
+stack_name           = "gpa-operaciones-dev"
+region               = "us-east-1"
+resolve_s3           = true
+confirm_changeset    = false
+capabilities         = "CAPABILITY_IAM"
+parameter_overrides  = "Env=dev"
+
+[dev.build.parameters]
+cached = true
+parallel = true
+
+# ─── STAGING ─────────────────────────────────────────────────────
+[staging.deploy.parameters]
+stack_name           = "gpa-operaciones-staging"
+region               = "us-east-1"
+resolve_s3           = true
+confirm_changeset    = true
+capabilities         = "CAPABILITY_IAM"
+parameter_overrides  = "Env=staging"
+
+# ─── PROD ────────────────────────────────────────────────────────
+[prod.deploy.parameters]
+stack_name           = "gpa-operaciones-prod"
+region               = "us-east-1"
+resolve_s3           = true
+confirm_changeset    = true
+capabilities         = "CAPABILITY_IAM"
+parameter_overrides  = "Env=prod"

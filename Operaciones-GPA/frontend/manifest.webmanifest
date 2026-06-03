@@ -1,0 +1,14 @@
+{
+  "name": "GPA Control de Unidades",
+  "short_name": "GPA Unidades",
+  "description": "Combustible, checklist de reparto y montacargas — GPA",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f6fa",
+  "theme_color": "#185FA5",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

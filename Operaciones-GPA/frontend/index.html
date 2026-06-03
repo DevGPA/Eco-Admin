@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#185FA5"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="icon.svg"/>
+<title>GPA — Control de Unidades</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="config.js"></script>
+<script src="gpa-api.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:#f5f6fa;min-height:100vh}
+#root{max-width:430px;margin:0 auto;min-height:100vh}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef,useEffect}=React;
+const api=new GpaApi();
+
+// ─── CONSTANTES ──────────────────────────────────────────────────────
+const C={blue:"#185FA5",blueLt:"#E6F1FB",blueMd:"#378ADD",red:"#A32D2D",redLt:"#FCEBEB",green:"#2E6B30",greenLt:"#EDF7EE",amber:"#854F0B",amberLt:"#FAEEDA",gray:"#888780",grayLt:"#F1EFE8"};
+const TANK_OPTS=[{val:0.25,label:"1/4"},{val:0.5,label:"1/2"},{val:0.75,label:"3/4"},{val:1,label:"Lleno"}];
+const NIVEL_OPTS=["Nivel Optimo","Bajo","Muy Bajo","Sin Nivel"];
+const TACO_OPTS=[1,2,3,4,5,6,7,8,9,10];
+const DOC_OPTS=["Si vigente","Vencido","No cuenta"];
+const ESTATUS_MC=["Activo","Inactivo - Mantenimiento","Inactivo - Falla","Inactivo - Otro"];
+const ITEMS_GAS=["¿La cabina proporciona protección al operador contra la intemperie?","¿Las llantas se encuentran infladas (si aplica), sin desgaste, daño excesivo y las tuercas se encuentran completas?","¿El piso del montacargas permanece antiderrapante?","¿Cuenta con espejos retrovisores y se encuentran en buen estado?","¿Cuenta con dispositivo luminoso de operación (luz centelleante o giratoria, color ámbar) y ésta no deslumbra al operador?","¿Las horquillas y mástil se encuentran en buenas condiciones de operación?","¿Las mangueras y cadenas se encuentra en buenas condiciones?","¿El respaldo porta horquilla (si aplica) esta en su lugar, libre de fractura y/o suelto?","¿La guarda de protección superior se encuentra en su lugar, no esta doblada, quebrada o suelta?","¿La carrocería del montacargas se encuentra limpia y libre de objetos colgantes?","¿El aceite de motor se encuentra a su nivel óptimo y no se detectan fugas?","¿El aceite del sistema hidráulico se encuentra a nivel óptimo y no se detectan fugas?","¿El nivel del líquido del radiador de enfriamiento se encuentra en su nivel óptimo y no se detectan fugas?","¿El nivel de combustible se encuentra óptimo y sin fugas?","¿La placa de datos de capacidad del montacargas se ve y se lee con facilidad?","¿Cuenta con calcomanías de advertencia y éstas son visibles y fácil de leer?","¿El cinturón de seguridad o sujetadores se encuentran accesibles y sin daños visibles?","¿El motor funciona suave y silencioso, sin fugas o chispas en el tubo de escape?","¿La bocina (claxon) funciona?","¿La Señal de dirección (Si esta equipado) funciona con facilidad?","¿Las luces delanteras, traseras y de advertencia funcionan y se encuentran alineadas correctamente?","¿Los indicadores e instrumentos del tablero se encuentran funcionando?","¿Al realizar el levantamiento y descenso de las horquillas funcionan sin dificultad y se encuentran alineadas?","¿Al realizar la inclinación de las horquillas funciona sin dificultad y se encuentran alineadas?","¿Las palancas de control se encuentran marcadas, no están sueltas o pegadas y fáciles de colocar en neutral?","¿Al girar el control de dirección es fácil y responde sin juego excesivo?","¿Los frenos funcionan sin dificultad y sin fugas de líquido de frenos?","¿El freno de mano detiene el montacargas en una inclinación?","¿La alarma de reversa se encuentra funcionando?","¿Cuenta con extintor en buenas condiciones (Carga completa y vigente, colocado en su soporte)?"];
+const ITEMS_ELEC=["¿La cabina proporciona protección al operador contra la intemperie?","¿Las llantas se encuentran infladas (si aplica), sin desgaste, daño excesivo y las tuercas se encuentran completas?","¿El piso del montacargas permanece antiderrapante?","¿Cuenta con espejos retrovisores y se encuentran en buen estado?","¿Cuenta con dispositivo luminoso de operación (luz centelleante o giratoria, color ámbar)?","¿Las horquillas y mástil se encuentran en buenas condiciones de operación?","¿Las mangueras y cadenas se encuentra en buenas condiciones?","¿El respaldo porta horquilla (si aplica) esta en su lugar, libre de fractura y/o suelto?","¿La guarda de protección superior se encuentra en su lugar; no esta doblada, quebrada o suelta?","¿La carrocería del montacargas se encuentra limpia y libre de objetos colgantes?","¿El aceite del sistema hidráulico se encuentra a nivel óptimo y no se detectan fugas?","¿Las conexiones de la batería se encuentran apretadas?","¿Los cobertores de los bornes de la batería y otras partes peligrosas se encuentran asegurados y en su lugar?","¿La placa de datos de capacidad del montacargas se ve y se lee con facilidad?","¿Cuenta con calcomanías de advertencia y éstas son visibles y fácil de leer?","¿El cinturón de seguridad o sujetadores se encuentran accesibles y sin daños visibles?","¿La bocina (claxon) funciona?","¿Las luces (delanteras, traseras, y de advertencia) funcionan y están apuntadas correctamente?","¿Los indicadores e instrumentos del tablero se encuentran funcionando?","¿Al realizar el levantamiento y descenso de las horquillas funcionan sin dificultad y se encuentran alineadas?","¿Al realizar la inclinación de las horquillas funciona sin dificultad y se encuentran alineadas?","¿Las palanca(s) de control se encuentra(n) marcada(s), no se encuentran sueltas o pegadas?","¿Al girar el control de dirección es fácil y responde sin juego excesivo?","¿Los frenos funcionan sin dificultad?","¿Funciona el paro de emergencia?","¿La alarma de reversa se encuentra funcionando?","¿El nivel de la carga de batería se mantiene mientras detiene una inclinación completamente hacia adelante?","¿Cuenta con extintor en buenas condiciones (Carga completa o carga vigente, colocado en su soporte)?"];
+
+// ─── CSS GLOBAL ──────────────────────────────────────────────────────
+const GCS=`
+.wrap{max-width:430px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:#f5f6fa}
+.hdr{background:${C.blue};color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.hdr-l{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;color:${C.blue};font-size:12px;flex-shrink:0}
+.nav{display:flex;border-top:1px solid #e0e0e0;background:#fff;position:sticky;bottom:0;z-index:20}
+.nav button{flex:1;padding:8px 2px 6px;background:none;border:none;cursor:pointer;font-size:9px;color:#888;display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav button.act{color:${C.blue};border-top:2px solid ${C.blue}}
+.nav svg{width:19px;height:19px}
+.pg{flex:1;padding:14px;overflow-y:auto;padding-bottom:20px}
+.card{background:#fff;border-radius:10px;border:.5px solid #e0e0e0;padding:14px;margin-bottom:12px}
+.ct{font-size:12px;font-weight:700;color:${C.blue};margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+label{font-size:12px;color:#555;display:block;margin-bottom:3px;margin-top:8px}
+label:first-child{margin-top:0}
+select,input[type=text],input[type=number],input[type=password],input[type=date],textarea{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:#fff;color:#222}
+select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-color:transparent}
+.bp{width:100%;padding:12px;background:${C.blue};color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px}
+.bp:disabled{opacity:.45;cursor:default}
+.bs{padding:7px 14px;background:#fff;color:${C.blue};border:1px solid ${C.blue};border-radius:6px;font-size:12px;cursor:pointer}
+.bd{padding:7px 14px;background:#fff;color:${C.red};border:1px solid ${C.red};border-radius:6px;font-size:12px;cursor:pointer}
+.bgr{width:100%;padding:12px;background:${C.green};color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px}
+.brj{width:100%;padding:12px;background:${C.red};color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px}
+.bdg{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+.dok{background:${C.greenLt};color:${C.green}}
+.dpe{background:${C.amberLt};color:${C.amber}}
+.drj{background:${C.redLt};color:${C.red}}
+.dad{background:#EEEDFE;color:#3C3489}
+.dan{background:${C.blueLt};color:${C.blue}}
+.dsu{background:${C.greenLt};color:${C.green}}
+.dop{background:${C.grayLt};color:#444}
+.li{padding:10px 0;border-bottom:.5px solid #eee;cursor:pointer}
+.li:last-child{border:none}
+.lit{display:flex;justify-content:space-between;align-items:center}
+.lim{font-size:13px;font-weight:600;color:#222}
+.lis{font-size:11px;color:#888;margin-top:2px}
+.dr{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:.5px solid #f0f0f0}
+.dr:last-child{border:none}
+.dr span:first-child{color:#888;max-width:50%}
+.dr span:last-child{font-weight:500;color:#222;max-width:50%;text-align:right;word-break:break-word}
+.pb{border:2px dashed #ccc;border-radius:8px;padding:12px;text-align:center;cursor:pointer;font-size:12px;color:#888;position:relative;overflow:hidden;margin-top:4px}
+.pb img{width:100%;border-radius:6px;margin-top:6px}
+.pb input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.tg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:4px}
+.tb{padding:8px 4px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff;cursor:pointer;text-align:center;color:#333}
+.tb.sel{background:${C.blueLt};border-color:${C.blue};color:${C.blue};font-weight:600}
+.cb{background:${C.blueLt};border-radius:8px;padding:12px;margin-top:10px}
+.cr{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.cr span:last-child{font-weight:600;color:${C.blue}}
+.sig{border:1px solid #ddd;border-radius:8px;width:100%;touch-action:none}
+.tr{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.trb{padding:6px 12px;border:1px solid #ddd;border-radius:20px;font-size:12px;cursor:pointer;background:#fff;color:#555}
+.trb.act{background:${C.blue};color:#fff;border-color:${C.blue}}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:200;max-width:90%;text-align:center}
+.eb{background:${C.redLt};border-radius:6px;padding:7px 10px;font-size:12px;color:${C.red};margin-top:4px}
+.wb{background:${C.amberLt};border-radius:6px;padding:7px 10px;font-size:12px;color:${C.amber};margin-bottom:10px}
+.sb{display:flex;gap:5px;margin-bottom:14px}
+.sd{flex:1;height:4px;border-radius:4px}
+.ic{background:#fafafa;border-radius:8px;border:.5px solid #eee;padding:10px;margin-bottom:10px}
+.rr{display:flex;gap:5px}
+.rb{flex:1;padding:7px 4px;border:1px solid #ddd;border-radius:6px;font-size:12px;cursor:pointer;text-align:center;background:#fff;font-weight:600}
+.rb.O{background:${C.greenLt};border-color:${C.green};color:${C.green}}
+.rb.P{background:${C.redLt};border-color:${C.red};color:${C.red}}
+.rb.NA{background:${C.grayLt};border-color:#aaa;color:#666}
+.prb{background:${C.redLt};border-radius:8px;padding:10px;margin-top:6px;border:.5px solid #f0c0c0}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.empty{text-align:center;color:#aaa;font-size:13px;padding:30px 0}
+.tcg{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:4px}
+.tcb{padding:7px 2px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff;cursor:pointer;text-align:center}
+.tcb.sel{background:${C.blueLt};border-color:${C.blue};color:${C.blue};font-weight:700}
+.lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f5f6fa}
+.spin{width:34px;height:34px;border:3px solid #ddd;border-top-color:${C.blue};border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+`;
+
+// ─── HELPERS ────────────────────────────────────────────────────────
+const rolLabel=r=>r==="admin"?"Administrador":r==="analista"?"Analista":r==="supervisor"?"Supervisor":"Operador";
+const rolBadge=r=>r==="admin"?"dad":r==="analista"?"dan":r==="supervisor"?"dsu":"dop";
+const bcSol=s=>s==="Aprobada"?"dok":s==="Rechazada"?"drj":"dpe";
+const bcMC=s=>s==="Aprobado"?"dok":s==="Rechazado"?"drj":"dpe";
+const fdate=s=>{try{return new Date(s).toLocaleDateString("es-MX")}catch{return s}};
+const fdt=s=>{try{return new Date(s).toLocaleString("es-MX")}catch{return s}};
+
+function useSig(ref){
+  const drawing=useRef(false);
+  const start=e=>{drawing.current=true;const c=ref.current;const ctx=c.getContext("2d");const r=c.getBoundingClientRect();ctx.beginPath();ctx.moveTo((e.touches?.[0]||e).clientX-r.left,(e.touches?.[0]||e).clientY-r.top);};
+  const move=e=>{if(!drawing.current)return;const c=ref.current;const ctx=c.getContext("2d");const r=c.getBoundingClientRect();ctx.lineTo((e.touches?.[0]||e).clientX-r.left,(e.touches?.[0]||e).clientY-r.top);ctx.strokeStyle=C.blue;ctx.lineWidth=2;ctx.stroke();};
+  const end=()=>{drawing.current=false;};
+  const clear=cb=>{ref.current?.getContext("2d").clearRect(0,0,400,150);cb&&cb(null);};
+  return{start,move,end,clear};
+}
+const readFile=(e,cb)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>cb(ev.target.result);r.readAsDataURL(f);};
+
+// ─── LOGIN ──────────────────────────────────────────────────────────
+function Login({onLogin}){
+  const[u,setU]=useState("");const[p,setP]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);
+  const go=async()=>{
+    setErr("");setBusy(true);
+    try{ await onLogin(u.trim(),p); }
+    catch(e){ setErr(e.message||"No se pudo iniciar sesión"); }
+    setBusy(false);
+  };
+  return(
+    <div className="lw">
+      <style>{GCS}</style>
+      <div className="logo" style={{width:64,height:64,fontSize:20,marginBottom:16}}>GPA</div>
+      <div style={{fontSize:17,fontWeight:700,color:"#222",marginBottom:4,textAlign:"center"}}>General de Productos para el Agua</div>
+      <div style={{fontSize:13,color:"#888",marginBottom:24}}>Sistema de Control de Unidades</div>
+      <div style={{width:"100%",maxWidth:340}}>
+        <div className="card">
+          <label>Correo</label><input type="text" value={u} onChange={e=>setU(e.target.value)} placeholder="usuario@gpa.com.mx" autoCapitalize="off"/>
+          <label>Contraseña</label><input type="password" value={p} onChange={e=>setP(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&go()}/>
+          {err&&<div className="eb" style={{marginTop:8}}>{err}</div>}
+          <button className="bp" onClick={go} disabled={busy||!u||!p} style={{marginTop:14}}>{busy?"Entrando…":"Iniciar sesión"}</button>
+        </div>
+        <div style={{fontSize:11,color:"#aaa",textAlign:"center",marginTop:8}}>Credenciales asignadas por administrador</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP PRINCIPAL ──────────────────────────────────────────────────
+function App(){
+  const[session,setSession]=useState(api.isAuth?api.session:null);
+  const[cat,setCat]=useState(null);
+  const[data,setData]=useState({combustible:[],checklist:[],montacargas:[]});
+  const[loading,setLoading]=useState(false);
+  const[module,setModule]=useState("combustible");
+  const[toast,setToast]=useState(null);
+  const showToast=m=>{setToast(m);setTimeout(()=>setToast(null),3000);};
+
+  const cargarTodo=async()=>{
+    setLoading(true);
+    try{
+      const[c,sol,cl,mc]=await Promise.all([api.catalogos(),api.listar("combustible"),api.listar("checklist"),api.listar("montacargas")]);
+      setCat(c);setData({combustible:sol,checklist:cl,montacargas:mc});
+    }catch(e){showToast("⚠️ "+e.message);}
+    setLoading(false);
+  };
+  useEffect(()=>{if(session)cargarTodo();},[session]);
+
+  const refrescar=async tipo=>{try{const items=await api.listar(tipo);setData(d=>({...d,[tipo]:items}));}catch(e){showToast("⚠️ "+e.message);}};
+  const refrescarCat=async()=>{try{setCat(await api.catalogos());}catch(e){showToast("⚠️ "+e.message);}};
+  const login=async(email,pass)=>{await api.login(email,pass);setSession(api.session);};
+  const logout=()=>{api.logout();setSession(null);setCat(null);};
+
+  if(!session)return<Login onLogin={login}/>;
+  const rol=session.rol;const sucursalUser=session.sucursal||null;
+
+  const modules=[
+    {id:"combustible",label:"Combustible",icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"},
+    {id:"checklist",label:"Reparto",icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"},
+    {id:"montacargas",label:"Montagas",icon:"M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"},
+    ...(rol==="admin"?[{id:"admin",label:"Admin",icon:"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"}]:[]),
+  ];
+
+  return(
+    <div className="wrap">
+      <style>{GCS}</style>
+      {toast&&<div className="toast">{toast}</div>}
+      <div className="hdr">
+        <div className="hdr-l">
+          <div className="logo">GPA</div>
+          <div>
+            <div style={{fontSize:13,fontWeight:700}}>GPA Control Unidades</div>
+            <div style={{fontSize:10,opacity:.75}}>{session.nombre} · <span className={"bdg "+rolBadge(rol)} style={{fontSize:9,padding:"1px 6px"}}>{rolLabel(rol)}</span></div>
+          </div>
+        </div>
+        <button onClick={logout} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>Salir</button>
+      </div>
+      <div className="pg">
+        {!cat&&loading&&<div className="spin"/>}
+        {cat&&<>
+          {module==="combustible"&&<ModCombustible cat={cat} items={data.combustible} rol={rol} sucursalUser={sucursalUser} session={session} refrescar={()=>refrescar("combustible")} showToast={showToast}/>}
+          {module==="checklist"&&<ModChecklist cat={cat} items={data.checklist} rol={rol} sucursalUser={sucursalUser} session={session} refrescar={()=>refrescar("checklist")} showToast={showToast}/>}
+          {module==="montacargas"&&<ModMontacargas cat={cat} items={data.montacargas} rol={rol} sucursalUser={sucursalUser} session={session} refrescar={()=>refrescar("montacargas")} showToast={showToast}/>}
+          {module==="admin"&&rol==="admin"&&<ModAdmin cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
+        </>}
+      </div>
+      <nav className="nav">
+        {modules.map(m=>(
+          <button key={m.id} className={module===m.id?"act":""} onClick={()=>setModule(m.id)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={m.icon}/></svg>
+            {m.label}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+// ─── MÓDULO COMBUSTIBLE ──────────────────────────────────────────────
+function ModCombustible({cat,items,rol,sucursalUser,session,refrescar,showToast}){
+  const[view,setView]=useState(rol==="analista"?"history":"form");
+  const[sel,setSel]=useState(null);
+  return(
+    <div>
+      {rol!=="analista"&&<div className="tr">
+        {["form","history"].map(v=><button key={v} className={"trb"+(view===v?" act":"")} onClick={()=>{setView(v);setSel(null);}}>{v==="form"?"Nueva Solicitud":"Historial"}</button>)}
+      </div>}
+      {view==="form"&&rol!=="analista"&&<SolForm cat={cat} items={items} session={session} rol={rol} sucursalUser={sucursalUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>}
+      {view==="history"&&!sel&&<SolHistory items={items} rol={rol} onSelect={s=>{setSel(s);setView("detail");}}/>}
+      {view==="detail"&&sel&&<SolDetail sol={sel} rol={rol} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>}
+    </div>
+  );
+}
+
+function SolForm({cat,items,session,rol,sucursalUser,refrescar,showToast,onDone}){
+  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico"&&(!sucursalUser||rol==="admin"||rol==="analista"||v.sucursal===sucursalUser));
+  const availUsr=cat.users.filter(u=>u.activo&&(!sucursalUser||rol==="admin"||rol==="analista"||u.sucursal===sucursalUser));
+  const[veh,setVeh]=useState(availVeh[0]?String(availVeh[0].id):"");
+  const[usr,setUsr]=useState(yo?String(yo.id):availUsr[0]?String(availUsr[0].id):"");
+  const[km,setKm]=useState("");const[tank,setTank]=useState(0.25);const[obs,setObs]=useState("");
+  const[photo,setPhoto]=useState(null);const[sig,setSig]=useState(null);const[step,setStep]=useState(1);const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
+  const user=cat.users.find(u=>String(u.id)===String(usr));
+  const need=Math.max(0,1-tank);const litros=vehicle?Math.round(vehicle.tanque*need):0;const monto=vehicle?Math.round(litros*vehicle.precio):0;
+  const lastKm=items.filter(s=>String(s.vehicleId)===String(veh)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.km??null;
+  const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>1000?`No puede exceder 1,000 km del último (${lastKm.toLocaleString()} km)`:null):null;
+  const submit=async()=>{
+    if(!vehicle||!user||busy)return;
+    setBusy(true);
+    try{
+      const datos={vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,userId:user.id,responsable:user.nombre,mail:user.mail,km:kmN,tankBefore:tank,tankAfter:1,necesidad:need,litros,monto,obs,photo,firma:sig,status:"Pendiente"};
+      const subido=await api.subirEvidencias("combustible",datos);
+      await api.crear("combustible",subido);
+      showToast("✓ Solicitud enviada");
+      await refrescar();
+      onDone();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(
+    <div>
+      <div className="sb">{[1,2,3].map(s=><div key={s} className="sd" style={{background:step>=s?C.blue:"#e0e0e0"}}/>)}</div>
+      {step===1&&<>
+        <div className="card">
+          <div className="ct">Vehículo</div>
+          <select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
+          {vehicle&&<div style={{marginTop:8,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Combustible</span><span>{vehicle.combustible}</span></div><div className="dr"><span>Precio/L</span><span>${vehicle.precio.toFixed(2)}</span></div><div className="dr"><span>Tanque</span><span>{vehicle.tanque}L</span></div></div>}
+        </div>
+        <div className="card">
+          <div className="ct">Solicitante</div>
+          <label>Responsable</label>
+          <select value={usr} onChange={e=>setUsr(e.target.value)}><option value="">— Selecciona —</option>{availUsr.map(u=><option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+          <label>Kilometraje actual</label>
+          <input type="number" placeholder="Ej. 91127" value={km} onChange={e=>setKm(e.target.value)}/>
+          {lastKm!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastKm.toLocaleString()} km</div>}
+          {kmErr&&<div className="eb">{kmErr}</div>}
+        </div>
+        <div className="card">
+          <div className="ct">Nivel de Tanque</div>
+          <label>Nivel actual</label>
+          <div className="tg">{TANK_OPTS.map(o=><button key={o.val} className={"tb"+(tank===o.val?" sel":"")} onClick={()=>setTank(o.val)}>{o.label}</button>)}</div>
+          {vehicle&&<div className="cb"><div className="cr"><span>Litros estimados</span><span>{litros} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto estimado</span><span>${monto.toLocaleString()}</span></div></div>}
+        </div>
+        <label>Observaciones</label>
+        <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Notas adicionales..."/>
+        <button className="bp" disabled={!veh||!usr||!km||!!kmErr} onClick={()=>setStep(2)}>Siguiente →</button>
+      </>}
+      {step===2&&<>
+        <div className="card">
+          <div className="ct">Foto de Evidencia</div>
+          <p style={{fontSize:12,color:"#888",marginBottom:8}}>Captura el kilometraje y nivel del tanque en la misma foto.</p>
+          <div className="pb">{!photo&&<><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>Toca para capturar</div></>}{photo&&<img src={photo} alt="ev"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,setPhoto)}/></div>
+          {photo&&<button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>setPhoto(null)}>Cambiar foto</button>}
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} disabled={!photo} onClick={()=>setStep(3)}>Siguiente →</button></div>
+      </>}
+      {step===3&&<>
+        <div className="card">
+          <div className="ct">Firma del Solicitante</div>
+          <canvas ref={sigRef} className="sig" width={340} height={130} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+          <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+          {user&&<div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{user.nombre}</b><br/><span style={{fontSize:11,color:"#888"}}>Notif: {cat.config?.emailLogistica||"logística"}</span></div>}
+        </div>
+        <div className="card"><div className="ct">Resumen</div><div className="dr"><span>Vehículo</span><span>{vehicle?.placas}</span></div><div className="dr"><span>Litros</span><span>{litros} L</span></div><div className="dr"><span>Monto</span><span style={{color:C.blue,fontWeight:700}}>${monto.toLocaleString()}</span></div></div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(2)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} disabled={!sig||busy} onClick={submit}>{busy?"Enviando…":"Enviar"}</button></div>
+      </>}
+    </div>
+  );
+}
+
+function SolHistory({items,rol,onSelect}){
+  const[f,setF]=useState("Todos");
+  const list=items.filter(s=>f==="Todos"||s.status===f).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  return(
+    <div>
+      <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
+      {list.length===0&&<div className="empty">No hay solicitudes</div>}
+      <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
+    </div>
+  );
+}
+
+function SolDetail({sol,rol,refrescar,showToast,onBack}){
+  const canChange=rol==="admin"||rol==="analista"||rol==="supervisor";
+  const[busy,setBusy]=useState(false);
+  const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st);showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  return(
+    <div>
+      <button className="bs" style={{marginBottom:12}} onClick={onBack}>← Volver</button>
+      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Solicitud</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>Nivel antes</span><span>{TANK_OPTS.find(t=>t.val===sol.tankBefore)?.label}</span></div><div className="dr"><span>Litros</span><span>{sol.litros} L</span></div><div className="dr"><span>Monto</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}</div>
+      {sol.photo&&<div className="card"><div className="ct">Foto Evidencia</div><img src={sol.photo} style={{width:"100%",borderRadius:8}} alt="ev"/></div>}
+      {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
+      {canChange&&<div className="card"><div className="ct">Cambiar Estado</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
+    </div>
+  );
+}
+
+// ─── MÓDULO CHECKLIST REPARTO ────────────────────────────────────────
+const SEMANAL_SEC=[
+  {id:"ext",title:"Exterior",items:[{id:"carroceria",label:"Carrocería con golpes o raspaduras",type:"select",opts:["Sin daños","Con raspaduras/golpes"]},{id:"f_frente_d",label:"Foto 3/4 Frente derecho",type:"photo"},{id:"f_frente_i",label:"Foto 3/4 Frente izquierdo",type:"photo"},{id:"f_tras_d",label:"Foto 3/4 Trasera derecha",type:"photo"},{id:"f_tras_i",label:"Foto 3/4 Trasera izquierda",type:"photo"},{id:"golpes",label:"Fotos golpes/rayones (si aplica)",type:"damage_list"}]},
+  {id:"herr",title:"Herramientas y Seguridad",items:[{id:"llanta_ref",label:"Llanta de refacción funcional",type:"select",opts:["Si","No"]},{id:"f_llanta_ref",label:"Foto llanta de refacción",type:"photo"},{id:"f_diablito",label:"Foto Diablito de Carga",type:"photo"}]},
+  {id:"cofre",title:"Cofre Abierto",items:[{id:"radiador",label:"Nivel líquido radiador",type:"select",opts:NIVEL_OPTS},{id:"f_radiador",label:"Foto nivel radiador",type:"photo"},{id:"aceite",label:"Nivel aceite motor",type:"select",opts:NIVEL_OPTS},{id:"f_aceite",label:"Foto nivel motor",type:"photo"},{id:"f_bateria",label:"Foto batería (serie y marca)",type:"photo"}]},
+];
+const MENSUAL_SEC=[
+  {id:"ext",title:"Exterior",items:[{id:"carroceria",label:"Carrocería con golpes o raspaduras",type:"select",opts:["Sin daños","Con Raspaduras/Golpes"]},{id:"f_frente_d",label:"Foto 3/4 Frente derecho",type:"photo"},{id:"f_frente_i",label:"Foto 3/4 Frente izquierdo",type:"photo"},{id:"f_tras_d",label:"Foto 3/4 Trasera derecha",type:"photo"},{id:"f_tras_i",label:"Foto 3/4 Trasera izquierda",type:"photo"},{id:"golpes",label:"Fotos golpes/rayones",type:"damage_list"}]},
+  {id:"llantas",title:"Llantas",items:[{id:"taco_pd",label:"TACO piloto delantera",type:"taco"},{id:"f_pd",label:"Foto piloto delantera",type:"photo"},{id:"fab_pd",label:"Fab. piloto delantera",type:"text"},{id:"taco_cd",label:"TACO copiloto delantera",type:"taco"},{id:"f_cd",label:"Foto copiloto delantera",type:"photo"},{id:"fab_cd",label:"Fab. copiloto delantera",type:"text"},{id:"taco_pt",label:"TACO piloto trasera",type:"taco"},{id:"f_pt",label:"Foto piloto trasera",type:"photo"},{id:"fab_pt",label:"Fab. piloto trasera",type:"text"},{id:"pt_int",label:"¿Llanta piloto trasera INTERNA?",type:"select",opts:["Si","No"]},{id:"taco_pt_int",label:"TACO piloto trasera INTERNA",type:"taco",cond:"pt_int:Si"},{id:"taco_ct",label:"TACO copiloto trasera",type:"taco"},{id:"f_ct",label:"Foto copiloto trasera",type:"photo"},{id:"fab_ct",label:"Fab. copiloto trasera",type:"text"},{id:"ct_int",label:"¿Llanta copiloto trasera INTERNA?",type:"select",opts:["Si","No"]},{id:"taco_ct_int",label:"TACO copiloto trasera INTERNA",type:"taco",cond:"ct_int:Si"},{id:"refacc",label:"¿Llanta de refacción?",type:"select",opts:["Si","No"]},{id:"taco_ref",label:"TACO refacción",type:"taco",cond:"refacc:Si"},{id:"f_ref",label:"Foto refacción",type:"photo",cond:"refacc:Si"}]},
+  {id:"luces",title:"Luces y Exterior",items:[{id:"luces_d",label:"Luces delanteras funcionando",type:"select",opts:["Si","No"]},{id:"f_luces_d",label:"Foto luces delanteras",type:"photo"},{id:"f_luces_t",label:"Foto faros traseros",type:"photo"},{id:"espejos",label:"Espejos laterales en buen estado",type:"select",opts:["Si","No"]},{id:"f_esp_p",label:"Foto espejo piloto",type:"photo"},{id:"f_esp_c",label:"Foto espejo copiloto",type:"photo"},{id:"cristales",label:"Cristales en buenas condiciones",type:"select",opts:["Si","No"]},{id:"molduras",label:"Molduras en buen estado",type:"select",opts:["Si","No"]},{id:"tapon",label:"Tapón gasolina",type:"select",opts:["Si","No"]},{id:"f_tapon",label:"Foto tapón gasolina",type:"photo"}]},
+  {id:"interior",title:"Interior",items:[{id:"claxon",label:"Claxon funcionando",type:"select",opts:["Si","No"]},{id:"limpiaparab",label:"Limpiaparabrisas funcionando",type:"select",opts:["Si","No"]},{id:"f_limpiaparab",label:"Foto limpiaparabrisas",type:"photo"},{id:"tacometro",label:"Tacómetro en buenas condiciones",type:"select",opts:["Si","No"]},{id:"retrovisor",label:"Espejo retrovisor en buen estado",type:"select",opts:["Si","No"]},{id:"f_retrovisor",label:"Foto espejo retrovisor",type:"photo"},{id:"cinturones",label:"Cinturones funcionando",type:"select",opts:["Si","No"]},{id:"f_cinturones",label:"Foto cinturones abrochados",type:"photo"},{id:"luces_int",label:"Luces interiores funcionando",type:"select",opts:["Si","No"]},{id:"f_luces_int",label:"Foto luces interiores",type:"photo"},{id:"asientos",label:"Asientos en buen estado",type:"select",opts:["Si","No"]},{id:"f_asientos",label:"Foto asientos",type:"photo"},{id:"tapetes",label:"Tapetes completos",type:"select",opts:["Si","No"]},{id:"f_tapetes",label:"Foto tapetes",type:"photo"}]},
+  {id:"herr",title:"Herramientas y Seguridad",items:[{id:"diablito",label:"Diablito de Carga",type:"select",opts:["Si","No"]},{id:"f_diablito",label:"Foto diablito",type:"photo"},{id:"gato",label:"Gato adecuado",type:"select",opts:["Si","No"]},{id:"llave_cruz",label:"Llave de cruz",type:"select",opts:["Si","No"]},{id:"triangulo",label:"Triángulo de seguridad",type:"select",opts:["Si","No"]},{id:"cables",label:"Cables pasa corriente",type:"select",opts:["Si","No"]},{id:"f_herr",label:"Foto herramientas",type:"photo"},{id:"extinguidor",label:"Extinguidor",type:"select",opts:["Vigente","Vencido","No hay extinguidor"]},{id:"f_extinguidor",label:"Foto extinguidor",type:"photo"},{id:"f_bateria",label:"Foto batería",type:"photo"}]},
+  {id:"docs",title:"Documentación",items:[{id:"tarj_circ",label:"Tarjeta circulación",type:"select",opts:DOC_OPTS},{id:"f_tarj_circ",label:"Foto tarjeta circulación",type:"photo"},{id:"poliza",label:"Póliza de seguro",type:"select",opts:DOC_OPTS},{id:"f_poliza",label:"Foto póliza seguro",type:"photo"},{id:"refrendo",label:"Refrendo vehicular",type:"select",opts:["Si","No"]},{id:"f_refrendo",label:"Foto refrendo",type:"photo"},{id:"verif",label:"Verificación ambiental",type:"select",opts:DOC_OPTS},{id:"fecha_verif",label:"Fecha verificación",type:"date"},{id:"f_verif",label:"Foto verificación",type:"photo"},{id:"licencia",label:"Licencia de chofer",type:"select",opts:DOC_OPTS},{id:"fecha_lic",label:"Vencimiento licencia",type:"date"},{id:"tipo_lic",label:"Tipo de licencia",type:"text"},{id:"f_licencia",label:"Foto licencia",type:"photo"},{id:"calcomonia",label:"Calcomanía último servicio",type:"select",opts:["Si","No"]},{id:"f_calcomonia",label:"Foto calcomanía servicio",type:"photo"},{id:"fecha_ult_serv",label:"Fecha último servicio",type:"date"},{id:"fecha_sig_serv",label:"Fecha siguiente servicio",type:"date"},{id:"km_ult_serv",label:"Km último servicio",type:"number"},{id:"km_sig_serv",label:"Km siguiente servicio",type:"number"}]},
+  {id:"cofre",title:"Cofre Abierto",items:[{id:"radiador",label:"Nivel radiador",type:"select",opts:NIVEL_OPTS},{id:"f_radiador",label:"Foto radiador",type:"photo"},{id:"com_radiador",label:"Comentario radiador",type:"text"},{id:"liq_limpiaparab",label:"Nivel limpiaparabrisas",type:"select",opts:NIVEL_OPTS},{id:"f_liq_limpiaparab",label:"Foto limpiaparabrisas",type:"photo"},{id:"aceite_dir",label:"Nivel aceite dirección",type:"select",opts:NIVEL_OPTS},{id:"f_aceite_dir",label:"Foto dirección",type:"photo"},{id:"aceite_motor",label:"Nivel aceite motor",type:"select",opts:NIVEL_OPTS},{id:"f_aceite_motor",label:"Foto motor",type:"photo"},{id:"liq_frenos",label:"Nivel líquido frenos",type:"select",opts:NIVEL_OPTS},{id:"f_liq_frenos",label:"Foto frenos",type:"photo"}]},
+];
+
+function ModChecklist({cat,items,rol,sucursalUser,session,refrescar,showToast}){
+  const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
+  const canCreate=rol!=="analista";
+  if(view==="new")return<CLForm tipo={tipo} cat={cat} items={items} session={session} rol={rol} sucursalUser={sucursalUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
+  if(view==="detail"&&sel)return<CLDetail cl={sel} onBack={()=>{setView("history");setSel(null);}}/>;
+  if(view==="history")return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("home")}>← Inicio</button><CLHistory items={items} onSelect={c=>{setSel(c);setView("detail");}}/></div>;
+  return(
+    <div>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>Checklist Unidades de Reparto</div>
+      {canCreate&&<>
+        <div className="card" style={{cursor:"pointer",borderLeft:`4px solid ${C.blue}`}} onClick={()=>{setTipo("semanal");setView("new");}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14,color:C.blue}}>📋 Checklist Semanal</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Revisión básica semanal</div></div><div style={{fontSize:22,color:C.blue}}>→</div></div>
+        </div>
+        <div className="card" style={{cursor:"pointer",borderLeft:`4px solid ${C.green}`}} onClick={()=>{setTipo("mensual");setView("new");}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14,color:C.green}}>📋 Checklist Mensual</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Revisión completa mensual</div></div><div style={{fontSize:22,color:C.green}}>→</div></div>
+        </div>
+      </>}
+      <div className="card" style={{cursor:"pointer"}} onClick={()=>setView("history")}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>🗂 Historial</div><div style={{fontSize:12,color:"#888",marginTop:3}}>{items.length} registro(s)</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>
+    </div>
+  );
+}
+
+function CLForm({tipo,cat,items,session,rol,sucursalUser,refrescar,showToast,onDone}){
+  const sections=tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
+  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico"&&(!sucursalUser||rol==="admin"||rol==="analista"||v.sucursal===sucursalUser));
+  const availUsr=cat.users.filter(u=>u.activo&&(!sucursalUser||rol==="admin"||rol==="analista"||u.sucursal===sucursalUser));
+  const[veh,setVeh]=useState(availVeh[0]?String(availVeh[0].id):"");
+  const[usr,setUsr]=useState(yo?String(yo.id):availUsr[0]?String(availUsr[0].id):"");
+  const[km,setKm]=useState("");const[fotoKm,setFotoKm]=useState(null);const[ans,setAns]=useState({});const[sig,setSig]=useState(null);const[obs,setObs]=useState("");const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user=cat.users.find(u=>String(u.id)===String(usr));
+  const total=sections.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?sections[step-1]:null;
+  const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
+  const visible=item=>{if(!item.cond)return true;const[cid,cv]=item.cond.split(":");return String(getA(cid))===cv;};
+  const submit=async()=>{
+    if(!vehicle||!user||!km||!fotoKm||!sig||busy)return;
+    setBusy(true);
+    try{
+      const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig};
+      const subido=await api.subirEvidencias("checklist",datos);
+      await api.crear("checklist",subido);
+      showToast("✓ Checklist enviado");await refrescar();onDone();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:700,color:tipo==="semanal"?C.blue:C.green}}>{tipo==="semanal"?"Checklist Semanal":"Checklist Mensual"}</span><span style={{fontSize:11,color:"#888"}}>Paso {step+1}/{total}</span></div>
+      <div className="sb">{Array.from({length:total}).map((_,i)=><div key={i} className="sd" style={{background:step>=i?(tipo==="semanal"?C.blue:C.green):"#e0e0e0"}}/>)}</div>
+      {step===0&&<div>
+        <div className="card"><div className="ct">Datos Generales</div>
+          <label>Vehículo</label><select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas}</option>)}</select>
+          <label>Responsable que verifica</label><select value={usr} onChange={e=>setUsr(e.target.value)}><option value="">— Selecciona —</option>{availUsr.map(u=><option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+          <label>Kilometraje del día</label><input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="Ej. 97710"/>
+          <label>Foto del kilometraje</label>
+          <div className="pb">{!fotoKm&&<><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>Toca para capturar</div></>}{fotoKm&&<img src={fotoKm} alt="km"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,setFotoKm)}/></div>
+          {fotoKm&&<button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>setFotoKm(null)}>Cambiar foto</button>}
+        </div>
+        <button className="bp" disabled={!veh||!usr||!km||!fotoKm} onClick={()=>setStep(1)} style={{background:tipo==="semanal"?C.blue:C.green}}>Siguiente →</button>
+      </div>}
+      {curSec&&<div>
+        <div className="card"><div className="ct">{curSec.title}</div>
+          {curSec.items.map(item=>{
+            if(!visible(item))return null;const v=getA(item.id);
+            return(
+              <div key={item.id} style={{marginBottom:10}}>
+                <label>{item.label}</label>
+                {item.type==="select"&&<select value={v||""} onChange={e=>setA(item.id,e.target.value)}><option value="">— Selecciona —</option>{item.opts.map(o=><option key={o}>{o}</option>)}</select>}
+                {item.type==="text"&&<input type="text" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+                {item.type==="number"&&<input type="number" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+                {item.type==="date"&&<input type="date" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+                {item.type==="taco"&&<div className="tcg">{TACO_OPTS.map(n=><button key={n} className={"tcb"+(v===n?" sel":"")} onClick={()=>setA(item.id,n)}>{n}</button>)}</div>}
+                {item.type==="photo"&&<div><div className="pb">{!v&&<><div style={{fontSize:20}}>📷</div><div style={{fontSize:11,marginTop:2}}>Toca para capturar</div></>}{v&&<img src={v} alt={item.label}/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setA(item.id,d))}/></div>{v&&<button className="bs" style={{marginTop:4,width:"100%",fontSize:11}} onClick={()=>setA(item.id,null)}>Cambiar</button>}</div>}
+                {item.type==="damage_list"&&<DmgList value={v||[]} onChange={w=>setA(item.id,w)}/>}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:tipo==="semanal"?C.blue:C.green}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
+      </div>}
+      {isLast&&<div>
+        <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Reportes o comentarios (solo si aplica)"/></div>
+        <div className="card"><div className="ct">Firma de quien verifica</div>
+          <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+          <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+          {user&&<div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{user.nombre}</b><br/><span style={{fontSize:11,color:"#888"}}>Notif: {cat.config?.emailRiesgos||"riesgos"}</span></div>}
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:tipo==="semanal"?C.blue:C.green}} disabled={!sig||busy} onClick={submit}>{busy?"Enviando…":"Enviar checklist"}</button></div>
+      </div>}
+    </div>
+  );
+}
+
+function DmgList({value,onChange}){
+  const add=()=>onChange([...value,{foto:null,desc:""}]);
+  const upd=(i,f,v)=>{const n=[...value];n[i]={...n[i],[f]:v};onChange(n);};
+  const del=i=>onChange(value.filter((_,j)=>j!==i));
+  return(
+    <div>
+      {value.map((d,i)=>(
+        <div key={i} style={{background:"#fafafa",borderRadius:8,border:".5px solid #eee",padding:10,marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:12,fontWeight:600}}>Daño #{i+1}</span><button className="bd" style={{padding:"4px 10px",fontSize:11}} onClick={()=>del(i)}>Eliminar</button></div>
+          <div className="pb" style={{marginBottom:6}}>{!d.foto&&<><div style={{fontSize:18}}>📷</div><div style={{fontSize:11}}>Foto del daño</div></>}{d.foto&&<img src={d.foto} alt="daño"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,r=>upd(i,"foto",r))}/></div>
+          {d.foto&&<button className="bs" style={{width:"100%",fontSize:11,marginBottom:6}} onClick={()=>upd(i,"foto",null)}>Cambiar foto</button>}
+          <label>Descripción</label><input type="text" value={d.desc} onChange={e=>upd(i,"desc",e.target.value)} placeholder="Ej. Golpe puerta piloto"/>
+        </div>
+      ))}
+      <button className="bs" style={{width:"100%",marginTop:4}} onClick={add}>+ Agregar daño</button>
+    </div>
+  );
+}
+
+function CLHistory({items,onSelect}){
+  const[f,setF]=useState("Todos");
+  const list=items.filter(c=>f==="Todos"||c.tipo===f).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  return(
+    <div>
+      <div className="tr">{["Todos","semanal","mensual"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="Todos"?"Todos":x==="semanal"?"Semanal":"Mensual"}</button>)}</div>
+      {list.length===0&&<div className="empty">No hay checklists</div>}
+      <div className="card">{list.map(c=><div key={c.id} className="li" onClick={()=>onSelect(c)}><div className="lit"><span className="lim">{c.placas} · #{c.economico}</span><span className={"bdg "+(c.tipo==="semanal"?"dpe":"dok")}>{c.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="lis">{c.responsable} · {c.sucursal}</div><div className="lis">{fdt(c.fecha)}</div></div>)}</div>
+    </div>
+  );
+}
+
+function CLDetail({cl,onBack}){
+  const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
+  return(
+    <div>
+      <button className="bs" style={{marginBottom:12}} onClick={onBack}>← Volver</button>
+      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
+      {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
+      {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
+      {cl.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{cl.obs}</div></div>}
+      {cl.firma&&<div className="card"><div className="ct">Firma</div><img src={cl.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{cl.responsable}</b></div></div>}
+    </div>
+  );
+}
+
+// ─── MÓDULO MONTACARGAS ──────────────────────────────────────────────
+function ModMontacargas({cat,items,rol,sucursalUser,session,refrescar,showToast}){
+  const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
+  const mc=cat.vehicles.filter(v=>v.activo&&(v.combustible==="Gas LP"||v.combustible==="Electrico")&&(!sucursalUser||rol==="admin"||rol==="analista"||v.sucursal===sucursalUser));
+  const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
+  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} session={session} sucursalUser={sucursalUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
+  if(view==="detail"&&sel)return<MCDetail rec={sel} canAuth={canAuth} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>;
+  if(view==="history")return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("home")}>← Inicio</button><MCHistory items={items} onSelect={r=>{setSel(r);setView("detail");}}/></div>;
+  return(
+    <div>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>Checklist Montacargas</div>
+      {canCreate&&<>
+        <div className="card" style={{cursor:"pointer",borderLeft:`4px solid ${C.amber}`}} onClick={()=>{setTipo("gas");setView("new");}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14,color:C.amber}}>⛽ Gas / Gasolina</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Checklist diario · 30 puntos</div></div><div style={{fontSize:22,color:C.amber}}>→</div></div>
+        </div>
+        <div className="card" style={{cursor:"pointer",borderLeft:`4px solid ${C.blue}`}} onClick={()=>{setTipo("electrico");setView("new");}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14,color:C.blue}}>⚡ Eléctrico</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Checklist diario · 28 puntos</div></div><div style={{fontSize:22,color:C.blue}}>→</div></div>
+        </div>
+      </>}
+      <div className="card" style={{cursor:"pointer"}} onClick={()=>setView("history")}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>🗂 Historial</div><div style={{fontSize:12,color:"#888",marginTop:3}}>{items.length} registro(s) · {items.filter(r=>r.status==="Pendiente").length} pendiente(s)</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>
+    </div>
+  );
+}
+
+function MCForm({tipo,cat,mc,session,sucursalUser,refrescar,showToast,onDone}){
+  const items=tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;
+  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  const availMC=mc.filter(v=>!sucursalUser||v.sucursal===sucursalUser);
+  const[eq,setEq]=useState(availMC[0]?String(availMC[0].id):"");
+  const[estatus,setEstatus]=useState("Activo");const[dia,setDia]=useState(new Date().toISOString().split("T")[0]);
+  const[semana,setSemana]=useState("");const[horas,setHoras]=useState("");
+  const[resps,setResps]=useState({});const[fotos,setFotos]=useState({});const[coments,setComents]=useState({});
+  const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const vehicle=cat.vehicles.find(v=>String(v.id)===String(eq));
+  const CHUNK=10;const chunks=[];for(let i=0;i<items.length;i+=CHUNK)chunks.push(items.slice(i,i+CHUNK));
+  const total=chunks.length+2;const isLast=step===total-1;const curChunk=step>0&&step<total-1?chunks[step-1]:null;const off=(step-1)*CHUNK;
+  const setR=(i,v)=>setResps(r=>({...r,[i]:v}));const setF=(i,v)=>setFotos(f=>({...f,[i]:v}));const setC=(i,v)=>setComents(c=>({...c,[i]:v}));
+  const probs=Object.entries(resps).filter(([,v])=>v==="P");
+  const canSubmit=!!(eq&&sig&&(estatus!=="Activo"||probs.every(([i])=>fotos[i]&&coments[i])));
+  const submit=async()=>{
+    if(!canSubmit||busy)return;setBusy(true);
+    try{
+      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Pendiente"};
+      const subido=await api.subirEvidencias("montacargas",datos);
+      await api.crear("montacargas",subido);
+      showToast("✓ Checklist enviado");await refrescar();onDone();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  const color=tipo==="gas"?C.amber:C.blue;
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:700,color}}>{tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"} — Diario</span><span style={{fontSize:11,color:"#888"}}>Paso {step+1}/{total}</span></div>
+      <div className="sb">{Array.from({length:total}).map((_,i)=><div key={i} className="sd" style={{background:step>=i?color:"#e0e0e0"}}/>)}</div>
+      {step===0&&<div>
+        <div className="card"><div className="ct">Información General</div>
+          <label>Montacargas</label><select value={eq} onChange={e=>setEq(e.target.value)}><option value="">— Selecciona —</option>{availMC.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
+          {vehicle&&<div style={{marginTop:6,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Tipo</span><span>{vehicle.combustible}</span></div></div>}
+          <label>Estatus del equipo</label><select value={estatus} onChange={e=>setEstatus(e.target.value)}>{ESTATUS_MC.map(o=><option key={o}>{o}</option>)}</select>
+          <label>Fecha de revisión</label><input type="date" value={dia} onChange={e=>setDia(e.target.value)}/>
+          <div className="r2"><div><label>Semana No.</label><input type="text" value={semana} onChange={e=>setSemana(e.target.value)} placeholder="Ej. 19"/></div><div><label>Horas de trabajo</label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
+          <label>Quien revisa</label><input type="text" value={yo?.nombre||session.nombre} disabled style={{background:"#f5f5f5",color:"#aaa"}}/>
+        </div>
+        {estatus!=="Activo"&&<div className="wb">⚠️ Equipo inactivo — solo se registran datos generales y firma.</div>}
+        <button className="bp" disabled={!eq||!dia} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
+      </div>}
+      {curChunk&&estatus==="Activo"&&<div>
+        <div className="card"><div className="ct">Chequeo Visual — #{off+1} al #{off+curChunk.length}</div>
+          {curChunk.map((item,idx)=>{const i=off+idx;const r=resps[i];return(
+            <div key={i} className="ic">
+              <div style={{fontSize:11,fontWeight:700,color,marginBottom:4}}>#{i+1}</div>
+              <div style={{fontSize:12,color:"#333",marginBottom:8,lineHeight:1.4}}>{item}</div>
+              <div className="rr">{["O","P","N/A"].map(opt=><button key={opt} className={`rb${r===opt?" "+(opt==="O"?"O":opt==="P"?"P":"NA"):""}`} onClick={()=>setR(i,opt)}>{opt}</button>)}</div>
+              {r==="P"&&<div className="prb">
+                <div style={{fontSize:11,fontWeight:700,color:C.red,marginBottom:6}}>⚠️ Problema — requerido:</div>
+                <div className="pb">{!fotos[i]&&<><div style={{fontSize:18}}>📷</div><div style={{fontSize:11,marginTop:2}}>Foto del problema</div></>}{fotos[i]&&<img src={fotos[i]} alt="p"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setF(i,d))}/></div>
+                {fotos[i]&&<button className="bs" style={{width:"100%",marginTop:4,fontSize:11}} onClick={()=>setF(i,null)}>Cambiar foto</button>}
+                <label style={{marginTop:8}}>Descripción del problema</label>
+                <textarea rows={2} value={coments[i]||""} onChange={e=>setC(i,e.target.value)} placeholder="Describe el problema..."/>
+              </div>}
+            </div>
+          );})}
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:color}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
+      </div>}
+      {curChunk&&estatus!=="Activo"&&<div><div style={{textAlign:"center",padding:"20px 0",color:"#888",fontSize:13}}>Equipo inactivo — chequeo omitido.</div><div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:color}} onClick={()=>setStep(total-1)}>Ir a firma →</button></div></div>}
+      {isLast&&<div>
+        {probs.length>0&&<div style={{background:C.redLt,borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.red}}><b>⚠️ {probs.length} problema(s) detectado(s)</b>{probs.map(([i])=><div key={i}>• #{parseInt(i)+1}: {coments[i]||"Sin descripción"}</div>)}</div>}
+        <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Comentarios adicionales..."/></div>
+        <div className="card"><div className="ct">Firma de quien revisa</div>
+          <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+          <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+          <div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{yo?.nombre||session.nombre}</b><br/><span style={{fontSize:11,color:"#888"}}>Notif: {cat.config?.emailRiesgos||"riesgos"}</span></div>
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:color}} disabled={!canSubmit||busy} onClick={submit}>{busy?"Enviando…":"Enviar checklist"}</button></div>
+      </div>}
+    </div>
+  );
+}
+
+function MCHistory({items,onSelect}){
+  const[f,setF]=useState("Todos");
+  const list=items.filter(r=>f==="Todos"||r.status===f||r.tipo===f).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  return(
+    <div>
+      <div className="tr">{["Todos","Pendiente","Aprobado","Rechazado","gas","electrico"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="gas"?"Gas":x==="electrico"?"Eléctrico":x}</button>)}</div>
+      {list.length===0&&<div className="empty">No hay registros</div>}
+      <div className="card">{list.map(r=>{const p=Object.values(r.resps||{}).filter(v=>v==="P").length;return(<div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.placas} · #{r.economico}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"} · {r.sucursal}</div><div className="lis">{fdate(r.fecha)} · Sem {r.semana||"—"}{p>0&&<span style={{color:C.red,fontWeight:600}}> · {p} problema(s)</span>}</div></div>);})}</div>
+    </div>
+  );
+}
+
+function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
+  const items=rec.tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;
+  const probs=Object.entries(rec.resps||{}).filter(([,v])=>v==="P");
+  const[busy,setBusy]=useState(false);
+  const auth=async ok=>{setBusy(true);try{await api.cambiarEstado("montacargas",rec.id,ok?"Aprobado":"Rechazado");showToast(ok?"✓ Checklist aprobado":"✗ Checklist rechazado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  return(
+    <div>
+      <button className="bs" style={{marginBottom:12}} onClick={onBack}>← Volver</button>
+      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
+      {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
+      <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"80%",lineHeight:1.4}}>#{i+1} {item.substring(0,50)}{item.length>50?"...":""}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
+      {rec.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{rec.obs}</div></div>}
+      {rec.firma&&<div className="card"><div className="ct">Firma</div><img src={rec.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
+      {canAuth&&rec.status==="Pendiente"&&<div className="card"><div className="ct">Autorización del Supervisor</div><p style={{fontSize:12,color:"#555",marginBottom:10}}>Revisa y autoriza o rechaza este registro.</p><button className="bgr" disabled={busy} onClick={()=>auth(true)}>✓ Aprobar checklist</button><button className="brj" disabled={busy} onClick={()=>auth(false)}>✗ Rechazar checklist</button></div>}
+      {rec.status!=="Pendiente"&&<div style={{background:rec.status==="Aprobado"?C.greenLt:C.redLt,borderRadius:8,padding:"10px 14px",fontSize:12,color:rec.status==="Aprobado"?C.green:C.red,marginTop:8,textAlign:"center",fontWeight:600}}>{rec.status==="Aprobado"?"✓ Aprobado por "+(rec.autorizadoPor||""):"✗ Rechazado por "+(rec.autorizadoPor||"")}</div>}
+    </div>
+  );
+}
+
+// ─── MÓDULO ADMIN ────────────────────────────────────────────────────
+function ModAdmin({cat,refrescarCat,showToast}){
+  const[sec,setSec]=useState("vehicles");
+  const[editV,setEditV]=useState(null);const[editU,setEditU]=useState(null);const[editA,setEditA]=useState(null);
+  const[newSuc,setNewSuc]=useState("");const[busy,setBusy]=useState(false);
+  const[accounts,setAccounts]=useState(null);
+  const blankV={id:"",economico:"",placas:"",subMarca:"",sucursal:cat.sucursales[0]||"",tanque:60,responsable:"",combustible:"Gasolina",producto:"",precio:26.63,activo:true,_isNew:true};
+  const blankU={id:"",nombre:"",mail:"",sucursal:cat.sucursales[0]||"",activo:true,_isNew:true};
+  const blankA={email:"",nombre:"",rol:"operador",sucursal:cat.sucursales[0]||"",password:"",activo:true,_isNew:true};
+  const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
+  useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
+  const wrap=async fn=>{setBusy(true);try{await fn();await refrescarCat();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  const saveV=v=>{const{_isNew,...veh}=v;veh.economico=veh.economico||veh.id;veh.tanque=parseFloat(veh.tanque)||0;veh.precio=parseFloat(veh.precio)||0;if(_isNew&&!veh.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminVehiculo({...veh,id:String(veh.id)});setEditV(null);showToast("Vehículo guardado");});};
+  const saveU=u=>{const{_isNew,...usr}=u;if(_isNew&&!usr.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminResponsable({...usr,id:isNaN(Number(usr.id))?usr.id:Number(usr.id)});setEditU(null);showToast("Responsable guardado");});};
+  const toggleV=v=>wrap(()=>api.adminVehiculo({...v,activo:!v.activo}));
+  const toggleU=u=>wrap(()=>api.adminResponsable({...u,activo:!u.activo}));
+  const saveA=a=>{const{_isNew,...acc}=a;if(!acc.email||!acc.email.includes("@"))return showToast("⚠️ Correo válido obligatorio");if(_isNew&&!acc.password)return showToast("⚠️ Contraseña obligatoria al crear");if(_isNew)acc.activo=true;wrap(async()=>{await api.adminCuenta(acc);setEditA(null);await cargarCuentas();showToast("Cuenta guardada");});};
+  const toggleA=a=>wrap(async()=>{await api.adminCuenta({email:a.email,nombre:a.nombre,rol:a.rol,sucursal:a.sucursal,activo:!a.activo});await cargarCuentas();showToast("Estado actualizado");});
+  const VForm=({v,onClose})=>{const[d,setD]=useState({...v});const isN=!!v._isNew;const RO=k=>!isN&&["id","economico","placas","subMarca","sucursal","tanque"].includes(k);return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo vehículo":"Editar vehículo"}</div>{!isN&&<div className="wb">Solo editable: área responsable, combustible, precio y producto.</div>}{[["id","ID / # Económico"],["placas","Placas"],["subMarca","Sub-marca"],["responsable","Área responsable"],["producto","Producto"]].map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d[k]||""} disabled={RO(k)} style={RO(k)?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,[k]:e.target.value})}/></div>)}<div className="r2"><div><label>Tanque (L)</label><input type="number" value={d.tanque} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,tanque:e.target.value})}/></div><div><label>Precio/L</label><input type="number" value={d.precio} onChange={e=>setD({...d,precio:e.target.value})}/></div></div><label>Sucursal</label><select value={d.sucursal} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><label>Combustible</label><select value={d.combustible} onChange={e=>setD({...d,combustible:e.target.value})}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveV(d)}>Guardar</button></div></div></div>);};
+  const UForm=({u,onClose})=>{const[d,setD]=useState({...u});const isN=!!u._isNew;return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo responsable":"Editar responsable"}</div>{!isN&&<div className="wb">Solo editable: nombre, correo y sucursal.</div>}<label>ID</label><input type="text" value={d.id||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,id:e.target.value})}/><label>Nombre</label><input type="text" value={d.nombre} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Correo</label><input type="text" value={d.mail} onChange={e=>setD({...d,mail:e.target.value})}/><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveU(d)}>Guardar</button></div></div></div>);};
+  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const conSuc=d.rol==="operador"||d.rol==="supervisor";return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador"],["supervisor","Supervisor"],["analista","Analista"],["admin","Administrador"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>{conSuc&&<><label>Sucursal</label><select value={d.sucursal||""} onChange={e=>setD({...d,sucursal:e.target.value})}><option value="">— Selecciona —</option>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select></>}<label>{isN?"Contraseña":"Nueva contraseña (dejar vacío para no cambiar)"}</label><input type="text" value={d.password||""} placeholder={isN?"mín. 8, con minúscula y número":"••••••"} onChange={e=>setD({...d,password:e.target.value})}/><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
+  return(
+    <div>
+      {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
+      {editU&&<UForm u={editU} onClose={()=>setEditU(null)}/>}
+      {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
+      <div className="tr">{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      {sec==="vehicles"&&<>
+        <button className="bp" style={{marginBottom:12}} onClick={()=>setEditV(blankV)}>+ Nuevo vehículo</button>
+        <div className="card">{cat.vehicles.length===0&&<div className="empty">Sin vehículos</div>}{cat.vehicles.map(v=><div key={v.id} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">#{v.economico} · {v.placas}</span><span className={"bdg "+(v.activo?"dok":"drj")}>{v.activo?"Activo":"Inactivo"}</span></div><div className="lis">{v.subMarca} · {v.sucursal} · {v.tanque}L · {v.combustible}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditV(v)}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleV(v)}>{v.activo?"Desactivar":"Activar"}</button></div></div>)}</div>
+      </>}
+      {sec==="users"&&<>
+        <button className="bp" style={{marginBottom:12}} onClick={()=>setEditU(blankU)}>+ Nuevo responsable</button>
+        <div className="card">{cat.users.length===0&&<div className="empty">Sin responsables</div>}{cat.users.map(u=><div key={u.id} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{u.nombre}</span><span className={"bdg "+(u.activo?"dok":"drj")}>{u.activo?"Activo":"Inactivo"}</span></div><div className="lis">{u.mail} · {u.sucursal}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditU(u)}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleU(u)}>{u.activo?"Desactivar":"Activar"}</button></div></div>)}</div>
+      </>}
+      {sec==="sucursales"&&<>
+        <div className="card" style={{marginBottom:12}}><label>Nueva sucursal</label><div style={{display:"flex",gap:8}}><input type="text" value={newSuc} onChange={e=>setNewSuc(e.target.value)} placeholder="Nombre"/><button className="bp" style={{width:"auto",padding:"8px 14px",marginTop:0,whiteSpace:"nowrap"}} disabled={busy} onClick={()=>{if(!newSuc.trim())return;wrap(async()=>{await api.adminSucursal({nombre:newSuc.trim()});setNewSuc("");showToast("Sucursal agregada");});}}>+ Agregar</button></div></div>
+        <div className="card">{cat.sucursales.map(s=><div key={s} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{s}</span><button className="bd" disabled={busy} onClick={()=>wrap(async()=>{await api.adminSucursal({nombre:s,eliminar:true});showToast("Eliminada");})}>Eliminar</button></div></div>)}</div>
+        <div className="card"><div className="ct">Correos de Notificación</div>
+          <label>Logística (combustible)</label><input type="text" defaultValue={cat.config?.emailLogistica||""} onBlur={e=>wrap(()=>api.adminConfig({...cat.config,emailLogistica:e.target.value}))}/>
+          <label>Riesgos (checklists)</label><input type="text" defaultValue={cat.config?.emailRiesgos||""} onBlur={e=>wrap(()=>api.adminConfig({...cat.config,emailRiesgos:e.target.value}))}/>
+        </div>
+      </>}
+      {sec==="cuentas"&&<>
+        <button className="bp" style={{marginBottom:12}} onClick={()=>setEditA(blankA)}>+ Nueva cuenta de acceso</button>
+        {accounts===null&&<div className="spin"/>}
+        {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}{a.sucursal?" · "+a.sucursal:""}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:""})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
+        <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear/editar puedes fijar su contraseña.</div>
+      </>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}
+</script>
+</body>
+</html>
