@@ -1,0 +1,33 @@
+# amplify.yml — AWS Amplify Hosting (SOLO el monitor / dashboard web)
+# ─────────────────────────────────────────────────────────────────
+# IMPORTANTE: Amplify hostea el FRONTEND (el monitor). El BACKEND del motor
+# (Lambda, DynamoDB, S3, SQS, Cognito, Textract) NO va en Amplify: se despliega
+# con AWS SAM (template.yaml). Ver docs/DESPLIEGUE.md.
+#
+# Este build arma un sitio estático en dist/ con:
+#   index.html       ← el monitor (monitor-v24-gpa.html) + el SDK gpa-api.js
+#   gpa-api.js        ← SDK (Cognito + API Gateway)
+#   simulador.html   ← simulador de evaluación
+#   api-reference.html
+#
+# El monitor arranca en "modo demo offline". Para conectarlo al motor real,
+# edita GPA_CONFIG (apiUrl, poolId, clientId) con los Outputs del stack SAM.
+# ─────────────────────────────────────────────────────────────────
+version: 1
+frontend:
+  phases:
+    build:
+      commands:
+        - mkdir -p dist
+        - cp docs/monitor/monitor-v24-gpa.html dist/index.html
+        - cp frontend/gpa-api.js dist/gpa-api.js
+        - cp docs/monitor/simulador-v22.html dist/simulador.html
+        - cp docs/specs/api-reference.html dist/api-reference.html
+        # Cargar el SDK en el monitor (queda en modo demo hasta configurar GPA_CONFIG)
+        - sed -i 's#</body>#  <script src="gpa-api.js"></script>\n</body>#' dist/index.html
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths: []
