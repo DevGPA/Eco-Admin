@@ -109,7 +109,7 @@ Resources:
           Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /combustible }
         CombustibleEstado:
           Type: HttpApi
-          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /combustible/{id}/estado }
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/combustible/{id}/estado' }
 
         # ── Checklist de reparto ──
         ChecklistCrear:
@@ -128,7 +128,7 @@ Resources:
           Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /montacargas }
         MontacargasEstado:
           Type: HttpApi
-          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /montacargas/{id}/estado }
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/montacargas/{id}/estado' }
 
         # ── Evidencias (URL prefirmada de subida) ──
         EvidenciaUpload:
