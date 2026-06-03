@@ -57,7 +57,7 @@ make amplify-vars ENV=dev
 ### Publicar el frontend en AWS Amplify (una vez)
 
 1. Consola de **AWS Amplify** → **Create new app** → **Host web app** → **GitHub**, autoriza y elige el repo `DevGPA/Eco-Admin`, branch **`Operaciones-GPA`**.
-2. Amplify detecta el `amplify.yml` (monorepo, `appRoot: Operaciones-GPA`). Si pregunta por el directorio raíz, indica `Operaciones-GPA`.
+2. Marca que **es un monorepo** y pon como app root: **`Operaciones-GPA`** (Amplify usará `Operaciones-GPA/amplify.yml`). Equivale a definir la variable `AMPLIFY_MONOREPO_APP_ROOT=Operaciones-GPA`.
 3. En **App settings → Environment variables** captura lo que imprime `make amplify-vars`:
    `API_URL`, `POOL_ID`, `CLIENT_ID`, `APP_ENV`.
 4. **Save and deploy.** Amplify genera `config.js` en el build y publica. Te da una URL `https://operaciones-gpa.xxxx.amplifyapp.com`.

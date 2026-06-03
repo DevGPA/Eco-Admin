@@ -1,8 +1,5 @@
 # amplify.yml — Build spec de AWS Amplify Hosting (GPA Operaciones)
 # ─────────────────────────────────────────────────────────────────
-# El repo es un monorepo: este proyecto vive en la subcarpeta Operaciones-GPA/.
-# Por eso usamos el formato "applications" con appRoot.
-#
 # El frontend es estático (no hay build de npm). El único paso del build es
 # generar config.js a partir de variables de entorno definidas en la consola
 # de Amplify (App settings → Environment variables):
@@ -12,19 +9,23 @@
 #   CLIENT_ID  = XXXXXXXXXXXXXXXXXXXXXXXXXX                                (Output UserPoolClientId)
 #   APP_ENV    = prod | dev
 #   (AWS_REGION lo provee Amplify automáticamente)
+#
+# MONOREPO: este proyecto vive en la subcarpeta Operaciones-GPA/ del repo.
+# Al conectar la app en Amplify, marca "monorepo" y pon como app root:
+#   Operaciones-GPA
+# (o define la variable de entorno AMPLIFY_MONOREPO_APP_ROOT=Operaciones-GPA).
+# Con eso, Amplify usa este amplify.yml y las rutas de abajo son relativas a esa carpeta.
 # ─────────────────────────────────────────────────────────────────
 version: 1
-applications:
-  - appRoot: Operaciones-GPA
-    frontend:
-      phases:
-        build:
-          commands:
-            - 'echo "window.GPA_CONFIG={apiUrl:\"$API_URL\",region:\"${AWS_REGION:-us-east-1}\",poolId:\"$POOL_ID\",clientId:\"$CLIENT_ID\",env:\"${APP_ENV:-prod}\"};" > frontend/config.js'
-            - 'echo "config.js generado:" && cat frontend/config.js'
-      artifacts:
-        baseDirectory: frontend
-        files:
-          - '**/*'
-      cache:
-        paths: []
+frontend:
+  phases:
+    build:
+      commands:
+        - 'echo "window.GPA_CONFIG={apiUrl:\"$API_URL\",region:\"${AWS_REGION:-us-east-1}\",poolId:\"$POOL_ID\",clientId:\"$CLIENT_ID\",env:\"${APP_ENV:-prod}\"};" > frontend/config.js'
+        - 'echo "config.js generado:" && cat frontend/config.js'
+  artifacts:
+    baseDirectory: frontend
+    files:
+      - '**/*'
+  cache:
+    paths: []
