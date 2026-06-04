@@ -28,8 +28,9 @@ def _items(resp) -> list:
 def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
     """
     Devuelve registros de un tipo según el alcance del usuario:
-      admin / analista    → todos                       (GSI1)
-      otros               → unión de sus sucursales     (GSI2 por cada una)
+      admin / analista    → todos                          (GSI1)
+      supervisor          → unión de sus sucursales        (GSI2 por cada una)
+      operador            → solo lo que él capturó          (GSI3 por cuenta)
     `sucursales` es una lista; vacía para admin/analista = todas.
     Orden descendente por fecha.
     """
@@ -40,7 +41,14 @@ def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
                        ScanIndexForward=False)
         return [_limpiar(i) for i in _items(resp)]
 
-    # operador / supervisor: registros de las sucursales asignadas
+    if rol == "operador":
+        # El operador solo ve su propio historial de cargas
+        resp = t.query(IndexName="cuenta-fecha-idx",
+                       KeyConditionExpression=Key("GSI3PK").eq(f"{tipo}#{account_id}"),
+                       ScanIndexForward=False)
+        return [_limpiar(i) for i in _items(resp)]
+
+    # supervisor: registros de las sucursales asignadas
     out = []
     for suc in (sucursales or []):
         resp = t.query(IndexName="sucursal-fecha-idx",

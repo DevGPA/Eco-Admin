@@ -6,15 +6,18 @@
 #
 # Requisitos: boto3 y credenciales de AWS configuradas (aws configure).
 #
-# Uso (toma los valores de los Outputs del stack):
-#   python seed/seed.py \
-#       --tabla   gpa_operaciones_dev \
-#       --pool-id us-east-1_XXXXXXXXX \
-#       --region  us-east-1 \
-#       --password "Gpa2026!" \
-#       --operadores            # opcional: crea un login por responsable
+# Uso recomendado (resuelve tabla y pool solo, desde los Outputs del stack):
+#   python seed/seed.py --stack gpa-operaciones-dev --region us-east-1 --operadores
 #
-# También puede leer de variables de entorno: DYNAMO_TABLE, USER_POOL_ID, AWS_REGION
+#   La contraseña inicial NO va en el comando: se toma de la variable
+#   GPA_SEED_PASSWORD o, si no existe, se pregunta de forma segura (no queda en el
+#   historial de la terminal). También puedes forzarla con --password "…".
+#
+# Uso manual (sin --stack):
+#   python seed/seed.py --tabla gpa_operaciones_dev --pool-id us-east-1_XXXX
+#
+# Variables de entorno admitidas: STACK_NAME, DYNAMO_TABLE, USER_POOL_ID,
+# AWS_REGION, GPA_SEED_PASSWORD.
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -98,32 +101,68 @@ def crear_cuentas(cog, pool_id, password, con_operadores):
     print(f"✓ Cuentas Cognito procesadas: {n}")
 
 
+def resolver_outputs(session, stack):
+    """Lee TableName y UserPoolId de los Outputs del stack de CloudFormation."""
+    cf = session.client("cloudformation")
+    try:
+        outs = cf.describe_stacks(StackName=stack)["Stacks"][0].get("Outputs", [])
+    except Exception as e:
+        sys.exit(f"No se pudieron leer los Outputs del stack '{stack}': {e}")
+    o = {x["OutputKey"]: x["OutputValue"] for x in outs}
+    return o.get("TableName"), o.get("UserPoolId")
+
+
+def _password(args):
+    """Resuelve la contraseña inicial: --password, GPA_SEED_PASSWORD o prompt seguro."""
+    if args.password:
+        return args.password
+    env = os.environ.get("GPA_SEED_PASSWORD")
+    if env:
+        return env
+    import getpass
+    pwd = getpass.getpass("Contraseña inicial para las cuentas: ")
+    if len(pwd) < 8:
+        sys.exit("La contraseña debe tener al menos 8 caracteres (minúscula + número).")
+    return pwd
+
+
 def main():
     ap = argparse.ArgumentParser(description="Seed de GPA Operaciones")
+    ap.add_argument("--stack",   default=os.environ.get("STACK_NAME"),
+                    help="Nombre del stack (ej. gpa-operaciones-dev). Resuelve tabla y pool solo.")
     ap.add_argument("--tabla",   default=os.environ.get("DYNAMO_TABLE"))
     ap.add_argument("--pool-id", default=os.environ.get("USER_POOL_ID"))
     ap.add_argument("--region",  default=os.environ.get("AWS_REGION", "us-east-1"))
-    ap.add_argument("--password", default="Gpa2026!", help="Contraseña inicial para todas las cuentas")
+    ap.add_argument("--password", default=None,
+                    help="Contraseña inicial. Si se omite, usa GPA_SEED_PASSWORD o pregunta de forma segura.")
     ap.add_argument("--operadores", action="store_true", help="Crear un login por responsable")
     ap.add_argument("--solo-cuentas", action="store_true", help="No tocar catálogos")
     ap.add_argument("--solo-catalogos", action="store_true", help="No tocar Cognito")
     args = ap.parse_args()
 
-    if not args.tabla:
-        sys.exit("Falta --tabla (o DYNAMO_TABLE)")
-
     session = boto3.Session(region_name=args.region)
+
+    # Si dan --stack, resolvemos tabla/pool automáticamente (lo que falte)
+    if args.stack:
+        tabla, pool = resolver_outputs(session, args.stack)
+        args.tabla = args.tabla or tabla
+        args.pool_id = args.pool_id or pool
+
+    if not args.tabla:
+        sys.exit("Falta --tabla (o --stack, o DYNAMO_TABLE)")
 
     if not args.solo_cuentas:
         cargar_catalogos(session.resource("dynamodb").Table(args.tabla))
 
     if not args.solo_catalogos:
         if not args.pool_id:
-            sys.exit("Falta --pool-id (o USER_POOL_ID) para crear cuentas")
-        crear_cuentas(session.client("cognito-idp"), args.pool_id, args.password, args.operadores)
-
-    print("\nListo. Contraseña inicial:", args.password)
-    print("Recuerda cambiarla en producción.")
+            sys.exit("Falta --pool-id (o --stack, o USER_POOL_ID) para crear cuentas")
+        pwd = _password(args)
+        crear_cuentas(session.client("cognito-idp"), args.pool_id, pwd, args.operadores)
+        print("\nListo. Contraseña inicial establecida.")
+        print("⚠️  Indica a cada persona que la cambie en su primer ingreso (o desde 'Olvidé mi contraseña').")
+    else:
+        print("\nListo (solo catálogos).")
 
 
 if __name__ == "__main__":
