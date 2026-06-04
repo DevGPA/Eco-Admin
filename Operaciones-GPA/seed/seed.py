@@ -58,7 +58,14 @@ def cargar_catalogos(tabla):
     return data
 
 
+DOMINIO = os.environ.get("DOMINIO_PERMITIDO", "gpa.com.mx").lower()
+
+
 def crear_usuario(cog, pool_id, email, nombre, rol, sucursal, password, forzar_cambio=False):
+    email = (email or "").strip().lower()
+    if not email.endswith("@" + DOMINIO):
+        print(f"  · omitido (dominio no permitido): {email}")
+        return False
     attrs = [
         {"Name": "email", "Value": email},
         {"Name": "email_verified", "Value": "true"},
@@ -82,6 +89,7 @@ def crear_usuario(cog, pool_id, email, nombre, rol, sucursal, password, forzar_c
         cog.admin_add_user_to_group(UserPoolId=pool_id, Username=email, GroupName=rol)
     except ClientError:
         pass
+    return True
 
 
 def crear_cuentas(cog, pool_id, password, con_operadores, forzar_cambio=False):
@@ -89,9 +97,9 @@ def crear_cuentas(cog, pool_id, password, con_operadores, forzar_cambio=False):
     explicitos = {c["email"] for c in cuentas}
     n = 0
     for c in cuentas:
-        crear_usuario(cog, pool_id, c["email"], c["nombre"], c["rol"], c.get("sucursal", ""), password, forzar_cambio)
-        n += 1
-        print(f"  · {c['rol']:10s} {c['email']}")
+        if crear_usuario(cog, pool_id, c["email"], c["nombre"], c["rol"], c.get("sucursal", ""), password, forzar_cambio):
+            n += 1
+            print(f"  · {c['rol']:10s} {c['email']}")
 
     if con_operadores:
         users = json.loads((AQUI / "catalogos.json").read_text(encoding="utf-8"))["users"]
@@ -99,9 +107,9 @@ def crear_cuentas(cog, pool_id, password, con_operadores, forzar_cambio=False):
             mail = u.get("mail", "").strip().lower()
             if not mail or "@" not in mail or mail in explicitos:
                 continue
-            crear_usuario(cog, pool_id, mail, u["nombre"], "operador", u.get("sucursal", ""), password, forzar_cambio)
-            explicitos.add(mail)
-            n += 1
+            if crear_usuario(cog, pool_id, mail, u["nombre"], "operador", u.get("sucursal", ""), password, forzar_cambio):
+                explicitos.add(mail)
+                n += 1
         print(f"  · operadores creados desde responsables")
     print(f"✓ Cuentas Cognito procesadas: {n}")
 

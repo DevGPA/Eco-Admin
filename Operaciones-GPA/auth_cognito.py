@@ -11,6 +11,8 @@ import boto3
 POOL = os.environ.get("USER_POOL_ID", "")
 ROLES = ("admin", "analista", "supervisor", "operador")
 MODULOS = ("combustible", "checklist", "montacargas", "admin")
+# Solo se permiten cuentas de este dominio de correo
+DOMINIO = os.environ.get("DOMINIO_PERMITIDO", "gpa.com.mx").lower()
 _cli = None
 
 
@@ -75,6 +77,8 @@ def guardar_cuenta(d: dict) -> dict:
     email = (d.get("email") or "").strip().lower()
     if not email or "@" not in email:
         raise ValueError("Correo inválido")
+    if not email.endswith("@" + DOMINIO):
+        raise ValueError(f"Solo se permiten correos @{DOMINIO}")
     rol = d.get("rol", "operador")
     if rol not in ROLES:
         raise ValueError("Rol inválido")
