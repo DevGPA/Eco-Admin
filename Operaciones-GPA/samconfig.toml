@@ -13,7 +13,7 @@ region               = "us-east-1"
 resolve_s3           = true
 confirm_changeset    = false
 capabilities         = "CAPABILITY_IAM"
-parameter_overrides  = "Env=dev"
+parameter_overrides  = "Env=dev AllowedOrigin=https://operaciones-gpa.d109om7rqg17x3.amplifyapp.com"
 
 [dev.build.parameters]
 cached = true
@@ -26,7 +26,7 @@ region               = "us-east-1"
 resolve_s3           = true
 confirm_changeset    = true
 capabilities         = "CAPABILITY_IAM"
-parameter_overrides  = "Env=staging"
+parameter_overrides  = "Env=staging AllowedOrigin=https://operaciones-gpa.d109om7rqg17x3.amplifyapp.com"
 
 # ─── PROD ────────────────────────────────────────────────────────
 [prod.deploy.parameters]
@@ -35,4 +35,4 @@ region               = "us-east-1"
 resolve_s3           = true
 confirm_changeset    = true
 capabilities         = "CAPABILITY_IAM"
-parameter_overrides  = "Env=prod"
+parameter_overrides  = "Env=prod AllowedOrigin=https://operaciones-gpa.d109om7rqg17x3.amplifyapp.com"
