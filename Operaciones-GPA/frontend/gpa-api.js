@@ -19,6 +19,7 @@ class GpaApi {
   constructor() {
     this.cfg = window.GPA_CONFIG || {};
     this._sess = this._load();
+    this._pendingChallenge = null;
   }
 
   get region()   { return this.cfg.region   || "us-east-1"; }
@@ -49,12 +50,43 @@ class GpaApi {
       }),
     });
     const data = await res.json();
-    if (data.ChallengeName === "NEW_PASSWORD_REQUIRED")
-      throw new Error("Debes establecer una nueva contraseña. Contacta al administrador.");
+    if (data.ChallengeName === "NEW_PASSWORD_REQUIRED") {
+      // Primer ingreso: Cognito exige fijar contraseña. Guardamos el reto;
+      // la UI pide la nueva contraseña y llama a completeNewPassword().
+      this._pendingChallenge = {
+        name: "NEW_PASSWORD_REQUIRED",
+        session: data.Session,
+        username: (data.ChallengeParameters && data.ChallengeParameters.USER_ID_FOR_SRP) || email,
+      };
+      return { challenge: "NEW_PASSWORD_REQUIRED" };
+    }
     if (!res.ok || !data.AuthenticationResult)
       throw new Error(data.message || "Usuario o contraseña incorrectos");
+    return this._finishAuth(data.AuthenticationResult, email);
+  }
 
-    const a = data.AuthenticationResult;
+  // Completa el reto NEW_PASSWORD_REQUIRED del primer ingreso.
+  async completeNewPassword(newPassword) {
+    const ch = this._pendingChallenge;
+    if (!ch || ch.name !== "NEW_PASSWORD_REQUIRED")
+      throw new Error("No hay un cambio de contraseña pendiente. Vuelve a iniciar sesión.");
+    const res = await fetch(`https://cognito-idp.${this.region}.amazonaws.com/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-amz-json-1.1",
+                 "X-Amz-Target": "AWSCognitoIdentityProviderService.RespondToAuthChallenge" },
+      body: JSON.stringify({
+        ChallengeName: "NEW_PASSWORD_REQUIRED", ClientId: this.clientId, Session: ch.session,
+        ChallengeResponses: { USERNAME: ch.username, NEW_PASSWORD: newPassword },
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.AuthenticationResult)
+      throw new Error(data.message || "No se pudo establecer la nueva contraseña");
+    this._pendingChallenge = null;
+    return this._finishAuth(data.AuthenticationResult, ch.username);
+  }
+
+  _finishAuth(a, email) {
     const c = this._decode(a.IdToken);
     this._save({
       token: a.IdToken,

@@ -128,12 +128,22 @@ function useSig(ref){
 const readFile=(e,cb)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>cb(ev.target.result);r.readAsDataURL(f);};
 
 // ─── LOGIN ──────────────────────────────────────────────────────────
-function Login({onLogin}){
+function Login({onLogin,onSetNewPassword}){
   const[u,setU]=useState("");const[p,setP]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);
+  const[needNew,setNeedNew]=useState(false);const[np,setNp]=useState("");const[np2,setNp2]=useState("");
   const go=async()=>{
     setErr("");setBusy(true);
-    try{ await onLogin(u.trim(),p); }
+    try{ const r=await onLogin(u.trim(),p); if(r&&r.challenge==="NEW_PASSWORD_REQUIRED")setNeedNew(true); }
     catch(e){ setErr(e.message||"No se pudo iniciar sesión"); }
+    setBusy(false);
+  };
+  const setNew=async()=>{
+    setErr("");
+    if(np.length<8)return setErr("La contraseña debe tener al menos 8 caracteres");
+    if(np!==np2)return setErr("Las contraseñas no coinciden");
+    setBusy(true);
+    try{ await onSetNewPassword(np); }
+    catch(e){ setErr(e.message||"No se pudo establecer la contraseña"); }
     setBusy(false);
   };
   return(
@@ -144,10 +154,19 @@ function Login({onLogin}){
       <div style={{fontSize:13,color:"#888",marginBottom:24}}>Sistema de Control de Unidades</div>
       <div style={{width:"100%",maxWidth:340}}>
         <div className="card">
-          <label>Correo</label><input type="text" value={u} onChange={e=>setU(e.target.value)} placeholder="usuario@gpa.com.mx" autoCapitalize="off"/>
-          <label>Contraseña</label><input type="password" value={p} onChange={e=>setP(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&go()}/>
-          {err&&<div className="eb" style={{marginTop:8}}>{err}</div>}
-          <button className="bp" onClick={go} disabled={busy||!u||!p} style={{marginTop:14}}>{busy?"Entrando…":"Iniciar sesión"}</button>
+          {!needNew ? <>
+            <label>Correo</label><input type="text" value={u} onChange={e=>setU(e.target.value)} placeholder="usuario@gpa.com.mx" autoCapitalize="off"/>
+            <label>Contraseña</label><input type="password" value={p} onChange={e=>setP(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&go()}/>
+            {err&&<div className="eb" style={{marginTop:8}}>{err}</div>}
+            <button className="bp" onClick={go} disabled={busy||!u||!p} style={{marginTop:14}}>{busy?"Entrando…":"Iniciar sesión"}</button>
+          </> : <>
+            <div style={{fontSize:14,fontWeight:700,color:"#222",marginBottom:6}}>Establece tu nueva contraseña</div>
+            <div style={{fontSize:11,color:"#888",marginBottom:12}}>Es tu primer ingreso. Define una contraseña (mín. 8 caracteres, con minúsculas y números).</div>
+            <label>Nueva contraseña</label><input type="password" value={np} onChange={e=>setNp(e.target.value)} placeholder="••••••"/>
+            <label>Confirmar contraseña</label><input type="password" value={np2} onChange={e=>setNp2(e.target.value)} placeholder="••••••" onKeyDown={e=>e.key==="Enter"&&setNew()}/>
+            {err&&<div className="eb" style={{marginTop:8}}>{err}</div>}
+            <button className="bp" onClick={setNew} disabled={busy||!np||!np2} style={{marginTop:14}}>{busy?"Guardando…":"Guardar y entrar"}</button>
+          </>}
         </div>
         <div style={{fontSize:11,color:"#aaa",textAlign:"center",marginTop:8}}>Credenciales asignadas por administrador</div>
       </div>
@@ -177,10 +196,11 @@ function App(){
 
   const refrescar=async tipo=>{try{const items=await api.listar(tipo);setData(d=>({...d,[tipo]:items}));}catch(e){showToast("⚠️ "+e.message);}};
   const refrescarCat=async()=>{try{setCat(await api.catalogos());}catch(e){showToast("⚠️ "+e.message);}};
-  const login=async(email,pass)=>{await api.login(email,pass);setSession(api.session);};
+  const login=async(email,pass)=>{const r=await api.login(email,pass);if(r&&r.challenge)return r;setSession(api.session);};
+  const setNewPassword=async(np)=>{await api.completeNewPassword(np);setSession(api.session);};
   const logout=()=>{api.logout();setSession(null);setCat(null);};
 
-  if(!session)return<Login onLogin={login}/>;
+  if(!session)return<Login onLogin={login} onSetNewPassword={setNewPassword}/>;
   const rol=session.rol;const sucursalUser=session.sucursal||null;
 
   const modules=[
