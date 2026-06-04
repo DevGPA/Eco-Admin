@@ -71,9 +71,17 @@ Desde entonces, **cada push a la branch `Operaciones-GPA` se publica solo**.
 
 ### Acceso inicial
 
-Las cuentas se crean en Cognito con `make seed` (contraseña inicial `Gpa2026!`,
-cámbiala en prod con `PASSWORD=...`). Cuenta admin por defecto:
-`administracion@gpa.com.mx`. El login es por **correo**.
+Las cuentas se crean en Cognito con el seed:
+
+```bash
+# Resuelve tabla y pool del stack; pide la contraseña de forma segura.
+# Por defecto la contraseña es TEMPORAL (cada quien define la suya al entrar).
+python seed/seed.py --stack gpa-operaciones-dev --operadores
+```
+
+- El login es por **correo**. Cuenta admin por defecto: `administracion@gpa.com.mx`.
+- La contraseña inicial NO se escribe en el comando: usa `GPA_SEED_PASSWORD` o se pregunta.
+- Cambio obligatorio en el primer ingreso (recomendado). Usa `--permanente` para una clave definitiva, o `--password "…"` para fijarla.
 
 ### Instalar como app en el celular
 

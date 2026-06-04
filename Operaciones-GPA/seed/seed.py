@@ -12,6 +12,8 @@
 #   La contraseña inicial NO va en el comando: se toma de la variable
 #   GPA_SEED_PASSWORD o, si no existe, se pregunta de forma segura (no queda en el
 #   historial de la terminal). También puedes forzarla con --password "…".
+#   Por defecto la contraseña es TEMPORAL: cada usuario define la suya en el primer
+#   ingreso (más seguro). Usa --permanente solo si quieres una clave definitiva.
 #
 # Uso manual (sin --stack):
 #   python seed/seed.py --tabla gpa_operaciones_dev --pool-id us-east-1_XXXX
@@ -56,12 +58,13 @@ def cargar_catalogos(tabla):
     return data
 
 
-def crear_usuario(cog, pool_id, email, nombre, rol, sucursal, password):
+def crear_usuario(cog, pool_id, email, nombre, rol, sucursal, password, forzar_cambio=False):
     attrs = [
         {"Name": "email", "Value": email},
         {"Name": "email_verified", "Value": "true"},
         {"Name": "custom:rol", "Value": rol},
         {"Name": "custom:sucursal", "Value": sucursal or ""},
+        {"Name": "custom:sucursales", "Value": sucursal or ""},
         {"Name": "custom:nombre", "Value": nombre or ""},
     ]
     try:
@@ -69,9 +72,11 @@ def crear_usuario(cog, pool_id, email, nombre, rol, sucursal, password):
                               UserAttributes=attrs, MessageAction="SUPPRESS")
     except cog.exceptions.UsernameExistsException:
         cog.admin_update_user_attributes(UserPoolId=pool_id, Username=email, UserAttributes=attrs)
-    # Contraseña permanente (sin forzar cambio) para simplificar el alta masiva
+    # Permanent=False → la contraseña es TEMPORAL: el usuario debe cambiarla en su
+    # primer ingreso (Cognito devuelve NEW_PASSWORD_REQUIRED, que la app ya maneja).
+    # Permanent=True → contraseña definitiva (alta rápida, menos segura).
     cog.admin_set_user_password(UserPoolId=pool_id, Username=email,
-                                Password=password, Permanent=True)
+                                Password=password, Permanent=not forzar_cambio)
     # Agregar al grupo del rol
     try:
         cog.admin_add_user_to_group(UserPoolId=pool_id, Username=email, GroupName=rol)
@@ -79,12 +84,12 @@ def crear_usuario(cog, pool_id, email, nombre, rol, sucursal, password):
         pass
 
 
-def crear_cuentas(cog, pool_id, password, con_operadores):
+def crear_cuentas(cog, pool_id, password, con_operadores, forzar_cambio=False):
     cuentas = json.loads((AQUI / "cuentas.json").read_text(encoding="utf-8"))["cuentas"]
     explicitos = {c["email"] for c in cuentas}
     n = 0
     for c in cuentas:
-        crear_usuario(cog, pool_id, c["email"], c["nombre"], c["rol"], c.get("sucursal", ""), password)
+        crear_usuario(cog, pool_id, c["email"], c["nombre"], c["rol"], c.get("sucursal", ""), password, forzar_cambio)
         n += 1
         print(f"  · {c['rol']:10s} {c['email']}")
 
@@ -94,7 +99,7 @@ def crear_cuentas(cog, pool_id, password, con_operadores):
             mail = u.get("mail", "").strip().lower()
             if not mail or "@" not in mail or mail in explicitos:
                 continue
-            crear_usuario(cog, pool_id, mail, u["nombre"], "operador", u.get("sucursal", ""), password)
+            crear_usuario(cog, pool_id, mail, u["nombre"], "operador", u.get("sucursal", ""), password, forzar_cambio)
             explicitos.add(mail)
             n += 1
         print(f"  · operadores creados desde responsables")
@@ -136,9 +141,13 @@ def main():
     ap.add_argument("--password", default=None,
                     help="Contraseña inicial. Si se omite, usa GPA_SEED_PASSWORD o pregunta de forma segura.")
     ap.add_argument("--operadores", action="store_true", help="Crear un login por responsable")
+    ap.add_argument("--permanente", action="store_true",
+                    help="Contraseña definitiva (NO fuerza cambio). Por defecto la contraseña es "
+                         "temporal y cada usuario define la suya en el primer ingreso (más seguro).")
     ap.add_argument("--solo-cuentas", action="store_true", help="No tocar catálogos")
     ap.add_argument("--solo-catalogos", action="store_true", help="No tocar Cognito")
     args = ap.parse_args()
+    forzar_cambio = not args.permanente
 
     session = boto3.Session(region_name=args.region)
 
@@ -158,9 +167,13 @@ def main():
         if not args.pool_id:
             sys.exit("Falta --pool-id (o --stack, o USER_POOL_ID) para crear cuentas")
         pwd = _password(args)
-        crear_cuentas(session.client("cognito-idp"), args.pool_id, pwd, args.operadores)
-        print("\nListo. Contraseña inicial establecida.")
-        print("⚠️  Indica a cada persona que la cambie en su primer ingreso (o desde 'Olvidé mi contraseña').")
+        crear_cuentas(session.client("cognito-idp"), args.pool_id, pwd, args.operadores, forzar_cambio)
+        print("\nListo. Cuentas creadas.")
+        if forzar_cambio:
+            print("🔐 Contraseña TEMPORAL: cada usuario la cambiará por la suya en el primer ingreso.")
+            print("   Comunícales la contraseña temporal; la app les pedirá una nueva al entrar.")
+        else:
+            print("⚠️  Contraseña definitiva y compartida. Pídeles cambiarla cuanto antes.")
     else:
         print("\nListo (solo catálogos).")
 
