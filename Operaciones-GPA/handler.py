@@ -22,7 +22,8 @@ import json, os, re, logging, traceback
 from db import modelos as m
 from db.escritura import (crear_registro, cambiar_estado,
                           guardar_vehiculo, guardar_responsable,
-                          guardar_sucursal, eliminar_sucursal, guardar_config)
+                          guardar_sucursal, eliminar_sucursal, guardar_config,
+                          actualizar_precio_por_combustible)
 from db.queries import listar_registros, get_registro, cargar_catalogos
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
@@ -58,15 +59,33 @@ def _err(msg, status=400):
 
 
 # ── Claims del JWT de Cognito ────────────────────────────────────
+def _csv(x):
+    return [s.strip() for s in (x or "").split(",") if s.strip()]
+
+
+# Mapa tipo de registro → nombre de módulo (para el control de acceso)
+MODULO = {m.SOL: "combustible", m.CL: "checklist", m.MC: "montacargas"}
+
+
 def _claims(event) -> dict:
     c = (event.get("requestContext", {}).get("authorizer", {})
               .get("jwt", {}).get("claims", {})) or {}
+    sucursales = _csv(c.get("custom:sucursales"))
+    if not sucursales and c.get("custom:sucursal"):
+        sucursales = [c.get("custom:sucursal")]
     return {
-        "email":    c.get("email") or c.get("cognito:username") or "desconocido",
-        "rol":      c.get("custom:rol", "operador"),
-        "sucursal": c.get("custom:sucursal") or None,
-        "nombre":   c.get("custom:nombre") or c.get("email") or "",
+        "email":      c.get("email") or c.get("cognito:username") or "desconocido",
+        "rol":        c.get("custom:rol", "operador"),
+        "sucursal":   c.get("custom:sucursal") or None,
+        "sucursales": sucursales,                 # [] = todas
+        "modulos":    _csv(c.get("custom:modulos")),  # [] = todos
+        "nombre":     c.get("custom:nombre") or c.get("email") or "",
     }
+
+
+def _modulo_ok(cl, modulo) -> bool:
+    mods = cl.get("modulos") or []
+    return (not mods) or (modulo in mods)
 
 
 def _body(event) -> dict:
@@ -164,6 +183,8 @@ def lambda_handler(event, context):
 def _crear(tipo, datos, cl, notif=None):
     if cl["rol"] == "analista":
         return _err("El analista no captura registros", 403)
+    if not _modulo_ok(cl, MODULO[tipo]):
+        return _err("Tu cuenta no tiene acceso a este módulo", 403)
     sucursal = datos.get("sucursal") or cl["sucursal"] or "SIN_SUCURSAL"
     # Análisis de foto puede llegar después; lo separamos del cuerpo principal
     res = crear_registro(tipo, datos, sucursal, cl["email"])
@@ -174,7 +195,9 @@ def _crear(tipo, datos, cl, notif=None):
 
 
 def _listar(tipo, cl):
-    regs = listar_registros(tipo, cl["rol"], cl["sucursal"], cl["email"])
+    if not _modulo_ok(cl, MODULO[tipo]):
+        return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    regs = listar_registros(tipo, cl["rol"], cl["sucursales"], cl["email"])
     return _resp({"items": [_resolver_urls(r) for r in regs]})
 
 
@@ -222,6 +245,13 @@ def _admin(route, body):
             guardar_sucursal(body["nombre"])
     elif route == "POST /admin/config":
         guardar_config(body)
+    elif route == "POST /admin/precio-combustible":
+        comb = body.get("combustible")
+        precio = body.get("precio")
+        if not comb or precio is None:
+            return _err("Faltan 'combustible' y 'precio'")
+        n = actualizar_precio_por_combustible(comb, precio)
+        return _resp({"ok": True, "actualizados": n})
     else:
         return _err("Ruta admin no encontrada", 404)
     return _resp({"ok": True})

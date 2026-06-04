@@ -25,28 +25,30 @@ def _items(resp) -> list:
 
 
 # ── Registros, filtrados por rol ─────────────────────────────────
-def listar_registros(tipo: str, rol: str, sucursal: str, account_id: str) -> list:
+def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
     """
-    Devuelve registros de un tipo según el alcance del rol:
-      operador            → solo su cuenta (GSI3)
-      supervisor          → su sucursal   (GSI2)
-      admin / analista    → todos         (GSI1)
+    Devuelve registros de un tipo según el alcance del usuario:
+      admin / analista    → todos                       (GSI1)
+      otros               → unión de sus sucursales     (GSI2 por cada una)
+    `sucursales` es una lista; vacía para admin/analista = todas.
     Orden descendente por fecha.
     """
     t = _t()
-    if rol == "operador":
-        resp = t.query(IndexName="cuenta-fecha-idx",
-                       KeyConditionExpression=Key("GSI3PK").eq(f"{tipo}#{account_id}"),
-                       ScanIndexForward=False)
-    elif rol == "supervisor":
-        resp = t.query(IndexName="sucursal-fecha-idx",
-                       KeyConditionExpression=Key("GSI2PK").eq(f"{tipo}#{sucursal}"),
-                       ScanIndexForward=False)
-    else:  # admin, analista
+    if rol in ("admin", "analista"):
         resp = t.query(IndexName="tipo-fecha-idx",
                        KeyConditionExpression=Key("GSI1PK").eq(tipo),
                        ScanIndexForward=False)
-    return [_limpiar(i) for i in _items(resp)]
+        return [_limpiar(i) for i in _items(resp)]
+
+    # operador / supervisor: registros de las sucursales asignadas
+    out = []
+    for suc in (sucursales or []):
+        resp = t.query(IndexName="sucursal-fecha-idx",
+                       KeyConditionExpression=Key("GSI2PK").eq(f"{tipo}#{suc}"),
+                       ScanIndexForward=False)
+        out.extend(_items(resp))
+    out.sort(key=lambda r: r.get("fecha", ""), reverse=True)
+    return [_limpiar(i) for i in out]
 
 
 def get_registro(tipo: str, rid: str) -> dict | None:

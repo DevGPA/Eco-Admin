@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import uuid
 import boto3
+from boto3.dynamodb.conditions import Key
 from datetime import datetime, timezone
 
 from db import modelos as m
@@ -92,3 +93,21 @@ def eliminar_sucursal(nombre: str) -> None:
 
 def guardar_config(cfg: dict) -> None:
     _t().put_item(Item={"PK": m.PK_CONFIG, "SK": m.SK_CONFIG, **m.to_dynamo(cfg)})
+
+
+def actualizar_precio_por_combustible(combustible: str, precio) -> int:
+    """Cambio masivo: fija el precio/L de TODOS los vehículos de un tipo de
+    combustible. Devuelve cuántos vehículos se actualizaron."""
+    t = _t()
+    precio_dec = m.to_dynamo(float(precio))
+    n = 0
+    resp = t.query(KeyConditionExpression=Key("PK").eq(m.PK_VEHICLE))
+    for it in resp.get("Items", []):
+        if it.get("combustible") == combustible:
+            t.update_item(
+                Key={"PK": m.PK_VEHICLE, "SK": it["SK"]},
+                UpdateExpression="SET precio = :p",
+                ExpressionAttributeValues={":p": precio_dec},
+            )
+            n += 1
+    return n

@@ -155,6 +155,10 @@ Resources:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/cuenta }
 
+        AdminPrecioCombustible:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/precio-combustible }
+
         # Health (sin auth)
         Health:
           Type: HttpApi
@@ -363,6 +367,16 @@ Resources:
           AttributeDataType: String
           Mutable: true
           StringAttributeConstraints: { MinLength: '0', MaxLength: '80' }
+        # Acceso por módulos (CSV: combustible,checklist,montacargas,admin). Vacío = todos.
+        - Name: modulos
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '60' }
+        # Acceso por sucursales (CSV de nombres). Vacío = todas.
+        - Name: sucursales
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '256' }
       AccountRecoverySetting:
         RecoveryMechanisms:
           - { Name: verified_email, Priority: 1 }

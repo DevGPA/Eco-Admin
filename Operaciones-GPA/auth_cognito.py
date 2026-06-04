@@ -10,7 +10,18 @@ import boto3
 
 POOL = os.environ.get("USER_POOL_ID", "")
 ROLES = ("admin", "analista", "supervisor", "operador")
+MODULOS = ("combustible", "checklist", "montacargas", "admin")
 _cli = None
+
+
+def _csv_to_list(s):
+    return [x.strip() for x in (s or "").split(",") if x.strip()]
+
+
+def _list_to_csv(v):
+    if isinstance(v, str):
+        return v
+    return ",".join(str(x).strip() for x in (v or []) if str(x).strip())
 
 
 def _c():
@@ -30,12 +41,14 @@ def _attr(user_attrs, name, default=""):
 def _map(u) -> dict:
     attrs = u.get("Attributes") or u.get("UserAttributes") or []
     return {
-        "email":    _attr(attrs, "email") or u.get("Username", ""),
-        "nombre":   _attr(attrs, "custom:nombre"),
-        "rol":      _attr(attrs, "custom:rol", "operador"),
-        "sucursal": _attr(attrs, "custom:sucursal"),
-        "activo":   u.get("Enabled", True),
-        "estado":   u.get("UserStatus", ""),
+        "email":      _attr(attrs, "email") or u.get("Username", ""),
+        "nombre":     _attr(attrs, "custom:nombre"),
+        "rol":        _attr(attrs, "custom:rol", "operador"),
+        "sucursal":   _attr(attrs, "custom:sucursal"),
+        "sucursales": _csv_to_list(_attr(attrs, "custom:sucursales")),
+        "modulos":    _csv_to_list(_attr(attrs, "custom:modulos")),
+        "activo":     u.get("Enabled", True),
+        "estado":     u.get("UserStatus", ""),
     }
 
 
@@ -66,12 +79,19 @@ def guardar_cuenta(d: dict) -> dict:
     if rol not in ROLES:
         raise ValueError("Rol inválido")
 
+    sucursales = _list_to_csv(d.get("sucursales", d.get("sucursal", "")))
+    modulos    = _list_to_csv(d.get("modulos", ""))
+    # 'sucursal' (singular) se conserva por compatibilidad: la 1ª de la lista
+    sucursal_1 = sucursales.split(",")[0] if sucursales else (d.get("sucursal") or "")
+
     c = _c()
     attrs = [
         {"Name": "email", "Value": email},
         {"Name": "email_verified", "Value": "true"},
         {"Name": "custom:rol", "Value": rol},
-        {"Name": "custom:sucursal", "Value": d.get("sucursal") or ""},
+        {"Name": "custom:sucursal", "Value": sucursal_1},
+        {"Name": "custom:sucursales", "Value": sucursales},
+        {"Name": "custom:modulos", "Value": modulos},
         {"Name": "custom:nombre", "Value": d.get("nombre") or ""},
     ]
 

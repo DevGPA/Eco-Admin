@@ -88,6 +88,9 @@ class GpaApi {
 
   _finishAuth(a, email) {
     const c = this._decode(a.IdToken);
+    const csv = s => (s || "").split(",").map(x => x.trim()).filter(Boolean);
+    const sucursales = csv(c["custom:sucursales"]);
+    if (!sucursales.length && c["custom:sucursal"]) sucursales.push(c["custom:sucursal"]);
     this._save({
       token: a.IdToken,
       refresh: a.RefreshToken,
@@ -95,9 +98,37 @@ class GpaApi {
       email: c.email || email,
       rol: c["custom:rol"] || "operador",
       sucursal: c["custom:sucursal"] || null,
+      sucursales,                          // [] = todas
+      modulos: csv(c["custom:modulos"]),   // [] = todos
       nombre: c["custom:nombre"] || c.email || email,
     });
     return this._sess;
+  }
+
+  // ── Recuperar contraseña (olvido) ──────────────────────────────
+  async forgotPassword(email) {
+    const res = await fetch(`https://cognito-idp.${this.region}.amazonaws.com/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-amz-json-1.1",
+                 "X-Amz-Target": "AWSCognitoIdentityProviderService.ForgotPassword" },
+      body: JSON.stringify({ ClientId: this.clientId, Username: (email || "").trim().toLowerCase() }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "No se pudo enviar el código");
+    return data.CodeDeliveryDetails || {};
+  }
+
+  async confirmForgotPassword(email, code, newPassword) {
+    const res = await fetch(`https://cognito-idp.${this.region}.amazonaws.com/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-amz-json-1.1",
+                 "X-Amz-Target": "AWSCognitoIdentityProviderService.ConfirmForgotPassword" },
+      body: JSON.stringify({ ClientId: this.clientId, Username: (email || "").trim().toLowerCase(),
+                             ConfirmationCode: (code || "").trim(), Password: newPassword }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "No se pudo cambiar la contraseña");
+    return true;
   }
 
   async _refresh() {
@@ -144,6 +175,7 @@ class GpaApi {
   adminResponsable(u) { return this._fetch("POST", "/admin/responsable", u); }
   adminSucursal(b)    { return this._fetch("POST", "/admin/sucursal", b); }
   adminConfig(c)      { return this._fetch("POST", "/admin/config", c); }
+  adminPrecioCombustible(combustible, precio) { return this._fetch("POST", "/admin/precio-combustible", { combustible, precio }); }
   async adminCuentas() { return (await this._fetch("GET", "/admin/cuentas")).items || []; }
   adminCuenta(c)      { return this._fetch("POST", "/admin/cuenta", c); }
 
