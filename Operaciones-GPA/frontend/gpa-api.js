@@ -125,7 +125,7 @@ class GpaApi {
     if (this._sess && this._sess.exp <= Date.now()) await this._refresh();
     const res = await fetch(this.apiUrl + path, {
       method,
-      headers: { "Content-Type": "application/json", "Authorization": this._sess?.token || "" },
+      headers: { "Content-Type": "application/json", "Authorization": this._sess?.token ? `Bearer ${this._sess.token}` : "" },
       body: body ? JSON.stringify(body) : undefined,
     });
     if (res.status === 401) { this.logout(); throw new Error("Sesión expirada, vuelve a entrar"); }
