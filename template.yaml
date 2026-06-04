@@ -36,9 +36,16 @@ Description: >
 Globals:
   Function:
     Runtime:      python3.12
-    Architectures: [arm64]        # Graviton2 — 20% más barato, 20% más rápido
+    # x86_64 (no arm64): pymupdf es binario en C y debe compilarse en la MISMA
+    # arquitectura del host de build. CloudShell es x86 y no tiene Docker, así que
+    # `sam build --use-container` (arm64) no es opción ahí. x86_64 garantiza que el
+    # binario de pymupdf funcione en la Lambda.
+    Architectures: [x86_64]
     MemorySize:   512
-    Timeout:      30
+    # 300 s: el OCR (Textract) procesa varias páginas por documento. Las rutas de
+    # API Gateway responden rápido (API GW corta a 29 s de todos modos); el path
+    # S3→OCR es asíncrono y aprovecha el tiempo completo.
+    Timeout:      300
     Tracing:      Active          # AWS X-Ray habilitado
     Layers:
       - !Ref DependenciasLayer
@@ -372,7 +379,7 @@ Resources:
       CompatibleRuntimes:
         - python3.12
       CompatibleArchitectures:
-        - arm64
+        - x86_64
       RetentionPolicy: Retain
 
     Metadata:
@@ -660,7 +667,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName:              !Sub gpa-fletes-queue-${Env}
-      VisibilityTimeout:      60       # > Lambda timeout
+      VisibilityTimeout:      960      # > Lambda timeout (300 s) para no reprocesar
       MessageRetentionPeriod: 86400    # 1 día
       ReceiveMessageWaitTimeSeconds: 20 # long polling
       RedrivePolicy:
