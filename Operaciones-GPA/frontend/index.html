@@ -709,6 +709,25 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const blankA={email:"",nombre:"",rol:"operador",sucursales:[],modulos:[],password:"",activo:true,_isNew:true};
   const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
+  // ── Reporte de cargas de combustible ──
+  const[reporte,setReporte]=useState(null);
+  const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
+  const cargarReporte=async()=>{try{setReporte(await api.listar("combustible"));}catch(e){showToast("⚠️ "+e.message);}};
+  useEffect(()=>{if(sec==="reportes"&&reporte===null)cargarReporte();},[sec]);
+  const repFiltrado=(reporte||[]).filter(s=>{const d=(s.fecha||"").slice(0,10);return (!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta)&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const repMonto=repFiltrado.reduce((a,s)=>a+(s.monto||0),0);
+  const repLitros=repFiltrado.reduce((a,s)=>a+(s.litros||0),0);
+  const descargarReporteCSV=()=>{
+    const cols=["Fecha","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Monto","Estado"];
+    const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    const filas=repFiltrado.map(s=>[new Date(s.fecha).toLocaleString("es-MX"),s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.monto,s.status]);
+    const total=["","","","","","","TOTAL "+repLitros+" L","TOTAL $"+repMonto,""];
+    const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(",")),total.map(esc).join(",")].join("\r\n");
+    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});  /* BOM para Excel */
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");
+    a.href=url;a.download="reporte_cargas_"+(rDesde||"inicio")+"_a_"+(rHasta||"hoy")+".csv";
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  };
   const wrap=async fn=>{setBusy(true);try{await fn();await refrescarCat();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   const saveV=v=>{const{_isNew,...veh}=v;veh.economico=veh.economico||veh.id;veh.tanque=parseFloat(veh.tanque)||0;veh.precio=parseFloat(veh.precio)||0;if(_isNew&&!veh.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminVehiculo({...veh,id:String(veh.id)});setEditV(null);showToast("Vehículo guardado");});};
   const saveU=u=>{const{_isNew,...usr}=u;if(_isNew&&!usr.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminResponsable({...usr,id:isNaN(Number(usr.id))?usr.id:Number(usr.id)});setEditU(null);showToast("Responsable guardado");});};
@@ -725,7 +744,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
       {editU&&<UForm u={editU} onClose={()=>setEditU(null)}/>}
       {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
-      <div className="tr">{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      <div className="tr">{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
       {sec==="vehicles"&&<>
         <div className="card"><div className="ct">Cambio masivo de precio por combustible</div>
           <div className="r2"><div><label>Combustible</label><select value={bulkComb} onChange={e=>setBulkComb(e.target.value)}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select></div><div><label>Nuevo precio/L</label><input type="number" value={bulkPrecio} onChange={e=>setBulkPrecio(e.target.value)} placeholder="Ej. 24.50"/></div></div>
@@ -752,6 +771,22 @@ function ModAdmin({cat,refrescarCat,showToast}){
         {accounts===null&&<div className="spin"/>}
         {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:""})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
         <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear/editar puedes fijar su contraseña.</div>
+      </>}
+      {sec==="reportes"&&<>
+        <div className="card"><div className="ct">Reporte de cargas de combustible</div>
+          <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>
+          <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><option key={x}>{x}</option>)}</select>
+          <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
+          <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar CSV</button>
+        </div>
+        {reporte===null&&<div className="spin"/>}
+        {reporte!==null&&<div className="card"><div className="ct">Resumen ({repFiltrado.length})</div>
+          {repFiltrado.length===0?<div className="empty">Sin cargas en el rango/estado</div>:
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{textAlign:"left",color:"#888"}}><th style={{padding:"4px 0"}}>#Unidad</th><th>Monto</th><th>Estado</th><th style={{textAlign:"right"}}>Fecha</th></tr></thead>
+            <tbody>{repFiltrado.map(s=><tr key={s.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 0",fontWeight:600}}>#{s.economico}</td><td style={{color:C.blue,fontWeight:600}}>${(s.monto||0).toLocaleString()}</td><td><span className={"bdg "+bcSol(s.status)} style={{fontSize:10}}>{s.status}</span></td><td style={{textAlign:"right",color:"#888"}}>{new Date(s.fecha).toLocaleDateString("es-MX")}</td></tr>)}</tbody>
+          </table>}
+        </div>}
       </>}
     </div>
   );
