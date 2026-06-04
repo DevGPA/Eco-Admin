@@ -307,7 +307,8 @@ function ModCombustible({cat,items,rol,sucursalesUser,session,refrescar,showToas
 
 function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDone}){
   const yo=cat.users.find(u=>u.mail===session.email)||null;
-  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  // Combustible: Gasolina, Diésel y Gas LP cargan combustible; solo se excluyen los eléctricos.
+  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const availUsr=cat.users.filter(u=>u.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(u.sucursal)));
   const[veh,setVeh]=useState(availVeh[0]?String(availVeh[0].id):"");
   const[usr,setUsr]=useState(yo?String(yo.id):availUsr[0]?String(availUsr[0].id):"");
@@ -729,6 +730,19 @@ function ModAdmin({cat,refrescarCat,showToast}){
     a.href=url;a.download="reporte_cargas_"+(rDesde||"inicio")+"_a_"+(rHasta||"hoy")+".csv";
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   };
+  // Total por unidad (suma de monto/litros/cargas por #Unidad)
+  const repPorUnidad=Object.values(repFiltrado.reduce((acc,s)=>{const k=s.economico||"—";acc[k]=acc[k]||{economico:k,placas:s.placas,cargas:0,litros:0,monto:0};acc[k].cargas++;acc[k].litros+=(s.litros||0);acc[k].monto+=(s.monto||0);return acc;},{})).sort((a,b)=>b.monto-a.monto);
+  const descargarPorUnidadCSV=()=>{
+    const cols=["Unidad","Placas","Cargas","Litros","Monto"];
+    const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+    const filas=repPorUnidad.map(u=>[u.economico,u.placas,u.cargas,u.litros.toFixed(2),u.monto.toFixed(2)]);
+    const total=["TOTAL","",repFiltrado.length,repLitros.toFixed(2),repMonto.toFixed(2)];
+    const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(",")),total.map(esc).join(",")].join("\r\n");
+    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");
+    a.href=url;a.download="reporte_por_unidad_"+(rDesde||"inicio")+"_a_"+(rHasta||"hoy")+".csv";
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  };
   const wrap=async fn=>{setBusy(true);try{await fn();await refrescarCat();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   const saveV=v=>{const{_isNew,...veh}=v;veh.economico=veh.economico||veh.id;veh.tanque=parseFloat(veh.tanque)||0;veh.precio=parseFloat(veh.precio)||0;if(_isNew&&!veh.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminVehiculo({...veh,id:String(veh.id)});setEditV(null);showToast("Vehículo guardado");});};
   const saveU=u=>{const{_isNew,...usr}=u;if(_isNew&&!usr.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminResponsable({...usr,id:isNaN(Number(usr.id))?usr.id:Number(usr.id)});setEditU(null);showToast("Responsable guardado");});};
@@ -778,11 +792,19 @@ function ModAdmin({cat,refrescarCat,showToast}){
           <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>
           <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><option key={x}>{x}</option>)}</select>
           <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
-          <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar CSV</button>
+          <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar detalle (CSV)</button>
+          <button className="bp" style={{marginTop:6}} disabled={!repFiltrado.length} onClick={descargarPorUnidadCSV}>⬇ Descargar total por unidad (CSV)</button>
           <button className="bs" style={{marginTop:6}} onClick={()=>{setReporte(null);cargarReporte();}}>↻ Actualizar datos</button>
         </div>
         {reporte===null&&<div className="spin"/>}
-        {reporte!==null&&<div className="card"><div className="ct">Resumen ({repFiltrado.length})</div>
+        {reporte!==null&&repFiltrado.length>0&&<div className="card"><div className="ct">Total por unidad</div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{textAlign:"left",color:"#888"}}><th style={{padding:"4px 0"}}>#Unidad</th><th style={{textAlign:"center"}}>Cargas</th><th style={{textAlign:"right"}}>Monto</th></tr></thead>
+            <tbody>{repPorUnidad.map(u=><tr key={u.economico} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 0",fontWeight:600}}>#{u.economico}</td><td style={{textAlign:"center",color:"#888"}}>{u.cargas}</td><td style={{textAlign:"right",color:C.blue,fontWeight:700}}>${u.monto.toLocaleString()}</td></tr>)}</tbody>
+            <tfoot><tr style={{borderTop:`1px solid ${C.blueMd}`}}><td style={{padding:"5px 0",fontWeight:700}}>TOTAL</td><td style={{textAlign:"center",fontWeight:700}}>{repFiltrado.length}</td><td style={{textAlign:"right",fontWeight:700,color:C.blue}}>${repMonto.toLocaleString()}</td></tr></tfoot>
+          </table>
+        </div>}
+        {reporte!==null&&<div className="card"><div className="ct">Detalle de cargas ({repFiltrado.length})</div>
           {repFiltrado.length===0?<div className="empty">Sin cargas en el rango/estado</div>:
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead><tr style={{textAlign:"left",color:"#888"}}><th style={{padding:"4px 0"}}>#Unidad</th><th>Monto</th><th>Estado</th><th style={{textAlign:"right"}}>Fecha</th></tr></thead>
