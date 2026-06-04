@@ -714,14 +714,15 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
   const cargarReporte=async()=>{try{setReporte(await api.listar("combustible"));}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="reportes"&&reporte===null)cargarReporte();},[sec]);
-  const repFiltrado=(reporte||[]).filter(s=>{const d=(s.fecha||"").slice(0,10);return (!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta)&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const fechaLocal=f=>{const d=new Date(f);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};  /* fecha local, no UTC, para coincidir con lo mostrado */
+  const repFiltrado=(reporte||[]).filter(s=>{const d=s.fecha?fechaLocal(s.fecha):"";return (!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta)&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const repMonto=repFiltrado.reduce((a,s)=>a+(s.monto||0),0);
   const repLitros=repFiltrado.reduce((a,s)=>a+(s.litros||0),0);
   const descargarReporteCSV=()=>{
     const cols=["Fecha","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Monto","Estado"];
     const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
     const filas=repFiltrado.map(s=>[new Date(s.fecha).toLocaleString("es-MX"),s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.monto,s.status]);
-    const total=["","","","","","","TOTAL "+repLitros+" L","TOTAL $"+repMonto,""];
+    const total=["","","","","","","TOTAL "+repLitros.toFixed(2)+" L","TOTAL $"+repMonto.toFixed(2),""];
     const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(",")),total.map(esc).join(",")].join("\r\n");
     const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});  /* BOM para Excel */
     const url=URL.createObjectURL(blob);const a=document.createElement("a");
@@ -778,6 +779,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
           <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><option key={x}>{x}</option>)}</select>
           <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
           <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar CSV</button>
+          <button className="bs" style={{marginTop:6}} onClick={()=>{setReporte(null);cargarReporte();}}>↻ Actualizar datos</button>
         </div>
         {reporte===null&&<div className="spin"/>}
         {reporte!==null&&<div className="card"><div className="ct">Resumen ({repFiltrado.length})</div>
