@@ -1,6 +1,0 @@
-{
-  "requestContext": {
-    "http": { "method": "POST", "path": "/evaluar" }
-  },
-  "body": "{\"folioCP\":\"116873635\",\"foliosFV\":[\"FA10315862\"],\"origenSucursal\":\"GDL\",\"destinoEstado\":\"Sonora\",\"fletaRFC\":\"ACT68080665A\",\"partidas\":[],\"fleteBaseMXN\":18500,\"tipoCambioRef\":17.35,\"fechaEmision\":\"2026-04-22\"}"
-}
