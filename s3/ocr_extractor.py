@@ -328,11 +328,13 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
     fv0 = fvs[0]
     moneda = (fv0.get("moneda") or "USD").upper()
     tc = _num(fv0.get("tipoCambio")) or None
-    # Una FV en USD sin tipo de cambio haría mal el % de flete (MXN/USD).
-    # Mejor marcar para revisión que evaluar con un TC inventado.
-    if moneda == "USD" and not tc:
+    # El flete (CP) SIEMPRE viene en MXN y los mínimos de C1 son en USD, así que el
+    # tipo de cambio se necesita siempre (convertir flete y, si la FV es MXN, el monto).
+    # Sin TC válido, mejor marcar para revisión que evaluar con un valor inventado.
+    if not tc:
         return {"status": "ERROR", "error": "SIN_TIPO_CAMBIO",
-                "detalle": f"FV {fv0.get('folio')} en USD sin tipo de cambio; requiere revisión.",
+                "detalle": f"FV {fv0.get('folio')} sin tipo de cambio; requiere revisión "
+                           "(el flete está en MXN y los mínimos en USD).",
                 "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     return {
         "status": "OK",
@@ -388,14 +390,22 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
 
 # ── Caso → entrada del endpoint /evaluar ──────────────────────────
 def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
-    """Convierte un caso OK (de emparejar_casos) al dict plano para POST /evaluar."""
+    """Convierte un caso OK (de emparejar_casos) al dict plano para POST /evaluar.
+
+    El monto del motor (y los mínimos de C1) son en USD. Si la FV viene en MXN,
+    los precios de las partidas se convierten a USD con el tipo de cambio. El flete
+    se deja en MXN (el motor lo convierte con tipoCambioRef).
+    """
+    tc = caso.get("tipoCambioRef") or 1.0
+    moneda = (caso.get("monedaFV") or "USD").upper()
+    factor_usd = (1.0 / tc) if moneda == "MXN" else 1.0   # partidas MXN → USD
     partidas = []
     for p in caso.get("partidas", []):
         cant = _num(p.get("cantidad")) or 1.0
         partidas.append({
             "descripcion": p.get("descripcion", ""),
             "cantidad": cant,
-            "precioUnitarioUSD": _num(p.get("importe")) / cant,
+            "precioUnitarioUSD": (_num(p.get("importe")) / cant) * factor_usd,
             "pesoKg": _num(p.get("pesoKg")),
             "volumenL": _num(p.get("volumenL")),
         })
@@ -408,7 +418,7 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
         "fletaRFC": caso.get("fletaRFC") or "",
         "partidas": partidas,
         "fleteBaseMXN": caso.get("fleteSinIvaMXN", 0.0),
-        "tipoCambioRef": caso.get("tipoCambioRef") or 1.0,
+        "tipoCambioRef": tc,
         "campoEntregaFV": "ENTREGA_DOMICILIO",
         "fechaEmision": fecha_emision or caso.get("fechaEmision") or "",
     }

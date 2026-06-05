@@ -352,11 +352,32 @@ def test_caso_usd_sin_tipo_cambio_es_error():
     assert res["casos"][0]["error"] == "SIN_TIPO_CAMBIO"
 
 
-def test_caso_mxn_sin_tipo_cambio_es_ok():
-    # En MXN no se necesita TC (flete y venta en la misma moneda)
+def test_caso_sin_tipo_cambio_siempre_es_error():
+    # Sin TC no se puede evaluar (el flete es MXN y los mínimos USD), sea USD o MXN.
     cp = cp_doc("FAC04927", 3330.0, "40086093")
     fv = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086093",
-          "subtotal": 3852.25, "moneda": "MXN", "partidas": []}
+          "subtotal": 3852.25, "moneda": "MXN", "partidas": []}   # MXN sin TC
     res = emparejar_casos([cp, fv])
-    assert res["casos"][0]["status"] == "OK"
-    assert res["casos"][0]["tipoCambioRef"] is None
+    assert res["casos"][0]["status"] == "ERROR"
+    assert res["casos"][0]["error"] == "SIN_TIPO_CAMBIO"
+
+
+def test_caso_a_solicitud_convierte_partidas_mxn_a_usd():
+    # FV en MXN: los precios de partidas se convierten a USD con el TC.
+    caso = {"status": "OK", "folioCP": "X", "foliosFV": ["F1"], "fletaRFC": HORMIK,
+            "fleteSinIvaMXN": 1000.0, "tipoCambioRef": 20.0, "monedaFV": "MXN",
+            "origenSucursal": "GDL",
+            "partidas": [{"descripcion": "Bomba", "cantidad": 2, "importe": 4000.0}]}
+    sol = caso_a_solicitud(caso)
+    # 4000 MXN / 2 u = 2000 MXN/u → /20 = 100 USD/u
+    assert sol["partidas"][0]["precioUnitarioUSD"] == pytest.approx(100.0)
+    assert sol["fleteBaseMXN"] == 1000.0       # el flete se queda en MXN
+    assert sol["tipoCambioRef"] == 20.0
+
+
+def test_caso_a_solicitud_usd_no_convierte():
+    caso = {"status": "OK", "folioCP": "X", "foliosFV": ["F1"], "fletaRFC": HORMIK,
+            "fleteSinIvaMXN": 1000.0, "tipoCambioRef": 17.5, "monedaFV": "USD",
+            "partidas": [{"descripcion": "Bomba", "cantidad": 2, "importe": 200.0}]}
+    sol = caso_a_solicitud(caso)
+    assert sol["partidas"][0]["precioUnitarioUSD"] == pytest.approx(100.0)  # 200/2, sin factor
