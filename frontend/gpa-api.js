@@ -758,9 +758,9 @@ class GpaMonitorBridge {
 const GPA_CONFIG = {
   env:      'prod',
   region:   'us-east-1',
-  apiUrl:   '',   // ← pegar: https://{id}.execute-api.us-east-1.amazonaws.com/prod
-  poolId:   '',   // ← pegar: us-east-1_XXXXXXXXX
-  clientId: '',   // ← pegar: abc123def456...
+  apiUrl:   'https://0do0qea2kg.execute-api.us-east-1.amazonaws.com/prod',  // stack gpa-fletes-prod
+  poolId:   'us-east-1_4734suwdu',
+  clientId: '2csir0ndl0dhd66i6v2okr11f',
 };
 
 // Instancia global

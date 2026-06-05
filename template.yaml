@@ -707,6 +707,8 @@ Resources:
           RequireSymbols:   false
           TemporaryPasswordValidityDays: 7
       MfaConfiguration: !If [IsProd, "OPTIONAL", "OFF"]
+      # MFA por app de autenticación (TOTP); evita exigir configuración SMS en prod
+      EnabledMfas: !If [IsProd, ["SOFTWARE_TOKEN_MFA"], !Ref "AWS::NoValue"]
       Schema:
         - Name:     email
           Required: true

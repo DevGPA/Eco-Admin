@@ -96,7 +96,7 @@ capabilities   = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
 
 parameter_overrides = [
   "Env=prod",
-  "AllowedOrigin=https://admin.gpa.com.mx",
+  "AllowedOrigin=https://motor-fletes.d2xnhcefeer2au.amplifyapp.com",
   "LambdaMemoryMB=512",
   "NotificacionesEmail=\"\"",                # definir en deploy con un alias de distribución, p.ej.
                                              # --parameter-overrides NotificacionesEmail=alertas-fletes@gpa.com.mx
