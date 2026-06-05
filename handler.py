@@ -271,7 +271,8 @@ def _route_health(event):
         if bucket: boto3.client("s3").head_bucket(Bucket=bucket); checks["s3"]="ok"
         else: checks["s3"]="not-configured"
     except Exception as e: checks["s3"]=f"error:{str(e)[:60]}"
-    all_ok=all(v in("ok","not-configured") for v in checks.values())
+    # "version" es informativo, no un check — excluirlo del veredicto
+    all_ok=all(v in("ok","not-configured") for k,v in checks.items() if k!="version")
     checks["timestamp"]=datetime.now(timezone.utc).isoformat()
     checks["status"]="healthy" if all_ok else "degraded"
     return _ok(checks, 200 if all_ok else 503)
