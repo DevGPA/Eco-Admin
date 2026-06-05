@@ -237,16 +237,18 @@ def clasificar_por_rfc(rfc_emisor: Optional[str], rfc_receptor: Optional[str],
 
 
 def _num(valor) -> float:
-    """Convierte a float tolerando montos con $, comas y espacios ("$3,330.00")."""
+    """Extrae el primer número de un texto, tolerando $, comas (miles) y unidades.
+
+    Ej: "$3,330.00 MXN" → 3330.0, "17.55" → 17.55, "Total: 4.41 USD" → 4.41.
+    Devuelve 0.0 si no hay número (en vez de fallar silenciosamente).
+    """
     if valor is None:
         return 0.0
     if isinstance(valor, (int, float)):
         return float(valor)
-    s = str(valor).strip().replace("$", "").replace(",", "").replace(" ", "")
-    try:
-        return float(s)
-    except ValueError:
-        return 0.0
+    s = str(valor).replace(",", "")          # quitar separador de miles
+    m = re.search(r"-?\d+(?:\.\d+)?", s)      # primer número
+    return float(m.group()) if m else 0.0
 
 
 # ── Armado del caso (1 PDF) → datos para evaluar ──────────────────
@@ -324,6 +326,14 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
                 "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     partidas = [pt for fv in fvs for pt in (fv.get("partidas") or [])]
     fv0 = fvs[0]
+    moneda = (fv0.get("moneda") or "USD").upper()
+    tc = _num(fv0.get("tipoCambio")) or None
+    # Una FV en USD sin tipo de cambio haría mal el % de flete (MXN/USD).
+    # Mejor marcar para revisión que evaluar con un TC inventado.
+    if moneda == "USD" and not tc:
+        return {"status": "ERROR", "error": "SIN_TIPO_CAMBIO",
+                "detalle": f"FV {fv0.get('folio')} en USD sin tipo de cambio; requiere revisión.",
+                "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     return {
         "status": "OK",
         "folioCP": str(cp.get("folio") or folio_archivo),
@@ -331,8 +341,8 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
         "fletaRFC": cp.get("fletaRFC") or cp.get("rfcEmisor"),
         "fleteSinIvaMXN": _num(cp.get("subtotal")),
         "montoVentaFV": sum(_num(fv.get("subtotal")) for fv in fvs),
-        "monedaFV": (fv0.get("moneda") or "USD").upper(),
-        "tipoCambioRef": _num(fv0.get("tipoCambio")) or None,
+        "monedaFV": moneda,
+        "tipoCambioRef": tc,
         "origenEstado": cp.get("origenEstado"),
         "origenCiudad": cp.get("origenCiudad"),
         # Sucursal derivada del ORIGEN real (no de la facturación); '' si no es plaza GPA
@@ -355,6 +365,7 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
 
     casos, usadas = [], set()
+    unico = (len(cps) == 1 and len(fvs) == 1)   # un solo CP + una sola FV
     for cp in cps:
         refs = _folios_referenciados(cp.get("comentarios"))
         match = []
@@ -362,6 +373,11 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
             if _fv_coincide(fv.get("folio"), refs):
                 match.append(fv)
                 usadas.add(i)
+        # Fallback: si hay exactamente 1 CP y 1 FV y el comentario no los enlazó
+        # (o el OCR no lo captó), emparejarlos de todos modos.
+        if not match and unico:
+            match = [fvs[0]]
+            usadas.add(0)
         casos.append(_construir_caso(cp, match, folio_archivo))
 
     fvs_sin_cp = [fvs[i].get("folio") for i in range(len(fvs)) if i not in usadas]

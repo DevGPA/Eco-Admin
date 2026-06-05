@@ -168,11 +168,16 @@ def test_emparejar_dos_casos_reales():
 
 
 def test_emparejar_cp_sin_fv_es_error():
-    paginas = [cp_doc("FAC04927", 3330.00, "99999999"), fv_doc("FM40086093", 100.0)]
+    # 2 CP (no aplica el fallback 1-1): el primero no enlaza con ninguna FV.
+    paginas = [
+        cp_doc("FAC04927", 3330.00, "99999999"),   # ref inexistente → sin FV
+        cp_doc("FAC04935", 390.00, "40086093"),     # enlaza con la FV
+        fv_doc("FM40086093", 100.0),
+    ]
     res = emparejar_casos(paginas)
     assert res["casos"][0]["status"] == "ERROR"
     assert res["casos"][0]["error"] == "SIN_FV_VINCULADA"
-    assert res["fvsSinCP"] == ["FM40086093"]   # la FV quedó sin emparejar
+    assert res["casos"][1]["status"] == "OK"
 
 
 def test_emparejar_suma_varias_fv_a_un_cp():
@@ -303,3 +308,55 @@ def test_procesar_pdf_orquesta(monkeypatch):
     assert len(res["casos"]) == 2
     assert res["casos"][0]["origenSucursal"] == "CDMX"   # Iztapalapa → CDMX
     assert res["casos"][0]["foliosFV"] == ["FM40086093"]
+
+
+# ── Fixes MEDIO de la auditoría ───────────────────────────────────
+def test_num_extrae_numero_con_unidad_y_miles():
+    assert ocr._num("$3,330.00 MXN") == pytest.approx(3330.0)
+    assert ocr._num("17.55") == pytest.approx(17.55)
+    assert ocr._num("Total: 4.41 USD") == pytest.approx(4.41)
+    assert ocr._num("sin numero") == 0.0
+    assert ocr._num(None) == 0.0
+
+
+def test_emparejar_unico_cp_fv_sin_comentario():
+    # 1 CP + 1 FV sin comentario que los enlace → se emparejan igual
+    cp = {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "116162584",
+          "subtotal": 132.0, "moneda": "MXN", "fletaRFC": HORMIK}   # SIN comentarios
+    fv = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40085931",
+          "subtotal": 4.41, "moneda": "USD", "tipoCambio": 17.77, "partidas": []}
+    res = emparejar_casos([cp, fv])
+    assert len(res["casos"]) == 1
+    assert res["casos"][0]["status"] == "OK"
+    assert res["casos"][0]["foliosFV"] == ["FM40085931"]
+    assert res["fvsSinCP"] == []
+
+
+def test_emparejar_varios_cp_sin_comentario_no_hace_fallback():
+    # Con 2 CP + 2 FV sin comentario NO se adivina el emparejamiento (evita errores)
+    cp1 = {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "A", "subtotal": 100, "moneda": "MXN"}
+    cp2 = {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "B", "subtotal": 200, "moneda": "MXN"}
+    fv1 = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "F1", "subtotal": 10, "moneda": "MXN"}
+    fv2 = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "F2", "subtotal": 20, "moneda": "MXN"}
+    res = emparejar_casos([cp1, fv1, cp2, fv2])
+    assert all(c["status"] == "ERROR" for c in res["casos"])
+    assert res["casos"][0]["error"] == "SIN_FV_VINCULADA"
+
+
+def test_caso_usd_sin_tipo_cambio_es_error():
+    cp = cp_doc("FAC04927", 3330.0, "40086093")
+    fv = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086093",
+          "subtotal": 3852.25, "moneda": "USD", "partidas": []}   # USD SIN tipoCambio
+    res = emparejar_casos([cp, fv])
+    assert res["casos"][0]["status"] == "ERROR"
+    assert res["casos"][0]["error"] == "SIN_TIPO_CAMBIO"
+
+
+def test_caso_mxn_sin_tipo_cambio_es_ok():
+    # En MXN no se necesita TC (flete y venta en la misma moneda)
+    cp = cp_doc("FAC04927", 3330.0, "40086093")
+    fv = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086093",
+          "subtotal": 3852.25, "moneda": "MXN", "partidas": []}
+    res = emparejar_casos([cp, fv])
+    assert res["casos"][0]["status"] == "OK"
+    assert res["casos"][0]["tipoCambioRef"] is None
