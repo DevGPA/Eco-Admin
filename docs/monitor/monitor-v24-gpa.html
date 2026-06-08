@@ -802,14 +802,29 @@ input::placeholder{color:var(--ink3);font-weight:400;}
         <label class="login-label" for="loginEmail">Correo electrónico</label>
         <input type="email" class="login-input" id="loginEmail" placeholder="usuario@gpa.com.mx" autocomplete="email">
       </div>
-      <div class="login-field">
+      <div class="login-field" id="passField">
         <label class="login-label" for="loginPass">Contraseña</label>
         <input type="password" class="login-input" id="loginPass" placeholder="••••••••••" autocomplete="current-password">
       </div>
 
+      <!-- Cambio de contraseña temporal (oculto hasta que Cognito lo solicite) -->
+      <div id="pwChangeFields" style="display:none;">
+        <div class="login-field">
+          <label class="login-label" for="pwNew">Nueva contraseña</label>
+          <input type="password" class="login-input" id="pwNew" placeholder="••••••••••" autocomplete="new-password">
+        </div>
+        <div class="login-field">
+          <label class="login-label" for="pwNew2">Confirmar contraseña</label>
+          <input type="password" class="login-input" id="pwNew2" placeholder="••••••••••" autocomplete="new-password">
+        </div>
+        <div style="font-size:11px;color:var(--ink3);margin:-4px 0 12px;line-height:1.5;">
+          Mínimo 10 caracteres, con al menos una mayúscula, una minúscula y un número.
+        </div>
+      </div>
+
       <div id="loginError" class="login-error"></div>
 
-      <div class="login-remember">
+      <div class="login-remember" id="rememberRow">
         <div class="login-check" id="loginRemember" onclick="this.classList.toggle('on')"></div>
         <span class="login-check-label" onclick="document.getElementById('loginRemember').classList.toggle('on')">Mantener sesión activa</span>
       </div>
@@ -1622,14 +1637,17 @@ function updateStatus(from, to, count) {
 // ── LOGIN FLOW ───────────────────────────────────────────────────
 // Configuración API — actualizar con outputs de sam deploy
 const API_CONFIG = {
-  apiUrl:   '',  // ← https://{id}.execute-api.us-east-1.amazonaws.com/prod
+  apiUrl:   'https://0do0qea2kg.execute-api.us-east-1.amazonaws.com/prod',  // stack gpa-fletes-prod
   region:   'us-east-1',
-  poolId:   '',  // ← us-east-1_XXXXXXXXX
-  clientId: '',  // ← abc123def456...
+  poolId:   'us-east-1_4734suwdu',
+  clientId: '2csir0ndl0dhd66i6v2okr11f',
 };
 
 // Estado de sesión
 let _session = { token: null, email: null, exp: 0, refresh: null };
+
+// Reto de cambio de contraseña temporal (NEW_PASSWORD_REQUIRED) en curso
+let _pwChallenge = null;  // { session, email } | null
 
 // Recuperar sesión guardada
 (function loadSession() {
@@ -1644,6 +1662,9 @@ let _session = { token: null, email: null, exp: 0, refresh: null };
 
 // Login principal
 async function doLogin() {
+  // Si hay un cambio de contraseña temporal en curso, ese es el flujo activo.
+  if (_pwChallenge) return submitNewPassword();
+
   const email = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
@@ -1718,8 +1739,8 @@ async function doLogin() {
     const data = await res.json();
 
     if (data.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
-      errEl.textContent = 'Debes cambiar tu contraseña temporal. Contacta al administrador.';
-      errEl.classList.add('show');
+      _pwChallenge = { session: data.Session, email };
+      showPasswordChange();
       resetBtn();
       return;
     }
@@ -1751,7 +1772,107 @@ async function doLogin() {
 function resetBtn() {
   const btn = document.getElementById('loginBtn');
   btn.disabled = false;
-  btn.innerHTML = 'Iniciar sesión <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  if (_pwChallenge) {
+    btn.innerHTML = 'Cambiar contraseña <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  } else {
+    btn.innerHTML = 'Iniciar sesión <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+  }
+}
+
+// Cambia el modal al modo "establecer contraseña nueva"
+function showPasswordChange() {
+  const mode = document.getElementById('loginMode');
+  if (mode) mode.textContent = 'Tu contraseña es temporal. Define una nueva para continuar.';
+  // Ocultar contraseña actual + "mantener sesión"; mostrar campos nuevos
+  document.getElementById('passField').style.display    = 'none';
+  document.getElementById('rememberRow').style.display  = 'none';
+  document.getElementById('pwChangeFields').style.display = 'block';
+  // Email en solo lectura (ya identificado por el reto)
+  const em = document.getElementById('loginEmail');
+  if (em) em.readOnly = true;
+  resetBtn();
+  setTimeout(() => document.getElementById('pwNew')?.focus(), 50);
+}
+
+// Responde el reto NEW_PASSWORD_REQUIRED con la contraseña nueva
+async function submitNewPassword() {
+  const p1    = document.getElementById('pwNew').value;
+  const p2    = document.getElementById('pwNew2').value;
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+
+  // Validación local antes de llamar a Cognito
+  if (!p1 || !p2) {
+    errEl.textContent = 'Ingresa y confirma la nueva contraseña';
+    errEl.classList.add('show'); return;
+  }
+  if (p1 !== p2) {
+    errEl.textContent = 'Las contraseñas no coinciden';
+    errEl.classList.add('show'); return;
+  }
+  if (p1.length < 10 || !/[A-Z]/.test(p1) || !/[a-z]/.test(p1) || !/[0-9]/.test(p1)) {
+    errEl.textContent = 'Mínimo 10 caracteres, con mayúscula, minúscula y número';
+    errEl.classList.add('show'); return;
+  }
+
+  errEl.classList.remove('show');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">Guardando<span class="lvd" style="width:6px;height:6px;"></span></span>';
+
+  try {
+    const res = await fetch(
+      `https://cognito-idp.${API_CONFIG.region}.amazonaws.com/`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': 'AWSCognitoIdentityProviderService.RespondToAuthChallenge',
+        },
+        body: JSON.stringify({
+          ChallengeName: 'NEW_PASSWORD_REQUIRED',
+          ClientId:      API_CONFIG.clientId,
+          Session:       _pwChallenge.session,
+          ChallengeResponses: {
+            USERNAME:     _pwChallenge.email,
+            NEW_PASSWORD: p1,
+          },
+        }),
+      }
+    );
+    const data = await res.json();
+
+    // Cognito puede encadenar otro reto (p.ej. MFA) en vez de autenticar
+    if (data.ChallengeName) {
+      errEl.textContent = 'Se requiere un paso adicional (' + data.ChallengeName + '). Contacta al administrador.';
+      errEl.classList.add('show');
+      resetBtn();
+      return;
+    }
+    if (!res.ok || !data.AuthenticationResult) {
+      errEl.textContent = data.message || 'No se pudo cambiar la contraseña';
+      errEl.classList.add('show');
+      resetBtn();
+      return;
+    }
+
+    // Cambio exitoso → sesión iniciada
+    const auth  = data.AuthenticationResult;
+    const email = _pwChallenge.email;
+    _session = {
+      token:   auth.IdToken,
+      email:   email,
+      exp:     Date.now() + (auth.ExpiresIn * 1000),
+      refresh: auth.RefreshToken,
+    };
+    _pwChallenge = null;
+    saveSession();
+    onLoginSuccess(email, false);
+
+  } catch (err) {
+    errEl.textContent = 'Error de conexión: ' + (err.message || 'Intenta de nuevo');
+    errEl.classList.add('show');
+    resetBtn();
+  }
 }
 
 function onLoginSuccess(email, silent) {
@@ -1817,6 +1938,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (p) p.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   const em = document.getElementById('loginEmail');
   if (em) em.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass')?.focus(); });
+  // Cambio de contraseña temporal: Enter avanza / confirma
+  const n1 = document.getElementById('pwNew');
+  if (n1) n1.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pwNew2')?.focus(); });
+  const n2 = document.getElementById('pwNew2');
+  if (n2) n2.addEventListener('keydown', e => { if (e.key === 'Enter') submitNewPassword(); });
 });
 
 
