@@ -57,6 +57,8 @@ def guardar_solicitud(resultado) -> dict:
 
     codigo   = resultado.codigo_motor
     concepto = R_CONCEPTOS.get(codigo, codigo)
+    # fechaEmision es clave RANGE de TODOS los GSI: nunca puede ir vacía.
+    fecha_emision = resultado.fecha_emision or fecha_iso
 
     # ── Item principal Solicitud ─────────────────────────────────
     item_meta = {
@@ -68,16 +70,13 @@ def guardar_solicitud(resultado) -> dict:
         "tipoOperacion":   {"S": resultado.tipo_operacion},
         "folioCP":         {"S": resultado.folio_cp},
         "foliosFV":        {"SS": list(resultado.folios_fv)} if resultado.folios_fv else {"NULL": True},
-        "origenSucursal":  {"S": resultado.origen_sucursal},
-        "fletaRFC":        {"S": resultado.fleta_rfc},
-        "destinoEstado":   {"S": resultado.destino_estado},
         "destinoCiudad":   {"S": resultado.destino_ciudad or ""},
         "montoBaseUSD":    {"N": str(_to_dec(resultado.monto_base_usd))},
         "fleteBaseUSD":    {"N": str(_to_dec(resultado.flete_base_usd))},
         "pctFlete":        {"N": str(_to_dec(resultado.pct_flete))},
         "tipoCambioRef":   {"N": str(_to_dec(resultado.tipo_cambio_ref))},
         "incluyeFerry":    {"BOOL": resultado.incluye_ferry},
-        "fechaEmision":    {"S": resultado.fecha_emision},
+        "fechaEmision":    {"S": fecha_emision},
         "fechaEvaluacion": {"S": ahora},
         "criteriosDetalle":{"S": json.dumps(
             [asdict(c) if is_dataclass(c) else c for c in (resultado.criterios or [])],
@@ -85,12 +84,22 @@ def guardar_solicitud(resultado) -> dict:
         "ttl":             {"N": str(ttl)},
     }
 
+    # Claves HASH de los GSI: solo se incluyen si tienen valor. Un GSI es sparse,
+    # así que omitir el atributo deja el registro fuera de ese índice; en cambio una
+    # cadena vacía en una clave de GSI hace fallar TransactWriteItems (ValidationException).
+    if resultado.origen_sucursal:
+        item_meta["origenSucursal"] = {"S": resultado.origen_sucursal}
+    if resultado.fleta_rfc:
+        item_meta["fletaRFC"] = {"S": resultado.fleta_rfc}
+    if resultado.destino_estado:
+        item_meta["destinoEstado"] = {"S": resultado.destino_estado}
+
     # ── Item índice CP ───────────────────────────────────────────
     item_cp = {
         "PK":          {"S": f"CP#{resultado.folio_cp}"},
         "SK":          {"S": f"SOL#{sol_id}"},
         "estado":      {"S": resultado.estado},
-        "fechaEmision":{"S": resultado.fecha_emision},
+        "fechaEmision":{"S": fecha_emision},
         "ttl":         {"N": str(ttl)},
     }
 
@@ -140,7 +149,7 @@ def guardar_solicitud(resultado) -> dict:
                     "PK":          {"S": f"FV#{folio_fv}"},
                     "SK":          {"S": f"SOL#{sol_id}"},
                     "estado":      {"S": resultado.estado},
-                    "fechaEmision":{"S": resultado.fecha_emision},
+                    "fechaEmision":{"S": fecha_emision},
                     "ttl":         {"N": str(ttl)},
                 },
             }
