@@ -878,14 +878,14 @@ window.gpaEvaluarAPI = async function(solicitud) {
 };
 
 // ── Auto-init cuando el DOM esté listo ───────────────────────────
+// El monitor (monitor-v24-gpa.html) maneja su PROPIA pantalla de login
+// (loginScreen + doLogin + cambio de contraseña temporal). No debemos
+// inyectar el overlay de login del SDK encima: solo activamos el bridge
+// si el SDK ya tiene sesión propia. De lo contrario el overlay (z-index
+// 9999) tapaba el login del monitor y su _gpaLoginAction mostraba
+// "Debes cambiar tu contraseña temporal." sin formulario para cambiarla.
 document.addEventListener('DOMContentLoaded', () => {
-  // Solo inicializar si la API está configurada
-  if (GPA_CONFIG.apiUrl) {
+  if (GPA_CONFIG.apiUrl && gpaApi.isAuthenticated) {
     gpaBridge.init();
-  } else {
-    console.info(
-      '%c[GPA API] %cNo configurada — usando modo offline (datos de demostración)',
-      'color:#3AADAD;font-weight:bold', 'color:#8A96B0'
-    );
   }
 });

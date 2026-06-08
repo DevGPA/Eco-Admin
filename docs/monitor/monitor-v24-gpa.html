@@ -1885,6 +1885,15 @@ async function submitNewPassword() {
 }
 
 function onLoginSuccess(email, silent) {
+  // Compartir la sesión con el SDK (gpa-api.js) para que el botón
+  // "Iniciar motor" y las llamadas al API usen el mismo token de Cognito.
+  if (typeof gpaApi !== 'undefined' && _session.token) {
+    gpaApi._token      = _session.token;
+    gpaApi._refreshTkn = _session.refresh || null;
+    gpaApi._tokenExp   = _session.exp || (Date.now() + 3600000);
+    gpaApi._userId     = email;
+  }
+
   // Ocultar login screen
   const ls = document.getElementById('loginScreen');
   if (ls) {
