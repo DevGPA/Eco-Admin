@@ -125,7 +125,28 @@ function useSig(ref){
   const clear=cb=>{ref.current?.getContext("2d").clearRect(0,0,400,150);cb&&cb(null);};
   return{start,move,end,clear};
 }
-const readFile=(e,cb)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>cb(ev.target.result);r.readAsDataURL(f);};
+// Lee la foto y la comprime a calidad ESTÁNDAR (máx 1280px lado mayor, JPEG ~60%)
+// para reducir el uso de datos al subir. No-imágenes o errores: usa el original.
+const IMG_MAX=1280, IMG_Q=0.6;
+const readFile=(e,cb)=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const src=ev.target.result;
+    if(!/^image\//.test(f.type||"")){cb(src);return;}
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>=h&&w>IMG_MAX){h=Math.round(h*IMG_MAX/w);w=IMG_MAX;}
+      else if(h>w&&h>IMG_MAX){w=Math.round(w*IMG_MAX/h);h=IMG_MAX;}
+      try{const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL("image/jpeg",IMG_Q));}
+      catch{cb(src);}
+    };
+    img.onerror=()=>cb(src);
+    img.src=src;
+  };
+  r.readAsDataURL(f);
+};
 
 // ─── LOGIN ──────────────────────────────────────────────────────────
 function Login({onLogin,onSetNewPassword}){
@@ -712,11 +733,12 @@ function ModAdmin({cat,refrescarCat,showToast}){
   useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
   // ── Reporte de cargas de combustible ──
   const[reporte,setReporte]=useState(null);
-  const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
+  const[rModo,setRModo]=useState("dia");const[rDia,setRDia]=useState("");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
   const cargarReporte=async()=>{try{setReporte(await api.listar("combustible"));}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="reportes"&&reporte===null)cargarReporte();},[sec]);
   const fechaLocal=f=>{const d=new Date(f);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};  /* fecha local, no UTC, para coincidir con lo mostrado */
-  const repFiltrado=(reporte||[]).filter(s=>{const d=s.fecha?fechaLocal(s.fecha):"";return (!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta)&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const repSufijo=rModo==="dia"?(rDia||"dia"):((rDesde||"inicio")+"_a_"+(rHasta||"hoy"));
+  const repFiltrado=(reporte||[]).filter(s=>{const d=s.fecha?fechaLocal(s.fecha):"";const okFecha=rModo==="dia"?(!rDia||d===rDia):((!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta));return okFecha&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const repMonto=repFiltrado.reduce((a,s)=>a+(s.monto||0),0);
   const repLitros=repFiltrado.reduce((a,s)=>a+(s.litros||0),0);
   const descargarReporteCSV=()=>{
@@ -727,7 +749,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
     const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(",")),total.map(esc).join(",")].join("\r\n");
     const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});  /* BOM para Excel */
     const url=URL.createObjectURL(blob);const a=document.createElement("a");
-    a.href=url;a.download="reporte_cargas_"+(rDesde||"inicio")+"_a_"+(rHasta||"hoy")+".csv";
+    a.href=url;a.download="reporte_cargas_"+repSufijo+".csv";
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   };
   // Total por unidad (suma de monto/litros/cargas por #Unidad)
@@ -740,7 +762,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
     const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(",")),total.map(esc).join(",")].join("\r\n");
     const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
     const url=URL.createObjectURL(blob);const a=document.createElement("a");
-    a.href=url;a.download="reporte_por_unidad_"+(rDesde||"inicio")+"_a_"+(rHasta||"hoy")+".csv";
+    a.href=url;a.download="reporte_por_unidad_"+repSufijo+".csv";
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   };
   const wrap=async fn=>{setBusy(true);try{await fn();await refrescarCat();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
@@ -789,7 +811,10 @@ function ModAdmin({cat,refrescarCat,showToast}){
       </>}
       {sec==="reportes"&&<>
         <div className="card"><div className="ct">Reporte de cargas de combustible</div>
-          <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>
+          <div className="tr"><button type="button" className={"trb"+(rModo==="dia"?" act":"")} onClick={()=>setRModo("dia")}>Un día</button><button type="button" className={"trb"+(rModo==="rango"?" act":"")} onClick={()=>setRModo("rango")}>Rango</button></div>
+          {rModo==="dia"
+            ? <><label>Día</label><input type="date" value={rDia} onChange={e=>setRDia(e.target.value)}/></>
+            : <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>}
           <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><option key={x}>{x}</option>)}</select>
           <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
           <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar detalle (CSV)</button>
