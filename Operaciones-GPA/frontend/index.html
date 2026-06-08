@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="config.js"></script>
 <script src="gpa-api.js"></script>
 <style>
@@ -155,6 +156,33 @@ const readFile=(e,cb)=>{
   };
   r.readAsDataURL(f);
 };
+
+// Genera un PDF con diseño corporativo (encabezado GPA + el formato lleno).
+// Toma el contenido del detalle (.pdf-area), quita botones (.no-print) y convierte
+// las imágenes de S3 a dataURL para evitar problemas de CORS al renderizar.
+async function descargarPDFCorp(){
+  const area=document.querySelector(".pdf-area");
+  if(!area||typeof html2pdf==="undefined"){window.print();return;}
+  const titulo=area.dataset.pdftitle||"Formato GPA";
+  const clone=area.cloneNode(true);
+  clone.querySelectorAll(".no-print").forEach(n=>n.remove());
+  await Promise.all([...clone.querySelectorAll("img")].map(async img=>{
+    try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}catch(e){}
+  }));
+  const head=document.createElement("div");
+  head.innerHTML='<div style="display:flex;align-items:center;gap:12px;border-bottom:3px solid '+C.blue+';padding-bottom:10px;margin-bottom:14px">'
+    +'<div style="width:46px;height:46px;background:'+C.blue+';color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px">GPA</div>'
+    +'<div style="flex:1"><div style="font-size:15px;font-weight:800;color:'+C.blue+'">General de Productos para el Agua</div>'
+    +'<div style="font-size:12px;color:#555">'+titulo+'</div></div>'
+    +'<div style="font-size:10px;color:#888;text-align:right">'+new Date().toLocaleString("es-MX")+'</div></div>';
+  const wrap=document.createElement("div");
+  wrap.style.cssText="width:190mm;padding:4mm;background:#fff;font-family:-apple-system,Segoe UI,sans-serif;color:#222;position:fixed;left:-10000px;top:0";
+  wrap.appendChild(head);wrap.appendChild(clone);
+  document.body.appendChild(wrap);
+  const fname=titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10)+".pdf";
+  try{await html2pdf().set({margin:[8,8,8,8],filename:fname,image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,backgroundColor:"#fff"},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(wrap).save();}
+  finally{wrap.remove();}
+}
 
 // ─── LOGIN ──────────────────────────────────────────────────────────
 function Login({onLogin,onSetNewPassword}){
@@ -430,8 +458,8 @@ function SolDetail({sol,rol,refrescar,showToast,onBack}){
   const[busy,setBusy]=useState(false);
   const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st);showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
-    <div>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={()=>window.print()}>⬇ Descargar PDF</button></div>
+    <div className="pdf-area" data-pdftitle="Solicitud de combustible">
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Solicitud</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>Nivel antes</span><span>{TANK_OPTS.find(t=>t.val===sol.tankBefore)?.label}</span></div><div className="dr"><span>Litros</span><span>{sol.litros} L</span></div><div className="dr"><span>Monto</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}</div>
       {sol.photo&&<div className="card"><div className="ct">Foto Evidencia</div><img src={sol.photo} style={{width:"100%",borderRadius:8}} alt="ev"/></div>}
       {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
@@ -584,8 +612,8 @@ function CLHistory({items,onSelect}){
 function CLDetail({cl,onBack}){
   const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
   return(
-    <div>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={()=>window.print()}>⬇ Descargar PDF</button></div>
+    <div className="pdf-area" data-pdftitle="Checklist de reparto">
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
       {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
@@ -717,8 +745,8 @@ function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
   const[busy,setBusy]=useState(false);
   const auth=async ok=>{setBusy(true);try{await api.cambiarEstado("montacargas",rec.id,ok?"Aprobado":"Rechazado");showToast(ok?"✓ Checklist aprobado":"✗ Checklist rechazado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
-    <div>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={()=>window.print()}>⬇ Descargar PDF</button></div>
+    <div className="pdf-area" data-pdftitle="Checklist de montacargas">
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"80%",lineHeight:1.4}}>#{i+1} {item.substring(0,50)}{item.length>50?"...":""}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
