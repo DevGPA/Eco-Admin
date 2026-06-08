@@ -1027,214 +1027,43 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 <!-- ══ POST-EJECUCIÓN ══ -->
 <div class="view active" id="vpost">
 <div class="ks">
-  <div class="kpi brand"><div class="kl">Total evaluados</div><div class="kv">99+</div><div class="ks2">3 batches · abr 2026</div></div>
-  <div class="kpi go"><div class="kl">Auto-aprobadas</div><div class="kv">~88%</div><div class="ks2">sin intervención humana</div></div>
-  <div class="kpi stop"><div class="kl">Auto-rechazadas</div><div class="kv">~8%</div><div class="ks2">R-101 · R-103 · R-201</div></div>
-  <div class="kpi warn"><div class="kl">En revisión</div><div class="kv">2</div><div class="ks2">R-501 · R-801</div></div>
-  <div class="kpi disp"><div class="kl">Dispersiones</div><div class="kv">3</div><div class="ks2">R-800 · GS0231 GDL</div></div>
-  <div class="kpi teal"><div class="kl">Fleteras activas</div><div class="kv">6+</div><div class="ks2">Tresguerras · Estrella · más</div></div>
-  <div class="kpi gold"><div class="kl">T/C referencia</div><div class="kv">17.35</div><div class="ks2">USD · abr 2026</div></div>
+  <div class="kpi brand"><div class="kl">Total evaluados</div><div class="kv" id="kpi-total">0</div><div class="ks2">&mdash;</div></div>
+  <div class="kpi go"><div class="kl">Auto-aprobadas</div><div class="kv" id="kpi-aprobadas">0</div><div class="ks2">&mdash;</div></div>
+  <div class="kpi stop"><div class="kl">Auto-rechazadas</div><div class="kv" id="kpi-rechazadas">0</div><div class="ks2">&mdash;</div></div>
+  <div class="kpi warn"><div class="kl">En revisi&oacute;n</div><div class="kv" id="kpi-revision">0</div><div class="ks2">&mdash;</div></div>
+  <div class="kpi disp"><div class="kl">Dispersiones</div><div class="kv" id="kpi-dispersiones">0</div><div class="ks2">&mdash;</div></div>
+  <div class="kpi teal"><div class="kl">Fleteras activas</div><div class="kv" id="kpi-fleteras">0</div><div class="ks2">&mdash;</div></div>
+  <div class="kpi gold"><div class="kl">T/C referencia</div><div class="kv" id="kpi-tc">&mdash;</div><div class="ks2">&mdash;</div></div>
 </div>
 
 <div class="kb">
 
-<!-- EN REVISIÓN -->
+<!-- EN REVISION -->
 <div class="col">
-  <div class="col-h"><div class="col-hl"><div class="ci warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 9v4M12 17h.01"/></svg></div><span class="ct">En revisión</span></div><span class="ccn">2</span></div>
-  <div class="cd">Requieren aprobador · SLA 4h hábiles</div>
-  <div class="cb">
-    <div class="cdiv">C5 · Flete alto · Navojoa</div>
-    <div class="card warn" onclick="selCard(this)">
-      <span class="tb2 vc">Venta cliente</span>
-      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
-        <div class="cm"><div class="cn">116873635</div><div class="cf">FA10315862 · Ecosistemas Navojoa</div></div>
-        <span class="cu w">R-501 · Flete alto > 15%</span>
-      </div>
-      <span class="st s30">GS0230 · Navojoa, SON</span>
-      <div class="cr">
-        <div class="c ok" title="C1 · $1,074 USD ✓ · costal OK">$✓</div>
-        <div class="c ok" title="C2 · Mangueras+Kit = EQUIPO ✓">◼✓</div>
-        <div class="c ok" title="C3 · Sonora en catálogo ✓">◉✓</div>
-        <div class="c ok" title="C4 · FV=domicilio · Tresguerras ✓">⇌✓</div>
-        <div class="c soft" title="C5 · 16.5% supera umbral 15%">⚠!</div>
-      </div>
-      <div class="rr"><span class="rc warn">R-501 · Flete alto > 15%</span><span class="rt">Flete 16.5% supera el umbral del 15%</span></div>
-      <div class="mtr"><div class="mh"><span class="ml">% flete vs pedido</span><span class="mv warn">16.5%</span></div><div class="mbar"><div class="mfill warn" style="width:55%"></div><div class="mt" style="left:50%"></div></div></div>
-      <div class="cmeta"><span>GDL → Navojoa, SON</span><span class="ms">·</span><span>Tresguerras</span><span class="ms">·</span><span>$1,074 USD</span></div>
-      <div class="cft"><div class="dps"><span class="dp">FV</span><span class="dp">CP</span></div><div class="bs"><button class="btn btnd">✕</button><button class="btn btnp">✓ Aprobar</button></div></div>
-    </div>
-
-    <div class="cdiv">Dispersión · tipo CAJA sin tarifa</div>
-    <div class="card navy" onclick="selCard(this)">
-      <span class="tb2 di">Dispersión interna</span>
-      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
-        <div class="cm"><div class="cn">JD322218</div><div class="cf">GS0231 · GPA Cancún · 12P+14C</div></div>
-        <span class="cu w">R-801 · Dispersión sin tarifa</span>
-      </div>
-      <span class="st s31">GS0231 → DISPERSIÓN · GDL→CUN</span>
-      <div class="cr">
-        <div class="c di" title="GS0231 · DISPERSION_INTERNA">D</div>
-        <div class="c ok" title="Origen GDL ✓">GDL✓</div>
-        <div class="c ok" title="J.Obregon · 12P CUN $44,784 ✓">P✓</div>
-        <div class="c soft" title="14 cajas · tarifa CAJA no cargada → R-801">C?</div>
-        <div class="c na" title="—">—</div>
-      </div>
-      <div class="rr"><span class="rc warn">R-801 · Dispersión sin tarifa</span><span class="rt">Tarifa tipo CAJA pendiente en catálogo</span></div>
-      <div class="tbox">
-        <div class="tbi"><div class="tbl">12 Pallets CUN</div><div class="tbv">$44,784 MXN</div></div>
-        <div class="tbi"><div class="tbl">14 Cajas</div><div class="tbv" style="color:var(--warn)">Sin tarifa →</div></div>
-      </div>
-      <div class="cmeta"><span>GDL → CUN</span><span class="ms">·</span><span>J.Obregon</span></div>
-      <div class="cft"><div class="dps"><span class="dp">JD322218</span></div><div class="bs"><button class="btn btnd">✕</button><button class="btn btnp">✓ Aprobar</button></div></div>
-    </div>
-  </div>
+  <div class="col-h"><div class="col-hl"><div class="ci warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 9v4M12 17h.01"/></svg></div><span class="ct">En revisi&oacute;n</span></div><span class="ccn" id="count-revision">0</span></div>
+  <div class="cd">Requieren aprobador &middot; SLA 4h h&aacute;biles</div>
+  <div class="cb" id="col-revision"><div class="empty">Sin solicitudes en este rango.</div></div>
 </div>
 
 <!-- ESCALAMIENTO -->
 <div class="col">
-  <div class="col-h"><div class="col-hl"><div class="ci hold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 11l5-5 5 5M12 6v12"/></svg></div><span class="ct">Escalamiento</span></div><span class="ccn">0</span></div>
-  <div class="cd">Cola Aprobador 2 · SLA 24h hábiles</div>
-  <div class="cb"><div class="empty">Sin escalamientos activos.</div></div>
+  <div class="col-h"><div class="col-hl"><div class="ci hold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 11l5-5 5 5M12 6v12"/></svg></div><span class="ct">Escalamiento</span></div><span class="ccn" id="count-escaladas">0</span></div>
+  <div class="cd">Cola Aprobador 2 &middot; SLA 24h h&aacute;biles</div>
+  <div class="cb" id="col-escaladas"><div class="empty">Sin escalamientos activos.</div></div>
 </div>
 
 <!-- APROBADAS -->
 <div class="col">
-  <div class="col-h"><div class="col-hl"><div class="ci go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></div><span class="ct">Aprobadas</span></div><span class="ccn">12+</span></div>
-  <div class="cd">Auto-liberadas · todos los tipos</div>
-  <div class="cb">
-
-
-
-    <div class="cdiv">Back Order · GS0229 · Multi-sucursal</div>
-    <div class="card warn" onclick="selCard(this)">
-      <span class="tb2 bo">Back Order · CUN→SJD</span>
-      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
-        <div class="cm"><div class="cn">116929225</div><div class="cf">GS0229 · CUN→SJD/BCS · Eco Water</div></div>
-        <span class="cu a">R-050 · Back Order</span>
-      </div>
-      <span class="st s29">GS0229 · BACK ORDER · origen CUN · Ferry ✓</span>
-      <div class="cr">
-        <div class="c bo" title="C1 · EXENTO Back Order">$—</div>
-        <div class="c bo" title="C2 · EXENTO Back Order">◼—</div>
-        <div class="c ok" title="C3 · Cabo San Lucas, BCS ✓">BCS✓</div>
-        <div class="c bo" title="C4 · EXENTO Back Order">⇌—</div>
-        <div class="c bo" title="C5 · EXENTO · ferry incluido">⚠—</div>
-      </div>
-      <div class="rr"><span class="rc go">R-050 · Back Order</span><span class="rt">Back Order · origen CUN válido · BCS ✓</span></div>
-      <div class="bob"><div class="boh">GS0229 · Back Order multi-sucursal</div><div class="bov">Reflectores · $235.75 MXN (incl. ferry $59.75) · SJD, BCS ✓</div></div>
-      <div class="cmeta"><span>CUN → SJD/BCS</span><span class="ms">·</span><span>Tresguerras</span><span class="ms">·</span><span>Ferry ✓</span></div>
-      <div class="cft"><div class="dps"><span class="dp">116929225</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
-    </div>
-
-    <div class="cdiv">Cargo por envío · GS0248</div>
-    <div class="card gold" onclick="selCard(this)">
-      <span class="tb2 cpe">Cargo por envío</span>
-      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
-        <div class="cm"><div class="cn">116468131</div><div class="cf">FA10316370 · M. Soledad Frances Ibarra</div></div>
-        <span class="cu g">R-060 · Cargo envío OK</span>
-      </div>
-      <span class="st s48">GS0248 · SKU 00400000000000 · CARGO POR ENVIO</span>
-      <div class="cr">
-        <div class="c pt" title="GS0248 + SKU + descripción ✓">CPE✓</div>
-        <div class="c ok" title="FV $286 MXN = CP $286 MXN · Δ $0.00">≈✓</div>
-        <div class="c na" title="C2–C5 no evaluados">—</div>
-        <div class="c na" title="—">—</div>
-        <div class="c na" title="—">—</div>
-      </div>
-      <div class="rr"><span class="rc gold">R-060 · Cargo envío OK</span><span class="rt">FV = CP · delta $0.00 ≤ umbral 1% ✓</span></div>
-      <div class="tbox">
-        <div class="tbi"><div class="tbl">FV subtotal s/IVA</div><div class="tbv">$286.00 MXN</div></div>
-        <div class="tbi"><div class="tbl">CP subtotal s/imp</div><div class="tbv">$286.00 MXN</div></div>
-      </div>
-      <div class="cmeta"><span>GDL → Guasave, SIN</span><span class="ms">·</span><span>Δ $0.00 · 0.00%</span></div>
-      <div class="cft"><div class="dps"><span class="dp">FA10316370</span><span class="dp">CP116468131</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
-    </div>
-
-    <div class="cdiv">Venta cliente · R-000 · GDL→BCS con ferry</div>
-    <div class="card go" onclick="selCard(this)">
-      <span class="tb2 vc">Venta cliente</span>
-      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
-        <div class="cm"><div class="cn">116861950</div><div class="cf">FA10315757 · Quimica &amp; Water Sol</div></div>
-        <span class="cu a">R-000 · Apoyo completo</span>
-      </div>
-      <span class="st s30">GS0230 · GDL→Cabo San Lucas · Ferry en C5</span>
-      <div class="cr">
-        <div class="c ok" title="C1 · $1,304.35 USD ✓ pedido limpio">$✓</div>
-        <div class="c ok" title="C2 · Motobomba Storm 7.5HP = EQUIPO ✓">◼✓</div>
-        <div class="c ok" title="C3 · Cabo San Lucas, BCS ✓">BCS✓</div>
-        <div class="c ok" title="C4 · FV=domicilio · Tresguerras ✓">⇌✓</div>
-        <div class="c ok" title="C5 · 8.8% incl. ferry $327.43 MXN ✓">⚠✓</div>
-      </div>
-      <div class="rr"><span class="rc go">R-000 · Apoyo completo</span><span class="rt">5/5 · ferry incluido en fleteBaseUSD ✓</span></div>
-      <div class="mtr"><div class="mh"><span class="ml">% flete (incl. ferry $327)</span><span class="mv ok">8.8%</span></div><div class="mbar"><div class="mfill ok" style="width:44%"></div><div class="mt" style="left:75%"></div></div></div>
-      <div class="cmeta"><span>GDL → CSL, BCS</span><span class="ms">·</span><span>Tresguerras</span><span class="ms">·</span><span>$1,304 USD</span></div>
-      <div class="cft"><div class="dps"><span class="dp">FV</span><span class="dp">CP</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
-    </div>
-
-    <div class="cdiv">Dispersión interna · R-800 · GDL→CUN</div>
-    <div class="card navy" onclick="selCard(this)">
-      <span class="tb2 di">Dispersión interna</span>
-      <div class="ch"><div class="chk" onclick="ck(this,event)"></div>
-        <div class="cm"><div class="cn">JC748687</div><div class="cf">GS0231 · GDL→CUN · 13 Pallets</div></div>
-        <span class="cu d">R-800 · Dispersión OK</span>
-      </div>
-      <span class="st s31">GS0231 → DISPERSIÓN INTERNA · origen GDL ✓</span>
-      <div class="cr">
-        <div class="c di" title="GS0231 detectado">D</div>
-        <div class="c ok" title="Origen GDL ✓">GDL✓</div>
-        <div class="c ok" title="J.Obregon autorizado ✓">⇌✓</div>
-        <div class="c ok" title="13P × $3,732 = $48,516 · flete $48,530 · +0.03% ✓">P✓</div>
-        <div class="c na" title="—">—</div>
-      </div>
-      <div class="rr"><span class="rc disp">R-800 · Dispersión OK</span><span class="rt">Dispersión aprobada · delta 0.03% ≤ 10%</span></div>
-      <div class="tbox">
-        <div class="tbi"><div class="tbl">Tarifa 13P CUN</div><div class="tbv">$48,516 MXN</div></div>
-        <div class="tbi"><div class="tbl">Flete facturado</div><div class="tbv">$48,530 MXN</div></div>
-      </div>
-      <div class="cmeta"><span>GDL → CUN</span><span class="ms">·</span><span>J.Obregon</span></div>
-      <div class="cft"><div class="dps"><span class="dp">JC748687</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
-    </div>
-  </div>
+  <div class="col-h"><div class="col-hl"><div class="ci go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></div><span class="ct">Aprobadas</span></div><span class="ccn" id="count-aprobadas">0</span></div>
+  <div class="cd">Auto-liberadas &middot; todos los tipos</div>
+  <div class="cb" id="col-aprobadas"><div class="empty">Sin solicitudes en este rango.</div></div>
 </div>
 
 <!-- RECHAZADAS -->
 <div class="col">
-  <div class="col-h"><div class="col-hl"><div class="ci stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></div><span class="ct">Rechazadas</span></div><span class="ccn">2</span></div>
-  <div class="cd">Auto-rechazadas · auditoría completa</div>
-  <div class="cb">
-    <div class="cdiv">Monto insuficiente · R-101</div>
-    <div class="card stop">
-      <span class="tb2 vc">Venta cliente</span>
-      <div class="ch">
-        <div class="cm"><div class="cn">FC20107952 + FC20108237</div><div class="cf">Alvaro Chavez Gonzalez · GDL→Chetumal · ×2</div></div>
-        <span class="cu s">R-101 · Monto insuficiente</span>
-      </div>
-      <div class="cr">
-        <div class="c fail" title="C1 · $62.39 USD &lt; mínimo $350">$✗</div>
-        <div class="c na">—</div><div class="c na">—</div><div class="c na">—</div><div class="c na">—</div>
-      </div>
-      <div class="rr"><span class="rc stop">R-101 · Monto insuficiente</span><span class="rt">$62.39 USD &lt; mínimo $350 pedido limpio</span></div>
-      <div class="cmeta"><span>GDL → Chetumal, QR</span><span class="ms">·</span><span>Estafeta</span></div>
-      <div class="cft"><div class="dps"><span class="dp">FV×2</span><span class="dp">CP×2</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
-    </div>
-
-    <div class="cdiv">EXCLUIDO_GRANDE sin mínimo · R-103</div>
-    <div class="card stop">
-      <span class="tb2 vc">Venta cliente</span>
-      <div class="ch">
-        <div class="cm"><div class="cn">FA10314864</div><div class="cf">Tricloro MAX 50KG · M. Soledad Frances Ibarra</div></div>
-        <span class="cu s">R-103 · Costal sin mínimo $1,000</span>
-      </div>
-      <div class="cr">
-        <div class="c fail" title="C1 · $91.80 &lt; $1,000 (EXCLUIDO_GRANDE activado)">$✗</div>
-        <div class="c fail" title="C2 · Tricloro 50KG = EXCLUIDO_GRANDE · sin elegible">◼✗</div>
-        <div class="c na">—</div><div class="c na">—</div><div class="c na">—</div>
-      </div>
-      <div class="rr"><span class="rc stop">R-103 · Costal sin mínimo $1,000</span><span class="rt">Cuñete 50kg · requiere ≥ $1,000 USD</span></div>
-      <div class="cmeta"><span>GDL → Zitacuaro, MICH</span></div>
-      <div class="cft"><div class="dps"><span class="dp">FV</span><span class="dp">CP</span></div><div class="bs"><button class="btn">Ver detalle</button></div></div>
-    </div>
-  </div>
+  <div class="col-h"><div class="col-hl"><div class="ci stop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg></div><span class="ct">Rechazadas</span></div><span class="ccn" id="count-rechazadas">0</span></div>
+  <div class="cd">Auto-rechazadas &middot; auditor&iacute;a completa</div>
+  <div class="cb" id="col-rechazadas"><div class="empty">Sin solicitudes en este rango.</div></div>
 </div>
 
 </div><!-- /kb -->
