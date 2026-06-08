@@ -107,6 +107,14 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 .lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f5f6fa}
 .spin{width:34px;height:34px;border:3px solid #ddd;border-top-color:${C.blue};border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
+@media print{
+  .hdr,.nav,.no-print{display:none!important}
+  .wrap{max-width:100%!important}
+  .pg{padding:0!important;overflow:visible!important}
+  .card{break-inside:avoid;border:1px solid #ddd}
+  img{max-width:100%!important}
+  body{background:#fff}
+}
 `;
 
 // ─── HELPERS ────────────────────────────────────────────────────────
@@ -423,11 +431,11 @@ function SolDetail({sol,rol,refrescar,showToast,onBack}){
   const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st);showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
     <div>
-      <button className="bs" style={{marginBottom:12}} onClick={onBack}>← Volver</button>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={()=>window.print()}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Solicitud</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>Nivel antes</span><span>{TANK_OPTS.find(t=>t.val===sol.tankBefore)?.label}</span></div><div className="dr"><span>Litros</span><span>{sol.litros} L</span></div><div className="dr"><span>Monto</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}</div>
       {sol.photo&&<div className="card"><div className="ct">Foto Evidencia</div><img src={sol.photo} style={{width:"100%",borderRadius:8}} alt="ev"/></div>}
       {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
-      {canChange&&<div className="card"><div className="ct">Cambiar Estado</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
+      {canChange&&<div className="card no-print"><div className="ct">Cambiar Estado</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
     </div>
   );
 }
@@ -577,7 +585,7 @@ function CLDetail({cl,onBack}){
   const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
   return(
     <div>
-      <button className="bs" style={{marginBottom:12}} onClick={onBack}>← Volver</button>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={()=>window.print()}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
       {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
@@ -617,7 +625,10 @@ function MCForm({tipo,cat,mc,session,sucursalesUser,refrescar,showToast,onDone})
   const availMC=mc.filter(v=>!sucursalesUser||sucursalesUser.includes(v.sucursal));
   const[eq,setEq]=useState(availMC[0]?String(availMC[0].id):"");
   const[estatus,setEstatus]=useState("Activo");const[dia,setDia]=useState(new Date().toISOString().split("T")[0]);
-  const[semana,setSemana]=useState("");const[horas,setHoras]=useState("");
+  const[horas,setHoras]=useState("");
+  // Número de semana ISO calculado automáticamente a partir de la fecha de revisión
+  const isoSemana=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+3-((d.getDay()+6)%7));const w1=new Date(d.getFullYear(),0,4);return 1+Math.round(((d-w1)/86400000-3+((w1.getDay()+6)%7))/7);};
+  const semana=isoSemana(dia);
   const[resps,setResps]=useState({});const[fotos,setFotos]=useState({});const[coments,setComents]=useState({});
   const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
@@ -648,7 +659,7 @@ function MCForm({tipo,cat,mc,session,sucursalesUser,refrescar,showToast,onDone})
           {vehicle&&<div style={{marginTop:6,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Tipo</span><span>{vehicle.combustible}</span></div></div>}
           <label>Estatus del equipo</label><select value={estatus} onChange={e=>setEstatus(e.target.value)}>{ESTATUS_MC.map(o=><option key={o}>{o}</option>)}</select>
           <label>Fecha de revisión</label><input type="date" value={dia} onChange={e=>setDia(e.target.value)}/>
-          <div className="r2"><div><label>Semana No.</label><input type="text" value={semana} onChange={e=>setSemana(e.target.value)} placeholder="Ej. 19"/></div><div><label>Horas de trabajo</label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
+          <div className="r2"><div><label>Semana No. (automática)</label><input type="text" value={semana?"Semana "+semana:""} disabled style={{background:"#f5f5f5",color:"#666"}}/></div><div><label>Horas de trabajo</label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
           <label>Quien revisa</label><input type="text" value={yo?.nombre||session.nombre} disabled style={{background:"#f5f5f5",color:"#aaa"}}/>
         </div>
         {estatus!=="Activo"&&<div className="wb">⚠️ Equipo inactivo — solo se registran datos generales y firma.</div>}
@@ -707,13 +718,13 @@ function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
   const auth=async ok=>{setBusy(true);try{await api.cambiarEstado("montacargas",rec.id,ok?"Aprobado":"Rechazado");showToast(ok?"✓ Checklist aprobado":"✗ Checklist rechazado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
     <div>
-      <button className="bs" style={{marginBottom:12}} onClick={onBack}>← Volver</button>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={()=>window.print()}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"80%",lineHeight:1.4}}>#{i+1} {item.substring(0,50)}{item.length>50?"...":""}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
       {rec.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{rec.obs}</div></div>}
       {rec.firma&&<div className="card"><div className="ct">Firma</div><img src={rec.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
-      {canAuth&&rec.status==="Pendiente"&&<div className="card"><div className="ct">Autorización del Supervisor</div><p style={{fontSize:12,color:"#555",marginBottom:10}}>Revisa y autoriza o rechaza este registro.</p><button className="bgr" disabled={busy} onClick={()=>auth(true)}>✓ Aprobar checklist</button><button className="brj" disabled={busy} onClick={()=>auth(false)}>✗ Rechazar checklist</button></div>}
+      {canAuth&&rec.status==="Pendiente"&&<div className="card no-print"><div className="ct">Autorización del Supervisor</div><p style={{fontSize:12,color:"#555",marginBottom:10}}>Revisa y autoriza o rechaza este registro.</p><button className="bgr" disabled={busy} onClick={()=>auth(true)}>✓ Aprobar checklist</button><button className="brj" disabled={busy} onClick={()=>auth(false)}>✗ Rechazar checklist</button></div>}
       {rec.status!=="Pendiente"&&<div style={{background:rec.status==="Aprobado"?C.greenLt:C.redLt,borderRadius:8,padding:"10px 14px",fontSize:12,color:rec.status==="Aprobado"?C.green:C.red,marginTop:8,textAlign:"center",fontWeight:600}}>{rec.status==="Aprobado"?"✓ Aprobado por "+(rec.autorizadoPor||""):"✗ Rechazado por "+(rec.autorizadoPor||"")}</div>}
     </div>
   );
