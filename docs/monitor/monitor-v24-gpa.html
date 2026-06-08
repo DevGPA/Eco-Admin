@@ -1652,10 +1652,19 @@ let _pwChallenge = null;  // { session, email } | null
 // Recuperar sesión guardada
 (function loadSession() {
   try {
-    const s = JSON.parse(sessionStorage.getItem('gpa_auth') || 'null');
-    if (s && s.exp > Date.now()) {
+    const raw = sessionStorage.getItem('gpa_auth') || localStorage.getItem('gpa_auth') || 'null';
+    const s = JSON.parse(raw);
+    // Solo restaurar sesiones REALES de Cognito (JWT empieza con "eyJ") y vigentes.
+    // Esto descarta sesiones de modo prueba (token "test_...") que antes
+    // saltaban el login real y nunca pedían cambiar la contraseña temporal.
+    const esJwt = s && typeof s.token === 'string' && s.token.startsWith('eyJ');
+    if (s && esJwt && s.exp > Date.now()) {
       _session = s;
       onLoginSuccess(s.email, true);
+    } else if (s) {
+      // Sesión inválida/caducada/de prueba → limpiar para forzar login real.
+      try { sessionStorage.removeItem('gpa_auth'); } catch(e) {}
+      try { localStorage.removeItem('gpa_auth'); } catch(e) {}
     }
   } catch(e) {}
 })();
@@ -1901,7 +1910,9 @@ function onLoginSuccess(email, silent) {
 function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
   _session = { token: null, email: null, exp: 0 };
+  _pwChallenge = null;
   try { sessionStorage.removeItem('gpa_auth'); } catch(e) {}
+  try { localStorage.removeItem('gpa_auth'); } catch(e) {}
 
   // Mostrar login de nuevo
   const ls = document.getElementById('loginScreen');
