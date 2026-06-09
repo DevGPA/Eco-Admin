@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script src="gpa-api.js"></script>
 <style>
@@ -810,6 +811,58 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const aplicarPrecioMasivo=()=>{const pr=parseFloat(bulkPrecio);if(isNaN(pr)||pr<=0)return showToast("⚠️ Precio inválido");wrap(async()=>{const r=await api.adminPrecioCombustible(bulkComb,pr);setBulkPrecio("");showToast("✓ "+(r.actualizados||0)+" vehículo(s) actualizados");});};
   const toggleV=v=>wrap(()=>api.adminVehiculo({...v,activo:!v.activo}));
   const toggleU=u=>wrap(()=>api.adminResponsable({...u,activo:!u.activo}));
+  // Exporta los vehículos actuales a Excel (para editar y volver a subir)
+  const descargarPlantilla=()=>{
+    if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
+    const datos=cat.vehicles.map(v=>({id:v.id,economico:v.economico,placas:v.placas,subMarca:v.subMarca,sucursal:v.sucursal,tanque:v.tanque,responsable:v.responsable,combustible:v.combustible,producto:v.producto,precio:v.precio}));
+    const ws=XLSX.utils.json_to_sheet(datos);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Vehiculos");
+    XLSX.writeFile(wb,"vehiculos_gpa.xlsx");
+  };
+  // Actualiza desde Excel: NO borra; en existentes solo cambia campos editables
+  // (responsable, combustible, precio, producto); en nuevos exige id consecutivo incremental.
+  const importarExcel=async(file)=>{
+    if(!file)return;
+    if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
+    setBusy(true);
+    try{
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+      const filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+      const norm=s=>String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,"");
+      const mapRow=r=>{const o={};for(const k in r){const n=norm(k);
+        if(n==="id"||n.includes("economico"))o.id=String(r[k]).trim();
+        else if(n==="placas")o.placas=String(r[k]).trim();
+        else if(n.includes("submarca")||n==="modelo"||n==="marca")o.subMarca=String(r[k]).trim();
+        else if(n==="sucursal")o.sucursal=String(r[k]).trim();
+        else if(n.includes("tanque")||n.includes("capacidad"))o.tanque=parseFloat(r[k])||0;
+        else if(n.includes("responsable")||n.includes("area"))o.responsable=String(r[k]).trim();
+        else if(n.includes("combustible"))o.combustible=String(r[k]).trim();
+        else if(n==="producto")o.producto=String(r[k]).trim();
+        else if(n.includes("precio"))o.precio=parseFloat(r[k])||0;}
+        return o;};
+      const rows=filas.map(mapRow).filter(r=>r.id);
+      if(!rows.length){setBusy(false);return showToast("⚠️ El Excel no tiene una columna 'id'/'económico'");}
+      let maxId=cat.vehicles.reduce((m,v)=>Math.max(m,Number(v.id)||0),0);
+      const existe=id=>cat.vehicles.some(v=>String(v.id)===id);
+      const ED=["responsable","combustible","precio","producto"]; // únicos editables en existentes
+      const nuevos=rows.filter(r=>!existe(r.id)).sort((a,b)=>(Number(a.id)||0)-(Number(b.id)||0));
+      const updates=rows.filter(r=>existe(r.id));
+      let nUpd=0,nNew=0;const errores=[];
+      for(const r of updates){
+        const ex=cat.vehicles.find(v=>String(v.id)===r.id);
+        const merged={...ex};ED.forEach(k=>{if(r[k]!==undefined&&r[k]!=="")merged[k]=r[k];});
+        await api.adminVehiculo(merged);nUpd++;
+      }
+      for(const r of nuevos){
+        if(!(Number(r.id)>maxId)){errores.push("#"+r.id+" — el consecutivo debe ser incremental (último #"+maxId+")");continue;}
+        await api.adminVehiculo({id:r.id,economico:r.economico||r.id,placas:r.placas||"",subMarca:r.subMarca||"",sucursal:r.sucursal||"",tanque:r.tanque||0,responsable:r.responsable||"",combustible:r.combustible||"Gasolina",producto:r.producto||"",precio:r.precio||0,activo:true});
+        maxId=Number(r.id);nNew++;
+      }
+      await refrescarCat();
+      showToast("✓ "+nUpd+" actualizados · "+nNew+" nuevos"+(errores.length?" · "+errores.length+" omitidos":""));
+      if(errores.length)alert("Filas OMITIDAS (no se borra ni se altera nada existente):\n\n"+errores.join("\n"));
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
   const saveA=a=>{const{_isNew,...acc}=a;if(!acc.email||!acc.email.includes("@"))return showToast("⚠️ Correo válido obligatorio");if(!acc.email.endsWith("@gpa.com.mx"))return showToast("⚠️ Solo se permiten correos @gpa.com.mx");if(_isNew&&!acc.password)return showToast("⚠️ Contraseña obligatoria al crear");if(_isNew)acc.activo=true;wrap(async()=>{await api.adminCuenta(acc);setEditA(null);await cargarCuentas();showToast("Cuenta guardada");});};
   const toggleA=a=>wrap(async()=>{await api.adminCuenta({email:a.email,nombre:a.nombre,rol:a.rol,sucursales:a.sucursales,modulos:a.modulos,activo:!a.activo});await cargarCuentas();showToast("Estado actualizado");});
   const VForm=({v,onClose})=>{const[d,setD]=useState({...v});const isN=!!v._isNew;const RO=k=>!isN&&["id","economico","placas","subMarca","sucursal","tanque"].includes(k);return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo vehículo":"Editar vehículo"}</div>{!isN&&<div className="wb">Solo editable: área responsable, combustible, precio y producto.</div>}{[["id","ID / # Económico"],["placas","Placas"],["subMarca","Sub-marca"],["responsable","Área responsable"],["producto","Producto"]].map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d[k]||""} disabled={RO(k)} style={RO(k)?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,[k]:e.target.value})}/></div>)}<div className="r2"><div><label>Tanque (L)</label><input type="number" value={d.tanque} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,tanque:e.target.value})}/></div><div><label>Precio/L</label><input type="number" value={d.precio} onChange={e=>setD({...d,precio:e.target.value})}/></div></div><label>Sucursal</label><select value={d.sucursal} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><label>Combustible</label><select value={d.combustible} onChange={e=>setD({...d,combustible:e.target.value})}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveV(d)}>Guardar</button></div></div></div>);};
@@ -822,6 +875,17 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
       <div className="tr">{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
       {sec==="vehicles"&&<>
+        <div className="card"><div className="ct">Actualizar tabla desde Excel</div>
+          <button className="bs" style={{width:"100%",marginBottom:8}} disabled={busy} onClick={descargarPlantilla}>⬇ Descargar Excel actual</button>
+          <label className="bp" style={{display:"block",textAlign:"center",cursor:"pointer",position:"relative",overflow:"hidden"}}>{busy?"Procesando…":"📤 Subir Excel para actualizar"}
+            <input type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e=>{const f=e.target.files[0];e.target.value="";importarExcel(f);}} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}}/>
+          </label>
+          <div style={{fontSize:11,color:"#666",marginTop:8,lineHeight:1.5}}>
+            • <b>No borra</b> vehículos (se conserva el histórico).<br/>
+            • En existentes solo cambia: <b>área responsable, combustible, precio y producto</b>.<br/>
+            • Los nuevos requieren <b>id consecutivo incremental</b> (mayor al último).
+          </div>
+        </div>
         <div className="card"><div className="ct">Cambio masivo de precio por combustible</div>
           <div className="r2"><div><label>Combustible</label><select value={bulkComb} onChange={e=>setBulkComb(e.target.value)}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select></div><div><label>Nuevo precio/L</label><input type="number" value={bulkPrecio} onChange={e=>setBulkPrecio(e.target.value)} placeholder="Ej. 24.50"/></div></div>
           <button className="bp" disabled={busy||!bulkPrecio} onClick={aplicarPrecioMasivo}>Aplicar a todos los «{bulkComb}»</button>
