@@ -398,7 +398,12 @@ Resources:
       IdTokenValidity:      12
       RefreshTokenValidity: 30
       TokenValidityUnits: { AccessToken: hours, IdToken: hours, RefreshToken: days }
-      PreventUserExistenceErrors: ENABLED
+      # LEGACY (no ENABLED): que ForgotPassword devuelva el error real en vez de
+      # un "éxito" falso. Así el front avisa a las cuentas nuevas (FORCE_CHANGE_PASSWORD)
+      # que deben activar su cuenta ingresando con la contraseña temporal, en lugar de
+      # decir "te enviamos un código" cuando Cognito no puede enviarlo. App interna
+      # @gpa.com.mx: el ligero riesgo de enumeración de usuarios es aceptable.
+      PreventUserExistenceErrors: LEGACY
 
   GrupoAdmin:
     Type: AWS::Cognito::UserPoolGroup

@@ -114,7 +114,18 @@ class GpaApi {
       body: JSON.stringify({ ClientId: this.clientId, Username: (email || "").trim().toLowerCase() }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || "No se pudo enviar el código");
+    if (!res.ok) {
+      const t = (data.__type || "") + " " + (data.message || "");
+      // Cuenta nueva que nunca fijó su contraseña (FORCE_CHANGE_PASSWORD): Cognito no
+      // puede enviar código hasta el primer ingreso. Guiamos al usuario a activarla.
+      if (/NotAuthorized/i.test(t) || /current state/i.test(t))
+        throw new Error("Tu cuenta aún no está activada. Ingresa con la contraseña temporal que te dio el administrador; al entrar te pedirá crear tu propia contraseña.");
+      if (/UserNotFound/i.test(t))
+        throw new Error("No encontramos una cuenta con ese correo.");
+      if (/LimitExceeded|TooManyRequests/i.test(t))
+        throw new Error("Demasiados intentos. Espera unos minutos e inténtalo de nuevo.");
+      throw new Error(data.message || "No se pudo enviar el código");
+    }
     return data.CodeDeliveryDetails || {};
   }
 
