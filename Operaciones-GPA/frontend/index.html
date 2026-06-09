@@ -194,7 +194,10 @@ function Login({onLogin,onSetNewPassword}){
   const[fp,setFp]=useState(0);const[code,setCode]=useState("");const[msg,setMsg]=useState(""); // fp: 0 login · 1 pedir código · 2 confirmar
   const go=async()=>{
     setErr("");setBusy(true);
-    try{ const r=await onLogin(u.trim(),p); if(r&&r.challenge==="NEW_PASSWORD_REQUIRED")setNeedNew(true); }
+    try{ const r=await onLogin(u.trim(),p);
+      if(r&&r.challenge==="NEW_PASSWORD_REQUIRED")setNeedNew(true);
+      else if(r&&r.challenge==="PASSWORD_RESET_REQUIRED"){setErr("");setFp(1);setMsg("Tu administrador restableció tu contraseña. Pulsa \"Enviar código\" para recibir un código por correo y crear una nueva.");}
+    }
     catch(e){ setErr(e.message||"No se pudo iniciar sesión"); }
     setBusy(false);
   };
@@ -245,6 +248,7 @@ function Login({onLogin,onSetNewPassword}){
             <div style={{fontSize:14,fontWeight:700,color:"#222",marginBottom:6}}>Recuperar contraseña</div>
             <div style={{fontSize:11,color:"#888",marginBottom:12}}>Escribe tu correo y te enviaremos un código para restablecerla.</div>
             <label>Correo</label><input type="text" value={u} onChange={e=>setU(e.target.value)} placeholder="usuario@gpa.com.mx" autoCapitalize="off" onKeyDown={e=>e.key==="Enter"&&pedirCodigo()}/>
+            {msg&&<div style={{background:C.greenLt,color:C.green,borderRadius:6,padding:"7px 10px",fontSize:12,marginTop:8}}>{msg}</div>}
             {err&&<div className="eb" style={{marginTop:8}}>{err}</div>}
             <button className="bp" onClick={pedirCodigo} disabled={busy||!u} style={{marginTop:14}}>{busy?"Enviando…":"Enviar código"}</button>
             <div style={{textAlign:"center",marginTop:10}}><a onClick={volverLogin} style={{fontSize:12,color:C.blue,cursor:"pointer"}}>← Volver</a></div>

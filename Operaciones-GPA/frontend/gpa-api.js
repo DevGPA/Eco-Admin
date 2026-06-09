@@ -60,6 +60,10 @@ class GpaApi {
       };
       return { challenge: "NEW_PASSWORD_REQUIRED" };
     }
+    // El administrador restableció la contraseña (estado RESET_REQUIRED): el usuario
+    // debe crear una nueva con un código que le llega por correo.
+    if (/PasswordResetRequired/i.test(data.__type || ""))
+      return { challenge: "PASSWORD_RESET_REQUIRED" };
     if (!res.ok || !data.AuthenticationResult)
       throw new Error(data.message || "Usuario o contraseña incorrectos");
     return this._finishAuth(data.AuthenticationResult, email);
