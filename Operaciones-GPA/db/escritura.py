@@ -75,8 +75,69 @@ def merge_registro(tipo: str, rid: str, parche: dict) -> None:
 
 
 # ── Catálogos ────────────────────────────────────────────────────
-def guardar_vehiculo(v: dict) -> None:
-    _t().put_item(Item={"PK": m.PK_VEHICLE, "SK": m.sk_vehicle(v["id"]), **m.to_dynamo(v)})
+# Campos que SÍ se pueden modificar en un vehículo existente.
+EDITABLES_VEH = ("responsable", "combustible", "precio", "producto", "activo")
+# Campos inmutables (no se alteran aunque vengan distintos): economico, placas,
+# subMarca, sucursal, tanque (+ id, que es la clave).
+
+
+def guardar_vehiculo(v: dict) -> dict:
+    """
+    Reglas (autoritativas en servidor):
+      • NO borra vehículos (no hay borrado; el alta/edición nunca elimina).
+      • Vehículo EXISTENTE: solo se actualizan los campos editables
+        (responsable, combustible, precio, producto, activo); el resto se conserva.
+      • Vehículo NUEVO: el id debe ser numérico y CONSECUTIVO INCREMENTAL
+        (mayor al id más alto existente). Si no, se rechaza.
+    """
+    vid = str(v.get("id", "")).strip()
+    if not vid:
+        raise ValueError("Falta el id del vehículo")
+    t = _t()
+    sk = m.sk_vehicle(vid)
+    existente = t.get_item(Key={"PK": m.PK_VEHICLE, "SK": sk}).get("Item")
+
+    if existente:
+        item = dict(existente)
+        for k in EDITABLES_VEH:
+            if k == "activo":
+                if "activo" in v:
+                    item["activo"] = bool(v["activo"])
+            elif k in v and v[k] not in (None, ""):
+                item[k] = v[k]
+        t.put_item(Item=m.to_dynamo(item))
+        return {"accion": "actualizado", "id": vid}
+
+    # Nuevo: validar consecutivo incremental
+    try:
+        nid = int(vid)
+    except ValueError:
+        raise ValueError(f"El id del vehículo debe ser numérico (recibido: '{vid}')")
+    maxid = 0
+    resp = t.query(KeyConditionExpression=Key("PK").eq(m.PK_VEHICLE))
+    for it in resp.get("Items", []):
+        try:
+            maxid = max(maxid, int(str(it.get("id", "0"))))
+        except ValueError:
+            pass
+    if nid <= maxid:
+        raise ValueError(f"El id #{vid} no es incremental (último #{maxid}). "
+                         f"No se permite reusar ni retroceder ids para conservar el histórico.")
+    nuevo = {
+        "id": vid,
+        "economico": str(v.get("economico") or vid),
+        "placas": v.get("placas", ""),
+        "subMarca": v.get("subMarca", ""),
+        "sucursal": v.get("sucursal", ""),
+        "tanque": v.get("tanque", 0),
+        "responsable": v.get("responsable", ""),
+        "combustible": v.get("combustible", "Gasolina"),
+        "producto": v.get("producto", ""),
+        "precio": v.get("precio", 0),
+        "activo": v.get("activo", True),
+    }
+    t.put_item(Item={"PK": m.PK_VEHICLE, "SK": sk, **m.to_dynamo(nuevo)})
+    return {"accion": "creado", "id": vid}
 
 
 def guardar_responsable(u: dict) -> None:
