@@ -303,13 +303,17 @@ Resources:
             Method: GET
             Path:   /auditor/destino
 
-        # API Gateway — GET /health (sin auth)
+        # API Gateway — GET /health (público, sin auth)
         ApiHealth:
           Type: HttpApi
           Properties:
             ApiId:  !Ref GpaHttpApi
             Method: GET
             Path:   /health
+            # Sobreescribe el DefaultAuthorizer (CognitoJWT): el health check
+            # debe ser accesible sin token (uptime monitors, balanceadores, etc.)
+            Auth:
+              Authorizer: NONE
 
         # SQS — cola de procesamiento asíncrono
         SqsCola:
