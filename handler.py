@@ -140,6 +140,7 @@ def _route_upload_url(event):
     """URL prefirmada de S3 para subir un PDF a pendientes/{fecha}/.
     El objeto subido dispara el Lambda (OCR → evaluar) de forma asíncrona."""
     import boto3, re as _re
+    from botocore.config import Config
     from datetime import datetime, timezone
     b=_body(event)
     nombre=str(b.get("filename","")).strip()
@@ -159,7 +160,15 @@ def _route_upload_url(event):
     # mayúsculas; sin esto un "FACTURA.PDF" se sube pero no dispara el OCR.
     seguro=_re.sub(r"\.([A-Za-z0-9]+)$", lambda m: "."+m.group(1).lower(), seguro)
     key=f"pendientes/{fecha}/{seguro}"
-    url=boto3.client("s3").generate_presigned_url(
+    # Firma SigV4 + endpoint regional + virtual-hosted: evita el 403
+    # SignatureDoesNotMatch que produce el cliente S3 por defecto cuando la
+    # URL se consume desde el navegador (host/firma inconsistentes).
+    region=os.environ.get("AWS_REGION") or "us-east-1"
+    s3=boto3.client("s3", region_name=region,
+                    endpoint_url=f"https://s3.{region}.amazonaws.com",
+                    config=Config(signature_version="s3v4",
+                                  s3={"addressing_style":"virtual"}))
+    url=s3.generate_presigned_url(
         "put_object", Params={"Bucket":bucket,"Key":key}, ExpiresIn=900)
     logger.info("UPLOAD-URL %s user=%s",key,_uid(event))
     return _ok({"url":url,"key":key,"bucket":bucket,"fecha":fecha})

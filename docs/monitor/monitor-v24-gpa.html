@@ -1895,7 +1895,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!r.ok) throw new Error('upload-url HTTP ' + r.status);
         var data = await r.json();
         var put = await fetch(data.url, {method:'PUT', body: f});
-        if (!put.ok) throw new Error('S3 PUT HTTP ' + put.status);
+        if (!put.ok) throw new Error('S3 PUT ' + put.status + (await _s3Code(put)));
         results.push({folioCP: base, codigoMotor:'EN PROCESO',
           concepto:'Subido al motor \u00B7 OCR + evaluaci\u00F3n en curso\u2026', estado:'PENDIENTE'});
       } catch (e) {
@@ -2186,7 +2186,7 @@ async function startEvaluation() {
       if (!r.ok) throw new Error('upload-url HTTP ' + r.status);
       const { url } = await r.json();
       const put = await fetch(url, { method: 'PUT', body: cf.file });
-      if (!put.ok) throw new Error('S3 PUT HTTP ' + put.status);
+      if (!put.ok) throw new Error('S3 PUT ' + put.status + (await _s3Code(put)));
       okN++;
     } catch (e) {
       errN++; errores.push(cf.name + ' → ' + e.message);
@@ -2217,6 +2217,16 @@ async function startEvaluation() {
     setTimeout(() => us.style.display = 'none', 350);
     refrescarTableroVariasVeces();
   }, 1200);
+}
+
+// Extrae el código de error que S3 devuelve en el cuerpo XML de un PUT
+// fallido (AccessDenied, SignatureDoesNotMatch, etc.) para no quedar a ciegas.
+async function _s3Code(resp) {
+  try {
+    const t = await resp.text();
+    const m = t.match(/<Code>([^<]+)<\/Code>/);
+    return m ? ' · ' + m[1] : '';
+  } catch (e) { return ''; }
 }
 
 // Refresca el Kanban ahora y luego de forma escalonada (5s, 12s, 25s, 45s)
