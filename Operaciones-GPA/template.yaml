@@ -380,6 +380,18 @@ Resources:
       AccountRecoverySetting:
         RecoveryMechanisms:
           - { Name: verified_email, Priority: 1 }
+      # Correo de invitación al dar de alta una cuenta (en español y claro: el
+      # login es por correo, no por el {username} interno de Cognito).
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        InviteMessageTemplate:
+          EmailSubject: "Tu acceso a GPA Operaciones"
+          EmailMessage: |
+            Hola. Se creó tu cuenta de acceso a <b>GPA Operaciones</b>.<br><br>
+            Inicia sesión con tu <b>correo electrónico</b> y esta contraseña temporal: <b>{####}</b><br><br>
+            En tu primer ingreso te pediremos crear tu propia contraseña.<br>
+            Abre la app: https://operaciones-gpa.d109om7rqg17x3.amplifyapp.com<br><br>
+            (id de referencia: {username})
       UserPoolTags:
         Proyecto: GPA-Operaciones
         Env:      !Ref Env

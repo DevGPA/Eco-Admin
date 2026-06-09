@@ -99,20 +99,33 @@ def guardar_cuenta(d: dict) -> dict:
         {"Name": "custom:nombre", "Value": d.get("nombre") or ""},
     ]
 
-    creado = False
-    try:
-        c.admin_create_user(UserPoolId=POOL, Username=email,
-                            UserAttributes=attrs, MessageAction="SUPPRESS")
-        creado = True
-    except c.exceptions.UsernameExistsException:
-        c.admin_update_user_attributes(UserPoolId=POOL, Username=email, UserAttributes=attrs)
-
-    # Contraseña (en alta es obligatoria; en edición es opcional)
     pwd = d.get("password")
-    if creado and not pwd:
-        raise ValueError("La contraseña es obligatoria al crear una cuenta")
-    if pwd:
-        c.admin_set_user_password(UserPoolId=POOL, Username=email, Password=pwd, Permanent=True)
+
+    # ¿La cuenta ya existe? (decide alta vs edición)
+    try:
+        c.admin_get_user(UserPoolId=POOL, Username=email)
+        existe = True
+    except c.exceptions.UserNotFoundException:
+        existe = False
+
+    creado = False
+    if not existe:
+        # ALTA: la contraseña (temporal) es obligatoria. Cognito ENVÍA el correo de
+        # invitación con los datos de acceso y la cuenta queda en FORCE_CHANGE_PASSWORD,
+        # por lo que se exige crear una contraseña propia en el primer ingreso.
+        if not pwd:
+            raise ValueError("La contraseña es obligatoria al crear una cuenta")
+        c.admin_create_user(
+            UserPoolId=POOL, Username=email, UserAttributes=attrs,
+            TemporaryPassword=pwd,
+            DesiredDeliveryMediums=["EMAIL"],
+        )
+        creado = True
+    else:
+        # EDICIÓN: actualizar atributos; si viene contraseña, es un reset directo del admin.
+        c.admin_update_user_attributes(UserPoolId=POOL, Username=email, UserAttributes=attrs)
+        if pwd:
+            c.admin_set_user_password(UserPoolId=POOL, Username=email, Password=pwd, Permanent=True)
 
     # Rol → grupo: dejar solo el grupo del rol vigente
     grupos = c.admin_list_groups_for_user(UserPoolId=POOL, Username=email).get("Groups", [])
