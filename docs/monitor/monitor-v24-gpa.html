@@ -895,8 +895,8 @@ input::placeholder{color:var(--ink3);font-weight:400;}
       </button>
       <div class="upload-drop-or">o arrastra archivos PDF directamente</div>
     </div>
-    <input type="file" id="uploadInput" webkitdirectory multiple accept=".pdf,.xml" style="display:none" onchange="handleUploadInput(this)">
-    <input type="file" id="uploadFiles" multiple accept=".pdf,.xml" style="display:none" onchange="handleFileInput(this)">
+    <input type="file" id="uploadInput" webkitdirectory multiple accept=".pdf,.PDF" style="display:none" onchange="handleUploadInput(this)">
+    <input type="file" id="uploadFiles" multiple accept=".pdf,.PDF" style="display:none" onchange="handleFileInput(this)">
 
     <!-- Results after classification -->
     <div class="upload-results" id="uploadResults">
@@ -970,7 +970,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     </button>
     <button class="tbtn" onclick="toggleTheme()">☀ / ☽</button>
   </div>
-  <input type="file" id="fi" webkitdirectory multiple accept=".pdf,.xml" onchange="onFI(this)">
+  <input type="file" id="fi" webkitdirectory multiple accept=".pdf,.PDF" onchange="onFI(this)">
 </header>
 <div class="teal-accent-bar"></div>
 
@@ -1012,7 +1012,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     Seleccionar archivos PDF
   </label>
-  <input type="file" id="evalFileInput" multiple accept=".pdf,.xml,.PDF,.XML" style="display:none">
+  <input type="file" id="evalFileInput" multiple accept=".pdf,.PDF" style="display:none">
   <div class="euz-files-wrap" id="euzFilesWrap" style="display:none"><div class="euz-files" id="euzFiles"></div></div>
   <span class="eval-count" id="evalCount" style="display:none">0</span>
   <button class="euz-clear" id="evalClear" style="display:none" title="Limpiar">&#x2715;</button>
@@ -1235,7 +1235,7 @@ async function readDir(dh,path){const fs=[];for await(const e of dh.values()){if
 function clf(n){const u=n.toUpperCase();const ext=u.split('.').pop();if(ext==='XML')return'xml';if(ext==='PDF'){if(/^(FA|FC|FV|FM|FLC)/.test(u))return'fv';if(/^(GCCR|GCR)/.test(u))return'ptx';if(/^(FAC|GDL|ACRED)/.test(u))return'cfdi';if(/^(1[0-9]{8,}|CP|JC|HP|JD|M8|VP|M83)/.test(u))return'cp';return'unk';}return'unk';}
 function fmt(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(0)+'KB';return(b/1048576).toFixed(1)+'MB';}
 function procFiles(files){
-  const rel=files.filter(f=>/\.(pdf|xml)$/i.test(f.name));
+  const rel=files.filter(f=>/\.pdf$/i.test(f.name));
   const cl=rel.map(f=>({...f,cls:clf(f.name)}));
   const fv=cl.filter(f=>f.cls==='fv'),cp=cl.filter(f=>f.cls==='cp'),xml=cl.filter(f=>f.cls==='xml'),ptx=cl.filter(f=>f.cls==='ptx'),cfdi=cl.filter(f=>f.cls==='cfdi'),unk=cl.filter(f=>f.cls==='unk');
   document.getElementById('fpSt').style.display='flex';
@@ -1987,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fileInput) fileInput.addEventListener('change', function() {
       var arr = [];
       for (var i = 0; i < this.files.length; i++) {
-        if (/\.(pdf|xml)$/i.test(this.files[i].name)) arr.push(this.files[i]);
+        if (/\.pdf$/i.test(this.files[i].name)) arr.push(this.files[i]);
       }
       if (arr.length) { evalFiles = evalFiles.concat(arr); render(); }
     });
@@ -2046,7 +2046,7 @@ function triggerUpload() {
         for await (const entry of dir.values()) {
           if (entry.kind === 'file') {
             const file = await entry.getFile();
-            if (/\.(pdf|xml)$/i.test(file.name)) {
+            if (/\.pdf$/i.test(file.name)) {
               files.push({ name: file.name, size: file.size, file: file });
             }
           }
@@ -2061,7 +2061,7 @@ function triggerUpload() {
 
 function handleUploadInput(input) {
   const files = Array.from(input.files)
-    .filter(f => /\.(pdf|xml)$/i.test(f.name))
+    .filter(f => /\.pdf$/i.test(f.name))
     .map(f => ({ name: f.name, size: f.size, file: f }));
   if (files.length) {
     const folder = files[0].file.webkitRelativePath?.split('/')[0] || 'Documentos';
@@ -2071,7 +2071,7 @@ function handleUploadInput(input) {
 
 function handleFileInput(input) {
   const files = Array.from(input.files)
-    .filter(f => /\.(pdf|xml)$/i.test(f.name))
+    .filter(f => /\.pdf$/i.test(f.name))
     .map(f => ({ name: f.name, size: f.size, file: f }));
   if (files.length) processUploadedFiles(files, 'Archivos seleccionados');
 }
@@ -2080,7 +2080,7 @@ function handleDrop(event) {
   const items = event.dataTransfer.items || [];
   const files = [];
   Array.from(event.dataTransfer.files).forEach(f => {
-    if (/\.(pdf|xml)$/i.test(f.name)) files.push({ name: f.name, size: f.size, file: f });
+    if (/\.pdf$/i.test(f.name)) files.push({ name: f.name, size: f.size, file: f });
   });
   if (files.length) processUploadedFiles(files, 'Archivos arrastrados');
 }

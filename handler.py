@@ -143,8 +143,10 @@ def _route_upload_url(event):
     from datetime import datetime, timezone
     b=_body(event)
     nombre=str(b.get("filename","")).strip()
-    if not nombre.lower().endswith((".pdf",".xml")):
-        return _err("Se requiere 'filename' con extensión .pdf o .xml",400)
+    # Solo PDF: es lo único que el pipeline OCR procesa (los fletes son
+    # documentos escaneados). Aceptar otros formatos sería una falla silenciosa.
+    if not nombre.lower().endswith(".pdf"):
+        return _err("Solo se aceptan documentos PDF",400)
     bucket=os.environ.get("S3_BUCKET","")
     if not bucket: return _err("S3_BUCKET no configurado",500)
     fecha=str(b.get("fecha") or "")
@@ -153,6 +155,9 @@ def _route_upload_url(event):
     base=_re.split(r"[\\/]",nombre)[-1]          # descartar componentes de ruta
     seguro=_re.sub(r"[^A-Za-z0-9._-]","_",base)
     seguro=_re.sub(r"\.{2,}",".",seguro).lstrip(".") or "archivo.pdf"  # sin '..' ni punto inicial
+    # Extensión en minúsculas: el filtro de sufijo de S3 (.pdf) es sensible a
+    # mayúsculas; sin esto un "FACTURA.PDF" se sube pero no dispara el OCR.
+    seguro=_re.sub(r"\.([A-Za-z0-9]+)$", lambda m: "."+m.group(1).lower(), seguro)
     key=f"pendientes/{fecha}/{seguro}"
     url=boto3.client("s3").generate_presigned_url(
         "put_object", Params={"Bucket":bucket,"Key":key}, ExpiresIn=900)

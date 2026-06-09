@@ -78,8 +78,9 @@ def test_upload_url_genera_presigned(monkeypatch):
 
 def test_upload_url_rechaza_extension_invalida(monkeypatch):
     monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
-    resp = _route_upload_url(_evento({"filename": "factura.docx"}))
-    assert resp["statusCode"] == 400
+    assert _route_upload_url(_evento({"filename": "factura.docx"}))["statusCode"] == 400
+    # XML también se rechaza: el OCR solo procesa PDF (evita falla silenciosa).
+    assert _route_upload_url(_evento({"filename": "cfdi.xml"}))["statusCode"] == 400
 
 
 def test_upload_url_sin_bucket_500(monkeypatch):
@@ -96,3 +97,14 @@ def test_upload_url_sanitiza_nombre(monkeypatch):
     assert resp["statusCode"] == 200
     key = json.loads(resp["body"])["key"]
     assert ".." not in key and " " not in key and key.startswith("pendientes/2026-05-07/")
+
+
+def test_upload_url_extension_a_minusculas(monkeypatch):
+    # El filtro de sufijo de S3 (.pdf) es sensible a mayúsculas: la key debe
+    # terminar en minúsculas para que el objeto dispare el OCR.
+    fake = _FakeS3()
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: fake)
+    monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
+    resp = _route_upload_url(_evento({"filename": "FACTURA.PDF", "fecha": "2026-05-07"}))
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["key"].endswith(".pdf")
