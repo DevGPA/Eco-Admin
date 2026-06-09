@@ -21,7 +21,7 @@ frontend:
   phases:
     build:
       commands:
-        - 'echo "window.GPA_CONFIG={apiUrl:\"$API_URL\",region:\"${AWS_REGION:-us-east-1}\",poolId:\"$POOL_ID\",clientId:\"$CLIENT_ID\",env:\"${APP_ENV:-prod}\"};" > frontend/config.js'
+        - 'echo "window.GPA_CONFIG={apiUrl:\"$API_URL\",region:\"${AWS_REGION:-us-east-1}\",poolId:\"$POOL_ID\",clientId:\"$CLIENT_ID\",env:\"${APP_ENV:-prod}\",dominio:\"${DOMINIO_PERMITIDO:-gpa.com.mx}\"};" > frontend/config.js'
         - 'echo "config.js generado:" && cat frontend/config.js'
   artifacts:
     baseDirectory: frontend

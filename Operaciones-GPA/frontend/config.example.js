@@ -8,4 +8,5 @@ window.GPA_CONFIG = {
   poolId:   "us-east-1_XXXXXXXXX",
   clientId: "XXXXXXXXXXXXXXXXXXXXXXXXXX",
   env:      "dev",
+  dominio:  "gpa.com.mx",   // dominio de correo permitido para cuentas
 };
