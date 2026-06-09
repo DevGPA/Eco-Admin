@@ -110,16 +110,15 @@ def guardar_cuenta(d: dict) -> dict:
 
     creado = False
     if not existe:
-        # ALTA: la contraseña (temporal) es obligatoria. Cognito ENVÍA el correo de
-        # invitación con los datos de acceso y la cuenta queda en FORCE_CHANGE_PASSWORD,
-        # por lo que se exige crear una contraseña propia en el primer ingreso.
-        if not pwd:
-            raise ValueError("La contraseña es obligatoria al crear una cuenta")
-        c.admin_create_user(
-            UserPoolId=POOL, Username=email, UserAttributes=attrs,
-            TemporaryPassword=pwd,
-            DesiredDeliveryMediums=["EMAIL"],
-        )
+        # ALTA: Cognito GENERA una contraseña temporal automáticamente y la envía en el
+        # correo de invitación. La cuenta queda en FORCE_CHANGE_PASSWORD, por lo que se
+        # exige crear una contraseña propia en el primer ingreso. (Si el admin manda una
+        # contraseña, se respeta como temporal; normalmente no se envía ninguna.)
+        kwargs = dict(UserPoolId=POOL, Username=email, UserAttributes=attrs,
+                      DesiredDeliveryMediums=["EMAIL"])
+        if pwd:
+            kwargs["TemporaryPassword"] = pwd
+        c.admin_create_user(**kwargs)
         creado = True
     else:
         # EDICIÓN: actualizar atributos; si viene contraseña, es un reset directo del admin.
