@@ -169,8 +169,11 @@ async function descargarPDFCorp(){
   const titulo=area.dataset.pdftitle||"Formato GPA";
   const clone=area.cloneNode(true);
   clone.querySelectorAll(".no-print").forEach(n=>n.remove());
-  await Promise.all([...clone.querySelectorAll("img")].map(async img=>{
+  const imgs=[...clone.querySelectorAll("img")];
+  // Convierte cada imagen de S3 a dataURL (evita CORS) y acota su tamaño visual
+  await Promise.all(imgs.map(async img=>{
     try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}catch(e){}
+    img.style.maxWidth="100%";img.style.maxHeight="70mm";img.style.height="auto";
   }));
   const head=document.createElement("div");
   head.innerHTML='<div style="display:flex;align-items:center;gap:12px;border-bottom:3px solid '+C.blue+';padding-bottom:10px;margin-bottom:14px">'
@@ -179,12 +182,33 @@ async function descargarPDFCorp(){
     +'<div style="font-size:12px;color:#555">'+titulo+'</div></div>'
     +'<div style="font-size:10px;color:#888;text-align:right">'+new Date().toLocaleString("es-MX")+'</div></div>';
   const wrap=document.createElement("div");
-  wrap.style.cssText="width:190mm;padding:4mm;background:#fff;font-family:-apple-system,Segoe UI,sans-serif;color:#222;position:fixed;left:-10000px;top:0";
+  // position:absolute fuera de pantalla (NO opacity:0, eso saldría en blanco): conserva layout real
+  wrap.style.cssText="width:190mm;padding:4mm;background:#fff;font-family:-apple-system,Segoe UI,sans-serif;color:#222;position:absolute;left:-9999px;top:0";
   wrap.appendChild(head);wrap.appendChild(clone);
   document.body.appendChild(wrap);
+  // Espera a que las imágenes (ya dataURL) decodifiquen, si no el PDF sale en blanco
+  await Promise.all([...wrap.querySelectorAll("img")].map(im=>im.decode?im.decode().catch(()=>{}):Promise.resolve()));
   const fname=titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10)+".pdf";
-  try{await html2pdf().set({margin:[8,8,8,8],filename:fname,image:{type:"jpeg",quality:0.92},html2canvas:{scale:2,useCORS:true,backgroundColor:"#fff"},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(wrap).save();}
+  try{await html2pdf().set({margin:[8,8,8,8],filename:fname,image:{type:"jpeg",quality:0.9},html2canvas:{scale:2,useCORS:true,backgroundColor:"#fff",logging:false,imageTimeout:0},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(wrap).save();}
+  catch(e){alert("No se pudo generar el PDF: "+e.message);}
   finally{wrap.remove();}
+}
+
+// Fecha local YYYY-MM-DD (para filtros por día) y descarga de CSV genérica
+const ymd=f=>{if(!f)return"";const d=new Date(f);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+function csvDownload(nombre,cols,filas){
+  const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(","))].join("\r\n");
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");
+  a.href=url;a.download=nombre+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+// Componente reutilizable: filtros de fecha (desde/hasta) + botón Descargar CSV
+function FiltroFechas({desde,hasta,setDesde,setHasta,onCSV,n}){
+  return(<div className="card" style={{padding:"10px 12px"}}>
+    <div className="r2"><div><label>Desde</label><input type="date" value={desde} onChange={e=>setDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}/></div></div>
+    <button className="bs" style={{width:"100%",marginTop:8}} disabled={!n} onClick={onCSV}>⬇ Descargar CSV ({n})</button>
+  </div>);
 }
 
 // ─── LOGIN ──────────────────────────────────────────────────────────
@@ -373,17 +397,27 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const yo=cat.users.find(u=>u.mail===session.email)||null;
   // Combustible: Gasolina, Diésel y Gas LP cargan combustible; solo se excluyen los eléctricos.
   const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
-  const availUsr=cat.users.filter(u=>u.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(u.sucursal)));
-  const[veh,setVeh]=useState(availVeh[0]?String(availVeh[0].id):"");
-  const[usr,setUsr]=useState(yo?String(yo.id):availUsr[0]?String(availUsr[0].id):"");
-  const[km,setKm]=useState("");const[tank,setTank]=useState(0.25);const[obs,setObs]=useState("");
-  const[photo,setPhoto]=useState(null);const[sig,setSig]=useState(null);const[step,setStep]=useState(1);const[busy,setBusy]=useState(false);
+  // El solicitante SIEMPRE es la persona que inició sesión (match por su correo).
+  const solicitante=yo||{id:null,nombre:session.nombre||session.email,mail:session.email};
+  // Borrador: guarda lo no enviado para retomarlo después. No se envía → no cuenta para km/controles.
+  const DKEY="gpa_sol_draft_"+session.email;
+  const draftRef=useRef(undefined);
+  if(draftRef.current===undefined){try{draftRef.current=JSON.parse(localStorage.getItem(DKEY))||{};}catch{draftRef.current={};}}
+  const D=draftRef.current;
+  const[veh,setVeh]=useState(D.veh||(availVeh[0]?String(availVeh[0].id):""));
+  const[km,setKm]=useState(D.km||"");const[tank,setTank]=useState(D.tank||0.25);const[obs,setObs]=useState(D.obs||"");
+  const[photo,setPhoto]=useState(D.photo||null);const[sig,setSig]=useState(D.sig||null);const[step,setStep]=useState(D.step||1);const[busy,setBusy]=useState(false);
+  const[teniaBorrador]=useState(!!(D.km||D.photo||D.obs||(D.step&&D.step>1)));
+  useEffect(()=>{try{localStorage.setItem(DKEY,JSON.stringify({veh,km,tank,obs,photo,sig,step}));}catch{}},[veh,km,tank,obs,photo,sig,step]);
+  const descartarBorrador=()=>{try{localStorage.removeItem(DKEY);}catch{}setVeh(availVeh[0]?String(availVeh[0].id):"");setKm("");setTank(0.25);setObs("");setPhoto(null);setSig(null);setStep(1);showToast("Borrador descartado");};
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
-  const user=cat.users.find(u=>String(u.id)===String(usr));
+  const user=solicitante;
   const need=Math.max(0,1-tank);const litros=vehicle?Math.round(vehicle.tanque*need):0;const monto=vehicle?Math.round(litros*vehicle.precio):0;
   const lastKm=items.filter(s=>String(s.vehicleId)===String(veh)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.km??null;
-  const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>1000?`No puede exceder 1,000 km del último (${lastKm.toLocaleString()} km)`:null):null;
+  // Montacargas (Gas LP/Eléctrico): máx 100 km entre cargas; vehículos normales: 1000
+  const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
+  const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   const submit=async()=>{
     if(!vehicle||!user||busy)return;
     setBusy(true);
@@ -391,6 +425,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
       const datos={vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,userId:user.id,responsable:user.nombre,mail:user.mail,km:kmN,tankBefore:tank,tankAfter:1,necesidad:need,litros,monto,obs,photo,firma:sig,status:"Pendiente"};
       const subido=await api.subirEvidencias("combustible",datos);
       await api.crear("combustible",subido);
+      try{localStorage.removeItem(DKEY);}catch{}
       showToast("✓ Solicitud enviada");
       await refrescar();
       onDone();
@@ -400,6 +435,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   return(
     <div>
       <div className="sb">{[1,2,3].map(s=><div key={s} className="sd" style={{background:step>=s?C.blue:"#e0e0e0"}}/>)}</div>
+      {teniaBorrador&&<div className="wb" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span>📝 Retomaste un borrador no enviado.</span><button className="bd" style={{padding:"4px 10px",fontSize:11}} onClick={descartarBorrador}>Descartar</button></div>}
       {step===1&&<>
         <div className="card">
           <div className="ct">Vehículo</div>
@@ -408,8 +444,8 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         </div>
         <div className="card">
           <div className="ct">Solicitante</div>
-          <label>Responsable</label>
-          <select value={usr} onChange={e=>setUsr(e.target.value)}><option value="">— Selecciona —</option>{availUsr.map(u=><option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+          <label>Responsable (tu sesión)</label>
+          <input type="text" value={solicitante.nombre} disabled style={{background:"#f5f5f5",color:"#666"}}/>
           <label>Kilometraje actual</label>
           <input type="number" placeholder="Ej. 91127" value={km} onChange={e=>setKm(e.target.value)}/>
           {lastKm!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastKm.toLocaleString()} km</div>}
@@ -423,7 +459,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         </div>
         <label>Observaciones</label>
         <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Notas adicionales..."/>
-        <button className="bp" disabled={!veh||!usr||!km||!!kmErr} onClick={()=>setStep(2)}>Siguiente →</button>
+        <button className="bp" disabled={!veh||!km||!!kmErr} onClick={()=>setStep(2)}>Siguiente →</button>
       </>}
       {step===2&&<>
         <div className="card">
@@ -449,11 +485,13 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
 }
 
 function SolHistory({items,rol,onSelect}){
-  const[f,setF]=useState("Todos");
-  const list=items.filter(s=>f==="Todos"||s.status===f).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
+  const list=items.filter(s=>(f==="Todos"||s.status===f)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const csv=()=>csvDownload("solicitudes_combustible",["Fecha","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Monto","Estado"],list.map(s=>[fdt(s.fecha),s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.monto,s.status]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
       {list.length===0&&<div className="empty">No hay solicitudes</div>}
       <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
     </div>
@@ -605,11 +643,13 @@ function DmgList({value,onChange}){
 }
 
 function CLHistory({items,onSelect}){
-  const[f,setF]=useState("Todos");
-  const list=items.filter(c=>f==="Todos"||c.tipo===f).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
+  const list=items.filter(c=>(f==="Todos"||c.tipo===f)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const csv=()=>csvDownload("checklist_reparto",["Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km"],list.map(c=>[fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km]));
   return(
     <div>
       <div className="tr">{["Todos","semanal","mensual"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="Todos"?"Todos":x==="semanal"?"Semanal":"Mensual"}</button>)}</div>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
       {list.length===0&&<div className="empty">No hay checklists</div>}
       <div className="card">{list.map(c=><div key={c.id} className="li" onClick={()=>onSelect(c)}><div className="lit"><span className="lim">{c.placas} · #{c.economico}</span><span className={"bdg "+(c.tipo==="semanal"?"dpe":"dok")}>{c.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="lis">{c.responsable} · {c.sucursal}</div><div className="lis">{fdt(c.fecha)}</div></div>)}</div>
     </div>
@@ -635,7 +675,7 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
   const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
   const mc=cat.vehicles.filter(v=>v.activo&&(v.combustible==="Gas LP"||v.combustible==="Electrico")&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
-  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} session={session} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
+  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} items={items} session={session} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
   if(view==="detail"&&sel)return<MCDetail rec={sel} canAuth={canAuth} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>;
   if(view==="history")return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("home")}>← Inicio</button><MCHistory items={items} onSelect={r=>{setSel(r);setView("detail");}}/></div>;
   return(
@@ -654,7 +694,7 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
   );
 }
 
-function MCForm({tipo,cat,mc,session,sucursalesUser,refrescar,showToast,onDone}){
+function MCForm({tipo,cat,mc,items,session,sucursalesUser,refrescar,showToast,onDone}){
   const items=tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;
   const yo=cat.users.find(u=>u.mail===session.email)||null;
   const availMC=mc.filter(v=>!sucursalesUser||sucursalesUser.includes(v.sucursal));
@@ -668,6 +708,10 @@ function MCForm({tipo,cat,mc,session,sucursalesUser,refrescar,showToast,onDone})
   const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(eq));
+  // Horas de trabajo: no menor al último ni más de 100 h por encima del último registro
+  const lastHoras=(items||[]).filter(r=>String(r.vehicleId)===String(eq)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.horas??null;
+  const horasN=parseFloat(horas);
+  const horasErr=horas!==""&&lastHoras!=null?(horasN<lastHoras?`No puede ser menor al último: ${lastHoras} h`:horasN-lastHoras>100?`No puede exceder 100 h del último (${lastHoras} h)`:null):null;
   const CHUNK=10;const chunks=[];for(let i=0;i<items.length;i+=CHUNK)chunks.push(items.slice(i,i+CHUNK));
   const total=chunks.length+2;const isLast=step===total-1;const curChunk=step>0&&step<total-1?chunks[step-1]:null;const off=(step-1)*CHUNK;
   const setR=(i,v)=>setResps(r=>({...r,[i]:v}));const setF=(i,v)=>setFotos(f=>({...f,[i]:v}));const setC=(i,v)=>setComents(c=>({...c,[i]:v}));
@@ -695,10 +739,12 @@ function MCForm({tipo,cat,mc,session,sucursalesUser,refrescar,showToast,onDone})
           <label>Estatus del equipo</label><select value={estatus} onChange={e=>setEstatus(e.target.value)}>{ESTATUS_MC.map(o=><option key={o}>{o}</option>)}</select>
           <label>Fecha de revisión</label><input type="date" value={dia} onChange={e=>setDia(e.target.value)}/>
           <div className="r2"><div><label>Semana No. (automática)</label><input type="text" value={semana?"Semana "+semana:""} disabled style={{background:"#f5f5f5",color:"#666"}}/></div><div><label>Horas de trabajo</label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
+          {lastHoras!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastHoras} h</div>}
+          {horasErr&&<div className="eb">{horasErr}</div>}
           <label>Quien revisa</label><input type="text" value={yo?.nombre||session.nombre} disabled style={{background:"#f5f5f5",color:"#aaa"}}/>
         </div>
         {estatus!=="Activo"&&<div className="wb">⚠️ Equipo inactivo — solo se registran datos generales y firma.</div>}
-        <button className="bp" disabled={!eq||!dia} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
+        <button className="bp" disabled={!eq||!dia||!!horasErr} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
       </div>}
       {curChunk&&estatus==="Activo"&&<div>
         <div className="card"><div className="ct">Chequeo Visual — #{off+1} al #{off+curChunk.length}</div>
@@ -735,11 +781,13 @@ function MCForm({tipo,cat,mc,session,sucursalesUser,refrescar,showToast,onDone})
 }
 
 function MCHistory({items,onSelect}){
-  const[f,setF]=useState("Todos");
-  const list=items.filter(r=>f==="Todos"||r.status===f||r.tipo===f).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
+  const list=items.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const csv=()=>csvDownload("checklist_montacargas",["Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas"],list.map(r=>[fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,Object.values(r.resps||{}).filter(v=>v==="P").length]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobado","Rechazado","gas","electrico"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="gas"?"Gas":x==="electrico"?"Eléctrico":x}</button>)}</div>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
       {list.length===0&&<div className="empty">No hay registros</div>}
       <div className="card">{list.map(r=>{const p=Object.values(r.resps||{}).filter(v=>v==="P").length;return(<div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.placas} · #{r.economico}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"} · {r.sucursal}</div><div className="lis">{fdate(r.fecha)} · Sem {r.semana||"—"}{p>0&&<span style={{color:C.red,fontWeight:600}}> · {p} problema(s)</span>}</div></div>);})}</div>
     </div>
