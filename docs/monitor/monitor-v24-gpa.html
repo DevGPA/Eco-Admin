@@ -1016,7 +1016,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
   <div class="euz-files-wrap" id="euzFilesWrap" style="display:none"><div class="euz-files" id="euzFiles"></div></div>
   <span class="eval-count" id="evalCount" style="display:none">0</span>
   <button class="euz-clear" id="evalClear" style="display:none" title="Limpiar">&#x2715;</button>
-  <button class="eval-go-btn" id="evalGoBtn" style="display:none"><div class="spinner"></div><span>&#x25B6; Evaluar motor v2.4</span></button>
+  <button class="eval-go-btn" id="evalGoBtn" style="display:none"><div class="spinner"></div><span>&#x25B6; Enviar documentos al motor</span></button>
 </div>
 <div class="eval-results" id="evalResults" style="display:none">
   <div class="er-header"><div class="er-title">Resultados de evaluaci&oacute;n &middot; Motor v2.4</div><button class="er-close" id="erClose">&#x2715;</button></div>
@@ -1159,9 +1159,9 @@ input::placeholder{color:var(--ink3);font-weight:400;}
       <div class="ti"><div class="tl">% flete est.</div><div class="tv" id="tPct">—</div></div>
     </div>
     <div style="padding:13px 18px;border-top:2px solid var(--ln);">
-      <button class="evb" id="evb" onclick="evaluar()">
+      <button class="evb" id="evb" onclick="evaluar()" title="Calcula el resultado de las reglas en el navegador con los datos que capturas. No consulta el motor en línea ni guarda nada.">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-        Evaluar solicitud en motor v2.4
+        Simular reglas (local · no usa el motor en línea)
       </button>
     </div>
   </div>
@@ -1279,7 +1279,7 @@ function getLines(){const ls=[];document.querySelectorAll('.pl').forEach(l=>{con
 function updT(){const ls=getLines();const tot=ls.reduce((s,l)=>s+l.amt,0);const eq=ls.filter(l=>l.cat==='EQ'||l.cat==='RE').reduce((s,l)=>s+l.amt,0);const co=ls.filter(l=>['EG','EP','MI'].includes(l.cat)).reduce((s,l)=>s+l.amt,0);document.getElementById('tTot').innerHTML=`$${tot.toFixed(2)} <span style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:var(--ink3)">USD</span>`;document.getElementById('tEq').textContent=`$${eq.toFixed(2)}`;document.getElementById('tCo').textContent=`$${co.toFixed(2)}`;const tc=parseFloat(document.getElementById('tC')?.value)||17.35;const fM=(parseFloat(document.getElementById('fM')?.value)||0)+(parseFloat(document.getElementById('fRY')?.value)||0);const fU=fM/tc;const p=tot>0?(fU/tot*100):0;const pe=document.getElementById('tPct');if(tot>0&&fM>0){pe.textContent=p.toFixed(1)+'%';pe.className='tv '+(p>30?'stop':p>15?'warn':'go');}else{pe.textContent='—';pe.className='tv';}
 const con=document.getElementById('psRows');if(!ls.length){con.innerHTML='<div class="psem">Agrega productos para ver el resumen</div>';return;}
 const grp={};ls.forEach(l=>{if(!grp[l.cat])grp[l.cat]={a:0};grp[l.cat].a+=l.amt;});const lbs={EQ:'Equipo',RE:'Recubrimiento',MI:'Mat. Instalación',EP:'Excluido ≤25kg',EG:'Excluido >25kg'};const dts={EQ:'go',RE:'go',MI:'warn',EP:'warn',EG:'stop'};let h='';Object.entries(grp).forEach(([c,{a}])=>{const pc=tot>0?(a/tot*100).toFixed(0):0;h+=`<div class="psr"><div class="psrl"><div class="psd ${dts[c]||'go'}"></div>${lbs[c]||c}</div><div class="psa">$${a.toFixed(2)} <span style="font-size:8.5px;color:var(--ink3)">${pc}%</span></div></div>`;});h+=`<div class="psto"><div class="pstl">Total consolidado</div><div class="pstv">$${tot.toFixed(2)} USD</div></div>`;con.innerHTML=h;}
-function evaluar(){const btn=document.getElementById('evb');btn.textContent='Evaluando…';setTimeout(()=>{btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Evaluar solicitud en motor v2.4`;motor();},400);}
+function evaluar(){const btn=document.getElementById('evb');btn.textContent='Simulando…';setTimeout(()=>{btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Simular reglas (local · no usa el motor en línea)`;motor();},400);}
 function motor(){
   const ls=getLines(),estado=document.getElementById('dE').value;
   const tc=parseFloat(document.getElementById('tC').value)||17.35;
@@ -1714,13 +1714,25 @@ async function submitNewPassword() {
 }
 
 function onLoginSuccess(email, silent) {
-  // Compartir la sesión con el SDK (gpa-api.js) para que el botón
-  // "Iniciar motor" y las llamadas al API usen el mismo token de Cognito.
-  if (typeof gpaApi !== 'undefined' && _session.token) {
-    gpaApi._token      = _session.token;
-    gpaApi._refreshTkn = _session.refresh || null;
-    gpaApi._tokenExp   = _session.exp || (Date.now() + 3600000);
-    gpaApi._userId     = email;
+  // Compartir sesión Y configuración con el SDK (gpa-api.js) para que el
+  // Kanban y las llamadas al API usen el mismo endpoint y token de Cognito.
+  // Sin este puente, el SDK se queda en "demo offline" (GPA_CONFIG vacío) y
+  // el tablero nunca carga datos reales aunque API_CONFIG esté configurado.
+  if (typeof gpaApi !== 'undefined') {
+    gpaApi.apiUrl   = API_CONFIG.apiUrl;
+    gpaApi.region   = API_CONFIG.region;
+    gpaApi.poolId   = API_CONFIG.poolId;
+    gpaApi.clientId = API_CONFIG.clientId;
+    if (_session.token) {
+      gpaApi._token      = _session.token;
+      gpaApi._refreshTkn = _session.refresh || null;
+      gpaApi._tokenExp   = _session.exp || (Date.now() + 3600000);
+      gpaApi._userId     = email;
+    }
+  }
+  // Cargar el tablero con los casos reales ya evaluados (históricos del mes).
+  if (typeof gpaBridge !== 'undefined' && gpaBridge.refreshKanban) {
+    try { gpaBridge.refreshKanban(); } catch (e) { /* SDK aún no listo */ }
   }
 
   // Ocultar login screen
@@ -1850,79 +1862,52 @@ document.addEventListener('DOMContentLoaded', () => {
     selBtn.classList.add('has-files');
   }
 
-  function doEval() {
+  async function doEval() {
     if (!evalFiles.length) return;
     var btn = document.getElementById('evalGoBtn');
     btn.classList.add('loading');
     btn.disabled = true;
 
-    var cps = [], fvFolios = [];
-    for (var i = 0; i < evalFiles.length; i++) {
-      var t = classify(evalFiles[i].name);
-      var folio = evalFiles[i].name.replace(/\.(pdf|xml)$/i, '');
-      if (t === 'fv') fvFolios.push(folio);
-      else cps.push({file: evalFiles[i], folio: folio, tipo: t});
-    }
-
-    var results = [];
-
-    if (!cps.length && fvFolios.length) {
-      results.push({folioCP:'\u2014', codigoMotor:'SIN_CP',
-        concepto:'Se cargaron ' + fvFolios.length + ' FVs pero ninguna carta porte. La CP es el documento ancla.',
-        estado:'ERROR'});
+    // Camino real: cada documento se SUBE a S3 (pendientes/) con URL prefirmada.
+    // El backend lo procesa de forma as\u00EDncrona (OCR \u2192 motor v2.4 \u2192 DynamoDB).
+    // No se eval\u00FAa en el navegador ni se env\u00EDan solicitudes con datos vac\u00EDos:
+    // el origen, destino, partidas, flete y tipo de cambio los extrae el OCR
+    // del PDF real (1 PDF = 1 caso; CP/FV se distinguen por el rol del RFC).
+    if (typeof API_CONFIG === 'undefined' || !API_CONFIG.apiUrl || !(_session && _session.token)) {
+      showResults([{folioCP:'\u2014', codigoMotor:'SIN_CONEXION',
+        concepto:'Inicia sesi\u00F3n y verifica API_CONFIG para enviar los documentos al motor.',
+        estado:'ERROR'}]);
       btn.classList.remove('loading'); btn.disabled = false;
-      showResults(results);
       return;
     }
 
-    // Evaluar cada CP
-    var pending = cps.length;
-    if (!pending) { btn.classList.remove('loading'); btn.disabled = false; return; }
-
-    for (var j = 0; j < cps.length; j++) {
-      (function(cp) {
-        var solicitud = {
-          folioCP: cp.folio, foliosFV: fvFolios,
-          origenSucursal: 'GDL', destinoEstado: '', fletaRFC: '',
-          codigoSAP: '', partidas: [], fleteBaseMXN: 0,
-          tipoCambioRef: 17.35, ferryMXN: 0,
-          fechaEmision: new Date().toISOString().slice(0,10),
-          esCFDI4: cp.tipo === 'cfdi'
-        };
-
-        if (typeof API_CONFIG !== 'undefined' && API_CONFIG.apiUrl && _session && _session.token) {
-          fetch(API_CONFIG.apiUrl + '/evaluar', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json','Authorization':'Bearer '+_session.token},
-            body: JSON.stringify(solicitud)
-          }).then(function(r){ return r.json(); }).then(function(data){
-            results.push({
-              folioCP: cp.folio,
-              codigoMotor: data.codigoMotor || (data.error ? 'ERROR' : 'OK'),
-              concepto: data.concepto || data.error || '\u2014',
-              estado: data.estado || 'EVALUADO'
-            });
-          }).catch(function(err){
-            results.push({folioCP: cp.folio, codigoMotor:'CONN_ERR',
-              concepto:'Error de conexi\u00F3n: ' + err.message, estado:'ERROR'});
-          }).finally(function(){
-            pending--;
-            if (pending <= 0) { btn.classList.remove('loading'); btn.disabled = false; showResults(results); }
-          });
-        } else {
-          var tipoDesc = cp.tipo === 'cfdi' ? 'CFDI 4.0 + Complemento CP' :
-                         cp.tipo === 'ptx'  ? 'PTX / GCCR Consolidado' : 'Carta Porte';
-          results.push({
-            folioCP: cp.folio,
-            codigoMotor: 'REGISTRADO',
-            concepto: tipoDesc + ' \u00B7 ' + fvFolios.length + ' FVs asociadas \u00B7 Pendiente conexi\u00F3n API Gateway',
-            estado: 'PENDIENTE'
-          });
-          pending--;
-          if (pending <= 0) { btn.classList.remove('loading'); btn.disabled = false; showResults(results); }
-        }
-      })(cps[j]);
+    var fecha = new Date().toISOString().slice(0, 10);
+    var results = [];
+    for (var i = 0; i < evalFiles.length; i++) {
+      var f = evalFiles[i];
+      var base = f.name.replace(/\.(pdf|xml)$/i, '');
+      try {
+        var r = await fetch(API_CONFIG.apiUrl + '/upload-url', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','Authorization':'Bearer '+_session.token},
+          body: JSON.stringify({filename: f.name, fecha: fecha})
+        });
+        if (!r.ok) throw new Error('upload-url HTTP ' + r.status);
+        var data = await r.json();
+        var put = await fetch(data.url, {method:'PUT', body: f});
+        if (!put.ok) throw new Error('S3 PUT HTTP ' + put.status);
+        results.push({folioCP: base, codigoMotor:'EN PROCESO',
+          concepto:'Subido al motor \u00B7 OCR + evaluaci\u00F3n en curso\u2026', estado:'PENDIENTE'});
+      } catch (e) {
+        results.push({folioCP: base, codigoMotor:'ERROR',
+          concepto:'No se pudo subir: ' + e.message, estado:'ERROR'});
+      }
     }
+
+    btn.classList.remove('loading'); btn.disabled = false;
+    showResults(results);
+    // Refrescar el tablero: los casos van apareciendo conforme el backend eval\u00FAa.
+    if (typeof refrescarTableroVariasVeces === 'function') refrescarTableroVariasVeces();
   }
 
   function showResults(results) {
@@ -2168,7 +2153,7 @@ function resetUpload() {
 async function startEvaluation() {
   const btn = document.getElementById('urEvalBtn');
   btn.disabled = true;
-  btn.innerHTML = 'Evaluando...';
+  btn.innerHTML = 'Subiendo...';
   document.getElementById('urActions').style.display = 'none';
 
   const progress = document.getElementById('uploadProgress');
@@ -2176,477 +2161,75 @@ async function startEvaluation() {
   const bar = document.getElementById('upBarFill');
   const status = document.getElementById('upStatus');
 
-  const cps  = classifiedFiles.filter(f => ['cp','cfdi','ptx'].includes(f.type));
-  const fvs  = classifiedFiles.filter(f => f.type === 'fv');
-  const total = cps.length || 1;
-  let processed = 0;
+  // Requiere backend configurado y sesión iniciada
+  if (typeof API_CONFIG === 'undefined' || !API_CONFIG.apiUrl || !(_session && _session.token)) {
+    status.textContent = '⚠ Sin conexión al motor. Inicia sesión y verifica la configuración (API_CONFIG).';
+    btn.disabled = false; btn.innerHTML = '▶ Reintentar';
+    document.getElementById('urActions').style.display = 'flex';
+    return;
+  }
 
-  // Simular evaluación (en producción → POST /evaluar por cada CP+FVs)
-  for (const cp of cps) {
-    processed++;
-    const pct = Math.round(processed / total * 100);
-    bar.style.width = pct + '%';
-    status.textContent = `Evaluando ${processed}/${total} · ${cp.name}`;
+  // Subir cada archivo a S3 (pendientes/) con URL prefirmada → el backend
+  // lo procesa de forma asíncrona (OCR → motor → DynamoDB).
+  const fecha = new Date().toISOString().slice(0, 10);
+  const total = classifiedFiles.length || 1;
+  let done = 0, okN = 0, errN = 0;
+  const errores = [];
 
-    // Delay simulado (en prod → await api.evaluar(...))
-    await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+  for (const cf of classifiedFiles) {
+    try {
+      const r = await fetch(API_CONFIG.apiUrl + '/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _session.token },
+        body: JSON.stringify({ filename: cf.name, fecha: fecha })
+      });
+      if (!r.ok) throw new Error('upload-url HTTP ' + r.status);
+      const { url } = await r.json();
+      const put = await fetch(url, { method: 'PUT', body: cf.file });
+      if (!put.ok) throw new Error('S3 PUT HTTP ' + put.status);
+      okN++;
+    } catch (e) {
+      errN++; errores.push(cf.name + ' → ' + e.message);
+    }
+    done++;
+    bar.style.width = Math.round(done / total * 100) + '%';
+    status.textContent = `Subiendo ${done}/${total} · ${cf.name}`;
   }
 
   bar.style.width = '100%';
-  status.textContent = `✓ ${total} documentos evaluados · Cargando monitor...`;
+  status.textContent = errN
+    ? `Subidos ${okN}/${total} · ${errN} con error · el motor procesa los demás…`
+    : `✓ ${okN} documentos subidos · el motor los está procesando…`;
+  if (errN) console.error('Errores de subida:', errores);
 
-  // Pasar los archivos al folder panel del monitor
   if (typeof procFiles === 'function') {
     procFiles(classifiedFiles.map(f => ({ name: f.name, size: f.size || 0 })));
     const fbtn = document.getElementById('fbtn');
     if (fbtn) fbtn.classList.add('loaded');
   }
 
-  // Transición al monitor
+  // Pasar al monitor y refrescar el Kanban. El procesamiento del backend es
+  // asíncrono (OCR + motor por cada PDF tarda segundos), así que refrescamos
+  // varias veces para que los casos vayan apareciendo sin recargar a mano.
   setTimeout(() => {
     const us = document.getElementById('uploadScreen');
     us.classList.add('hidden');
     setTimeout(() => us.style.display = 'none', 350);
-  }, 800);
+    refrescarTableroVariasVeces();
+  }, 1200);
+}
+
+// Refresca el Kanban ahora y luego de forma escalonada (5s, 12s, 25s, 45s)
+// para reflejar los casos que el backend va evaluando tras una subida.
+function refrescarTableroVariasVeces() {
+  const intentar = () => {
+    try { if (window.gpaBridge && gpaBridge.refreshKanban) gpaBridge.refreshKanban(); } catch (e) {}
+  };
+  intentar();
+  [5000, 12000, 25000, 45000].forEach(ms => setTimeout(intentar, ms));
 }
 
 </script>
 
-<!-- ═══ Botón flotante "Iniciar motor" ═══════════════════════════
-     Dispara POST /evaluar contra el API real si el SDK gpa-api.js
-     y GPA_CONFIG están cargados. Si no, muestra modo demo offline. -->
-<style>
-  #btn-motor {
-    position: fixed; bottom: 24px; right: 24px; z-index: 9000;
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 12px 20px; border: none; border-radius: 999px;
-    background: var(--navy, #1C2535); color: #fff;
-    font-family: 'Nunito', system-ui, sans-serif;
-    font-size: 13px; font-weight: 800; letter-spacing: .02em;
-    cursor: pointer; box-shadow: 0 8px 28px rgba(28,37,53,.35);
-    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
-  }
-  #btn-motor:hover    { background: var(--teal, #3AADAD); transform: translateY(-2px);
-                         box-shadow: 0 12px 32px rgba(58,173,173,.45); }
-  #btn-motor:active   { transform: translateY(0); }
-  #btn-motor:disabled { opacity: .55; cursor: wait; transform: none;
-                         background: var(--navy, #1C2535);
-                         box-shadow: 0 4px 12px rgba(28,37,53,.25); }
-  #btn-motor .dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--teal, #3AADAD);
-    box-shadow: 0 0 0 0 rgba(58,173,173,.7);
-    animation: pulseDot 2s infinite;
-  }
-  #btn-motor:disabled .dot { animation: none; background: var(--gold, #C4960A); }
-  @keyframes pulseDot {
-    0%   { box-shadow: 0 0 0 0   rgba(58,173,173,.7); }
-    70%  { box-shadow: 0 0 0 10px rgba(58,173,173,0); }
-    100% { box-shadow: 0 0 0 0   rgba(58,173,173,0); }
-  }
-  /* Panel de resultado de evaluación */
-  #motor-panel-ov {
-    position: fixed; inset: 0; background: rgba(28,37,53,.55);
-    backdrop-filter: blur(2px); z-index: 9500;
-    display: grid; place-items: center; padding: 20px;
-    animation: mpFade .15s ease;
-  }
-  #motor-panel {
-    background: #fff; border-radius: 14px; max-width: 560px; width: 100%;
-    max-height: 85vh; overflow: auto;
-    box-shadow: 0 24px 60px rgba(28,37,53,.45);
-    font-family: 'Nunito Sans', system-ui, sans-serif; color: #2a3548;
-    animation: mpSlide .2s ease;
-  }
-  #motor-panel .mph {
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px 20px; border-bottom: 1px solid #d6dde6;
-    background: linear-gradient(180deg, #1C2535 0%, #243045 100%);
-    color: #fff; border-radius: 14px 14px 0 0;
-  }
-  #motor-panel .mph .mpbadge {
-    padding: 4px 10px; border-radius: 999px; font-weight: 800;
-    font-size: 11px; letter-spacing: .04em;
-  }
-  #motor-panel .mph .mpbadge.ok   { background: #1f9d72; color: #fff; }
-  #motor-panel .mph .mpbadge.err  { background: #c5403f; color: #fff; }
-  #motor-panel .mph .mpbadge.warn { background: #d99a1a; color: #fff; }
-  #motor-panel .mph .mptitle {
-    flex: 1; font-family: 'Nunito', system-ui, sans-serif;
-    font-weight: 800; font-size: 15px;
-  }
-  #motor-panel .mph .mpclose {
-    background: rgba(255,255,255,.12); color: #fff; border: none;
-    width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
-    font-size: 18px; line-height: 1; font-weight: 700;
-  }
-  #motor-panel .mph .mpclose:hover { background: rgba(255,255,255,.22); }
-  #motor-panel .mpb { padding: 18px 20px; }
-  #motor-panel .mpb .mpr {
-    display: flex; justify-content: space-between; gap: 12px;
-    padding: 8px 0; border-bottom: 1px dashed #e4e8ee;
-    font-size: 13px;
-  }
-  #motor-panel .mpb .mpr:last-child { border-bottom: none; }
-  #motor-panel .mpb .mpr .mpk { color: #7a8a9a; font-weight: 600; }
-  #motor-panel .mpb .mpr .mpv {
-    font-family: 'IBM Plex Mono', monospace; color: #1C2535; font-weight: 700;
-    text-align: right; word-break: break-all;
-  }
-  #motor-panel .mpb .mpr .mpv.big { font-size: 16px; color: #3AADAD; }
-  #motor-panel .mpb .mpr .mpv.warn { color: #d99a1a; }
-  #motor-panel .mpb .mpr .mpv.stop { color: #c5403f; }
-  #motor-panel .mpcrit {
-    margin-top: 14px; padding-top: 12px; border-top: 2px solid #1C2535;
-  }
-  #motor-panel .mpcrit-h {
-    font-size: 11px; font-weight: 800; color: #1C2535;
-    letter-spacing: .05em; margin-bottom: 8px;
-  }
-  #motor-panel .mpcrit-i {
-    padding: 8px 10px; margin-bottom: 6px; border-radius: 6px;
-    background: #f5f7fa; font-size: 12px;
-  }
-  #motor-panel .mpcrit-i .mpc-top {
-    display: flex; gap: 8px; align-items: center; margin-bottom: 2px;
-  }
-  #motor-panel .mpcrit-i .mpc-r {
-    padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 800;
-    font-family: 'IBM Plex Mono', monospace;
-  }
-  #motor-panel .mpcrit-i .mpc-r.PASS { background: #e6f5ee; color: #1f9d72; }
-  #motor-panel .mpcrit-i .mpc-r.FAIL { background: #fde9e8; color: #c5403f; }
-  #motor-panel .mpcrit-i .mpc-r.WARN { background: #fdf3dc; color: #6a4400; }
-  #motor-panel .mpcrit-i .mpc-r.SKIP { background: #eef1f5; color: #7a8a9a; }
-  #motor-panel .mpcrit-i .mpc-r.INFO { background: #ebf0f7; color: #2e2278; }
-  #motor-panel .mpcrit-i .mpc-name { font-weight: 700; color: #1C2535; }
-  #motor-panel .mpcrit-i .mpc-d { color: #3a4a60; margin-top: 2px; }
-  #motor-panel .mpf {
-    padding: 12px 20px; border-top: 1px solid #d6dde6;
-    background: #f5f7fa; border-radius: 0 0 14px 14px;
-    display: flex; justify-content: flex-end; gap: 8px;
-  }
-  #motor-panel .mpf button {
-    background: #1C2535; color: #fff; border: none;
-    padding: 8px 18px; border-radius: 6px; cursor: pointer;
-    font-family: 'Nunito', system-ui, sans-serif; font-weight: 700;
-    font-size: 12px;
-  }
-  #motor-panel .mpf button:hover { background: #3AADAD; }
-  @keyframes mpFade  { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes mpSlide { from { transform: translateY(-12px); opacity: 0; }
-                        to   { transform: translateY(0); opacity: 1; } }
-</style>
-<button id="btn-motor" type="button" onclick="iniciarMotor()"
-        title="POST /evaluar con payload demo (requiere SDK gpa-api.js cargado)">
-  <span class="dot"></span>
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-       stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <polygon points="6 4 20 12 6 20 6 4"></polygon>
-  </svg>
-  Iniciar motor
-</button>
-<script>
-  // Funciona si el HTML carga después el SDK gpa-api.js + GPA_CONFIG.
-  // Si no, degrada a aviso "modo demo offline".
-  window.iniciarMotor = async function iniciarMotor() {
-    const btn = document.getElementById('btn-motor');
-    if (!btn) return;
-
-    if (typeof gpaApi === 'undefined' || !window.GPA_CONFIG || !GPA_CONFIG.apiUrl) {
-      alert('Modo demo offline.\n\nPara conectar al motor real, carga gpa-api.js y configura '
-            + 'GPA_CONFIG con apiUrl, poolId y clientId antes de presionar el botón.');
-      return;
-    }
-    if (!gpaApi.isAuthenticated) {
-      alert('Inicia sesión primero (Cognito) para arrancar el motor.');
-      return;
-    }
-
-    const ts = new Date();
-    const stamp = ts.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-    const demo = {
-      folioCP:        'CP-DEMO-' + stamp,
-      foliosFV:       ['FV-DEMO-' + stamp],
-      origenSucursal: 'GDL',
-      codigoSAP:      'GS0230',
-      destinoEstado:  'Sonora',
-      destinoCiudad:  'Navojoa',
-      fletaRFC:       'ACT68080665A',
-      campoEntregaFV: 'ENTREGA_DOMICILIO',
-      partidas: [{
-        sku:               '39111611',
-        descripcion:       'Reflector LED (demo)',
-        cantidad:          1,
-        precioUnitarioUSD: 1074.53,
-        pesoKg:            5.0,
-      }],
-      fleteBaseMXN:  18500.0,
-      ferryMXN:      0,
-      tipoCambioRef: 17.35,
-      fechaEmision:  ts.toISOString().slice(0, 10),
-    };
-
-    btn.disabled = true;
-    const original = btn.innerHTML;
-    btn.innerHTML = '<span class="dot"></span> Evaluando…';
-
-    try {
-      const t0 = performance.now();
-      const res = await gpaApi.evaluar(demo);
-      const ms  = Math.round(performance.now() - t0);
-      console.log('[iniciarMotor] respuesta', res);
-      _mostrarPanelResultado(res, demo, ms);
-      _actualizarPaginaPrincipal(res, demo);
-      if (window.gpaBridge && typeof gpaBridge.refreshKanban === 'function') {
-        try { await gpaBridge.refreshKanban(); } catch (e) { /* ignore */ }
-      }
-    } catch (err) {
-      console.error('[iniciarMotor] error', err);
-      _mostrarPanelError(err);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = original;
-    }
-  };
-
-  // ── Panel de resultado in-page ──────────────────────────────────
-  function _cerrarPanelMotor() {
-    const ov = document.getElementById('motor-panel-ov');
-    if (ov) ov.remove();
-    document.removeEventListener('keydown', _onPanelKey);
-  }
-  function _onPanelKey(e) { if (e.key === 'Escape') _cerrarPanelMotor(); }
-
-  function _badgeClass(codigo, estado) {
-    if (!codigo) return 'err';
-    if (codigo === 'R-000' || codigo === 'R-050' ||
-        codigo === 'R-060' || codigo === 'R-800') return 'ok';
-    if (codigo.startsWith('R-1') || codigo.startsWith('R-2') ||
-        codigo.startsWith('R-3') || codigo.startsWith('R-4') ||
-        codigo === 'R-091' || codigo === 'R-092') return 'err';
-    return 'warn';
-  }
-  function _pctClass(pct) {
-    const n = parseFloat(pct);
-    if (isNaN(n)) return '';
-    if (n > 30) return 'stop';
-    if (n > 15) return 'warn';
-    return '';
-  }
-  function _esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>]/g,
-      c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  }
-
-  function _mostrarPanelResultado(res, demo, ms) {
-    _cerrarPanelMotor();
-    const badge = _badgeClass(res.codigoMotor, res.estado);
-    const pcCls = _pctClass(res.pctFlete);
-    const criterios = Array.isArray(res.criterios) ? res.criterios : [];
-    const crHtml = criterios.length ? (
-      '<div class="mpcrit"><div class="mpcrit-h">' + criterios.length +
-      ' criterio(s) del motor</div>' +
-      criterios.map(c => (
-        '<div class="mpcrit-i">' +
-          '<div class="mpc-top">' +
-            '<span class="mpc-r ' + _esc(c.resultado || 'INFO') + '">' +
-              _esc(c.resultado || 'INFO') + '</span>' +
-            '<span class="mpc-name">' + _esc(c.criterio || '') + '</span>' +
-          '</div>' +
-          '<div class="mpc-d">' + _esc(c.detalle || '') +
-            (c.valor ? ' <span style="color:#7a8a9a"> · ' + _esc(c.valor) +
-              '</span>' : '') +
-          '</div>' +
-        '</div>'
-      )).join('') + '</div>'
-    ) : '';
-
-    const html =
-      '<div id="motor-panel-ov" onclick="if(event.target===this)_cerrarPanelMotor()">' +
-        '<div id="motor-panel">' +
-          '<div class="mph">' +
-            '<span class="mpbadge ' + badge + '">' + _esc(res.codigoMotor || '?') + '</span>' +
-            '<div class="mptitle">Resultado de evaluación · ' + ms + 'ms</div>' +
-            '<button class="mpclose" onclick="_cerrarPanelMotor()" title="Cerrar (Esc)">×</button>' +
-          '</div>' +
-          '<div class="mpb">' +
-            '<div class="mpr"><span class="mpk">Solicitud</span>' +
-              '<span class="mpv">' + _esc((res.id || '').slice(0, 8)) + '…</span></div>' +
-            '<div class="mpr"><span class="mpk">Folio CP</span>' +
-              '<span class="mpv">' + _esc(demo.folioCP) + '</span></div>' +
-            '<div class="mpr"><span class="mpk">Concepto</span>' +
-              '<span class="mpv big">' + _esc(res.concepto || '') + '</span></div>' +
-            '<div class="mpr"><span class="mpk">Estado</span>' +
-              '<span class="mpv">' + _esc(res.estado || '') + '</span></div>' +
-            '<div class="mpr"><span class="mpk">% Flete</span>' +
-              '<span class="mpv ' + pcCls + '">' + _esc(res.pctFlete) + '%</span></div>' +
-            '<div class="mpr"><span class="mpk">Monto base</span>' +
-              '<span class="mpv">$' + _esc(res.montoBaseUSD) + ' USD</span></div>' +
-            '<div class="mpr"><span class="mpk">Flete</span>' +
-              '<span class="mpv">$' + _esc(res.fleteBaseUSD) + ' USD</span></div>' +
-            '<div class="mpr"><span class="mpk">Origen → Destino</span>' +
-              '<span class="mpv">' + _esc(demo.origenSucursal) + ' → ' +
-              _esc(demo.destinoCiudad || demo.destinoEstado) + '</span></div>' +
-            '<div class="mpr"><span class="mpk">Fecha evaluación</span>' +
-              '<span class="mpv">' + _esc(res.fechaEvaluacion || '') + '</span></div>' +
-            crHtml +
-          '</div>' +
-          '<div class="mpf">' +
-            '<button onclick="_cerrarPanelMotor()">Cerrar</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    document.body.insertAdjacentHTML('beforeend', html);
-    document.addEventListener('keydown', _onPanelKey);
-  }
-
-  function _mostrarPanelError(err) {
-    _cerrarPanelMotor();
-    const codigo  = err && err.codigoMotor ? err.codigoMotor : 'ERROR';
-    const detalle = (err && err.message) ? err.message : String(err);
-    const html =
-      '<div id="motor-panel-ov" onclick="if(event.target===this)_cerrarPanelMotor()">' +
-        '<div id="motor-panel">' +
-          '<div class="mph">' +
-            '<span class="mpbadge err">' + _esc(codigo) + '</span>' +
-            '<div class="mptitle">No se pudo evaluar la solicitud</div>' +
-            '<button class="mpclose" onclick="_cerrarPanelMotor()" title="Cerrar (Esc)">×</button>' +
-          '</div>' +
-          '<div class="mpb">' +
-            '<div class="mpr"><span class="mpk">Detalle</span>' +
-              '<span class="mpv stop" style="font-family:inherit;font-weight:600">' +
-              _esc(detalle) + '</span></div>' +
-          '</div>' +
-          '<div class="mpf">' +
-            '<button onclick="_cerrarPanelMotor()">Cerrar</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    document.body.insertAdjacentHTML('beforeend', html);
-    document.addEventListener('keydown', _onPanelKey);
-  }
-  window._cerrarPanelMotor = _cerrarPanelMotor;
-
-  // ── Actualización de la página principal (Kanban + KPIs) ─────────
-  // Mapea el estado del resultado a la columna correcta del Kanban
-  // estático y le inserta una tarjeta arriba; bumpea contadores y
-  // el KPI "En revisión" / "Total evaluados".
-  function _actualizarPaginaPrincipal(res, demo) {
-    const ESTADO_A_COL = {
-      'EN_REVISION':       0,
-      'ESCALADA':          1,
-      'AUTO_APROBADA':     2,
-      'APROBADA_MANUAL':   2,
-      'AUTO_RECHAZADA':    3,
-      'RECHAZADA_MANUAL':  3,
-      'BLOQUEADA':         3,
-    };
-    const idx = ESTADO_A_COL[res.estado];
-    const cols = document.querySelectorAll('#vpost .kb > .col');
-    if (idx === undefined || !cols[idx]) return;
-    const col = cols[idx];
-    const cb  = col.querySelector('.cb');
-    if (!cb) return;
-
-    // Color de tarjeta según código motor
-    const codigo = res.codigoMotor || '';
-    let cardClass = 'warn';
-    if (codigo === 'R-000' || codigo === 'R-050' ||
-        codigo === 'R-060' || codigo === 'R-800') cardClass = 'go';
-    else if (codigo === 'R-801') cardClass = 'navy';
-    else if (codigo.startsWith('R-1') || codigo.startsWith('R-2') ||
-             codigo.startsWith('R-3') || codigo.startsWith('R-4') ||
-             codigo === 'R-091' || codigo === 'R-092') cardClass = 'stop';
-
-    // Estado pill para el badge
-    let badgeClass = 'vc';
-    if (codigo === 'R-800' || codigo === 'R-801') badgeClass = 'di';
-
-    const hora = new Date().toLocaleTimeString('es-MX',
-      {hour:'2-digit', minute:'2-digit'});
-
-    const tarjeta = document.createElement('div');
-    tarjeta.className = 'card ' + cardClass;
-    tarjeta.setAttribute('data-api-id', res.id || '');
-    tarjeta.style.outline      = '2px solid #3AADAD';
-    tarjeta.style.outlineOffset= '-2px';
-    tarjeta.innerHTML =
-      '<span class="tb2 ' + badgeClass + '">API · ' + _esc(hora) + '</span>' +
-      '<div class="ch">' +
-        '<div class="chk"></div>' +
-        '<div class="cm">' +
-          '<div class="cn">' + _esc(demo.folioCP) + '</div>' +
-          '<div class="cf">' + _esc((demo.foliosFV && demo.foliosFV[0]) || '') +
-            ' · ' + _esc((res.id || '').slice(0, 8)) + '…</div>' +
-        '</div>' +
-        '<span class="cu w">' + _esc(codigo) + ' · ' +
-          _esc(res.concepto || '') + '</span>' +
-      '</div>' +
-      '<div class="rr">' +
-        '<span class="rc ' + (cardClass === 'stop' ? 'stop' :
-          cardClass === 'go' ? 'go' : 'warn') + '">' +
-          _esc(codigo) + ' · ' + _esc(res.concepto || '') + '</span>' +
-        '<span class="rt">Vía POST /evaluar · ' + _esc(res.estado || '') + '</span>' +
-      '</div>' +
-      '<div class="cmeta">' +
-        '<span>' + _esc(demo.origenSucursal) + ' → ' +
-          _esc(demo.destinoCiudad || demo.destinoEstado) + '</span>' +
-        '<span class="ms">·</span>' +
-        '<span>Flete ' + _esc(res.pctFlete) + '%</span>' +
-        '<span class="ms">·</span>' +
-        '<span>$' + _esc(res.montoBaseUSD) + ' USD</span>' +
-      '</div>' +
-      '<div class="cft">' +
-        '<div class="dps"><span class="dp">' + _esc(demo.folioCP) + '</span></div>' +
-        '<div class="bs"></div>' +
-      '</div>';
-
-    // Quitar "Sin escalamientos activos." / similares si están
-    const empty = cb.querySelector('.empty');
-    if (empty) empty.remove();
-
-    cb.insertBefore(tarjeta, cb.firstChild);
-
-    // Fade-in + scroll a la tarjeta
-    tarjeta.style.opacity   = '0';
-    tarjeta.style.transform = 'translateY(-10px)';
-    requestAnimationFrame(() => {
-      tarjeta.style.transition = 'opacity .3s ease, transform .3s ease';
-      tarjeta.style.opacity    = '1';
-      tarjeta.style.transform  = 'translateY(0)';
-    });
-    setTimeout(() => {
-      tarjeta.style.transition = 'outline .8s ease';
-      tarjeta.style.outline    = '2px solid transparent';
-    }, 2500);
-
-    try { tarjeta.scrollIntoView({behavior:'smooth', block:'nearest'}); }
-    catch(e) { /* ignore */ }
-
-    // Bump contador de la columna
-    const ccn = col.querySelector('.ccn');
-    if (ccn) {
-      const cur = parseInt(String(ccn.textContent).replace(/[^0-9]/g, ''), 10) || 0;
-      ccn.textContent = String(cur + 1);
-    }
-
-    // Bump KPIs: "Total evaluados" y "En revisión"
-    const kpis = document.querySelectorAll('#vpost .ks .kpi');
-    kpis.forEach(k => {
-      const label = k.querySelector('.kl')?.textContent?.trim().toLowerCase();
-      const v     = k.querySelector('.kv');
-      if (!v) return;
-      if (label === 'total evaluados') {
-        const cur = parseInt(String(v.textContent).replace(/[^0-9]/g, ''), 10) || 0;
-        v.textContent = String(cur + 1);
-      } else if (label === 'en revisión' && idx === 0) {
-        const cur = parseInt(String(v.textContent).replace(/[^0-9]/g, ''), 10) || 0;
-        v.textContent = String(cur + 1);
-      }
-    });
-  }
-  window._actualizarPaginaPrincipal = _actualizarPaginaPrincipal;
-</script>
 </body>
 </html>

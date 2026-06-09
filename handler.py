@@ -97,6 +97,7 @@ def _router(event):
         ("GET","/auditor/fletera"):   _route_auditor_fletera,
         ("GET","/auditor/sucursal"):  _route_auditor_sucursal,
         ("GET","/auditor/destino"):   _route_auditor_destino,
+        ("POST","/upload-url"):       _route_upload_url,
         ("GET","/health"):            _route_health,
     }
     fn=RUTAS.get((method,path))
@@ -132,6 +133,31 @@ def _route_evaluar(event):
                 "fleteBaseUSD":round(resultado.flete_base_usd,2),
                 "criterios":[asdict(c) for c in resultado.criterios],
                 "fechaEvaluacion":reg["fechaEvaluacion"]},201)
+
+
+# ── POST /upload-url ──────────────────────────────────────────────
+def _route_upload_url(event):
+    """URL prefirmada de S3 para subir un PDF a pendientes/{fecha}/.
+    El objeto subido dispara el Lambda (OCR → evaluar) de forma asíncrona."""
+    import boto3, re as _re
+    from datetime import datetime, timezone
+    b=_body(event)
+    nombre=str(b.get("filename","")).strip()
+    if not nombre.lower().endswith((".pdf",".xml")):
+        return _err("Se requiere 'filename' con extensión .pdf o .xml",400)
+    bucket=os.environ.get("S3_BUCKET","")
+    if not bucket: return _err("S3_BUCKET no configurado",500)
+    fecha=str(b.get("fecha") or "")
+    if not _re.match(r"^\d{4}-\d{2}-\d{2}$",fecha):
+        fecha=datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    base=_re.split(r"[\\/]",nombre)[-1]          # descartar componentes de ruta
+    seguro=_re.sub(r"[^A-Za-z0-9._-]","_",base)
+    seguro=_re.sub(r"\.{2,}",".",seguro).lstrip(".") or "archivo.pdf"  # sin '..' ni punto inicial
+    key=f"pendientes/{fecha}/{seguro}"
+    url=boto3.client("s3").generate_presigned_url(
+        "put_object", Params={"Bucket":bucket,"Key":key}, ExpiresIn=900)
+    logger.info("UPLOAD-URL %s user=%s",key,_uid(event))
+    return _ok({"url":url,"key":key,"bucket":bucket,"fecha":fecha})
 
 
 def _build_solicitud_input(b: dict) -> SolicitudInput:

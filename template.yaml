@@ -215,6 +215,14 @@ Resources:
             Method: POST
             Path:   /evaluar
 
+        # API Gateway — POST /upload-url (URL prefirmada para subir PDFs a S3)
+        ApiUploadUrl:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: POST
+            Path:   /upload-url
+
         # API Gateway — POST /aprobar
         ApiAprobar:
           Type: HttpApi

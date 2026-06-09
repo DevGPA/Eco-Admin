@@ -1,6 +1,7 @@
 # Tests de validación de entrada del handler (rutas que retornan 400 sin tocar AWS).
 import json
-from handler import _route_evaluar
+import boto3
+from handler import _route_evaluar, _route_upload_url
 
 
 def _evento(body: dict) -> dict:
@@ -49,3 +50,49 @@ def test_chiapas_sin_ciudad_400():
     resp = _route_evaluar(_evento(_body_valido(destinoEstado="Chiapas")))
     assert resp["statusCode"] == 400
     assert "Chiapas" in resp["body"]
+
+
+# ── /upload-url (URL prefirmada de S3) ────────────────────────────────
+class _FakeS3:
+    def __init__(self):
+        self.llamada = None
+
+    def generate_presigned_url(self, op, Params, ExpiresIn):
+        self.llamada = {"op": op, "Params": Params, "ExpiresIn": ExpiresIn}
+        return "https://s3.amazonaws.com/gpa-docs/presigned?X-Amz-Signature=abc"
+
+
+def test_upload_url_genera_presigned(monkeypatch):
+    fake = _FakeS3()
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: fake)
+    monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
+    resp = _route_upload_url(_evento({"filename": "116873635.pdf", "fecha": "2026-05-07"}))
+    assert resp["statusCode"] == 200
+    body = json.loads(resp["body"])
+    assert body["url"].startswith("https://s3.amazonaws.com/")
+    assert body["key"] == "pendientes/2026-05-07/116873635.pdf"
+    assert body["bucket"] == "gpa-docs-test"
+    assert fake.llamada["op"] == "put_object"
+    assert fake.llamada["Params"]["Bucket"] == "gpa-docs-test"
+
+
+def test_upload_url_rechaza_extension_invalida(monkeypatch):
+    monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
+    resp = _route_upload_url(_evento({"filename": "factura.docx"}))
+    assert resp["statusCode"] == 400
+
+
+def test_upload_url_sin_bucket_500(monkeypatch):
+    monkeypatch.delenv("S3_BUCKET", raising=False)
+    resp = _route_upload_url(_evento({"filename": "116.pdf"}))
+    assert resp["statusCode"] == 500
+
+
+def test_upload_url_sanitiza_nombre(monkeypatch):
+    fake = _FakeS3()
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: fake)
+    monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
+    resp = _route_upload_url(_evento({"filename": "fac tura/../raro.pdf", "fecha": "2026-05-07"}))
+    assert resp["statusCode"] == 200
+    key = json.loads(resp["body"])["key"]
+    assert ".." not in key and " " not in key and key.startswith("pendientes/2026-05-07/")
