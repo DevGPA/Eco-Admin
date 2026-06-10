@@ -19,6 +19,7 @@ import os
 import re
 import json
 import logging
+import unicodedata
 from typing import Optional
 
 import boto3
@@ -105,12 +106,22 @@ def ocr_pagina(imagen_png: bytes, client=None) -> dict:
 
 
 # --- Backend 1: Amazon Textract (nativo AWS, recomendado) ---------
+def _query_ascii(texto: str) -> str:
+    """El feature Queries de Textract SOLO admite ASCII: acentos y signos como
+    '¿' provocan InvalidParameterException ("Request has invalid parameters") y
+    rompen el OCR de TODO documento. Plegamos a ASCII (quitando diacríticos y
+    cualquier carácter no-ASCII) manteniendo el español legible en el código."""
+    nfkd = unicodedata.normalize("NFKD", texto)
+    sin_acentos = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return sin_acentos.encode("ascii", "ignore").decode("ascii").strip()
+
+
 def _ocr_textract(imagen_png: bytes, client=None) -> dict:
     client = client or boto3.client("textract")
     resp = client.analyze_document(
         Document={"Bytes": imagen_png},
         FeatureTypes=["QUERIES", "TABLES"],
-        QueriesConfig={"Queries": [{"Text": t, "Alias": a} for a, t in TEXTRACT_QUERIES]},
+        QueriesConfig={"Queries": [{"Text": _query_ascii(t), "Alias": a} for a, t in TEXTRACT_QUERIES]},
     )
     return _parse_textract(resp)
 

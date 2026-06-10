@@ -8,7 +8,7 @@ import s3.ocr_extractor as ocr
 from s3.ocr_extractor import (
     clasificar_por_rfc, armar_caso, _parse_json,
     emparejar_casos, _folios_referenciados, _fv_coincide,
-    caso_a_solicitud,
+    caso_a_solicitud, _query_ascii, TEXTRACT_QUERIES,
 )
 from motor.catalogos import RFC_GPA
 
@@ -29,6 +29,19 @@ def cp(subtotal, folio="116162584"):
 def fv(subtotal, folio="FA10314168", tc=17.77):
     # Factura de venta: la emite GPA
     return pag(emisor=RFC_GPA, receptor=CLIENTE, subtotal=subtotal, moneda="USD", tc=tc, folio=folio)
+
+
+# ── Queries de Textract: deben ser ASCII ──────────────────────────
+# Textract Queries rechaza acentos y '¿' con InvalidParameterException, lo que
+# rompe el OCR de TODO documento. Este invariante evita la regresión.
+def test_query_ascii_pliega_acentos_y_signos():
+    assert _query_ascii("¿Cuál es la fecha de emisión?") == "Cual es la fecha de emision?"
+
+
+def test_todas_las_queries_textract_son_ascii():
+    for alias, texto in TEXTRACT_QUERIES:
+        enviado = _query_ascii(texto)
+        assert enviado.isascii() and enviado, f"Query '{alias}' no es ASCII válido: {enviado!r}"
 
 
 # ── clasificar_por_rfc ────────────────────────────────────────────
