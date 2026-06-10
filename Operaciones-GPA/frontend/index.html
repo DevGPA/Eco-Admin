@@ -186,7 +186,7 @@ async function descargarPDFCorp(){
   // Convierte cada imagen a dataURL (evita CORS). Si alguna no se puede incrustar
   // (p. ej. el mapa), se OMITE para no romper ni dejar el PDF en blanco.
   await Promise.all(imgs.map(async img=>{
-    try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});img.style.maxWidth="100%";img.style.maxHeight="70mm";img.style.height="auto";}
+    try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});img.style.maxWidth="100%";img.style.maxHeight="55mm";img.style.height="auto";}
     catch(e){img.remove();}
   }));
   const head=document.createElement("div");
@@ -205,7 +205,13 @@ async function descargarPDFCorp(){
   // Espera a que las imágenes (ya dataURL) decodifiquen, si no el PDF sale en blanco
   await Promise.all([...wrap.querySelectorAll("img")].map(im=>im.decode?im.decode().catch(()=>{}):Promise.resolve()));
   const fname=titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10)+".pdf";
-  try{await html2pdf().set({margin:[8,8,8,8],filename:fname,image:{type:"jpeg",quality:0.9},html2canvas:{scale:2,useCORS:true,backgroundColor:"#fff",logging:false,imageTimeout:0},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(wrap).save();}
+  // Escala adaptativa: los checklists largos reducen la escala para no exceder el
+  // límite del lienzo del navegador (que dejaba el PDF en blanco).
+  const W=wrap.scrollWidth||720,H=wrap.scrollHeight||1000;
+  let escala=Math.min(2,15000/H,15000/W,Math.sqrt(15000000/(W*H)));
+  if(!isFinite(escala)||escala<=0)escala=1;
+  escala=Math.max(0.6,escala);
+  try{await html2pdf().set({margin:[8,8,8,8],filename:fname,image:{type:"jpeg",quality:0.9},html2canvas:{scale:escala,useCORS:true,backgroundColor:"#fff",logging:false,imageTimeout:0},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(wrap).save();}
   catch(e){alert("No se pudo generar el PDF: "+e.message);}
   finally{wrap.remove();}
 }
