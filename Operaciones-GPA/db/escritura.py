@@ -76,8 +76,9 @@ def merge_registro(tipo: str, rid: str, parche: dict) -> None:
 
 # ── Catálogos ────────────────────────────────────────────────────
 # Campos que SÍ se pueden modificar en un vehículo existente.
-EDITABLES_VEH = ("responsable", "combustible", "precio", "producto", "activo", "categoria")
-# Campos inmutables (no se alteran aunque vengan distintos): economico, placas,
+# (economico = número económico personalizado de GPA; el id sí es inmutable/consecutivo)
+EDITABLES_VEH = ("economico", "responsable", "combustible", "precio", "producto", "activo", "categoria")
+# Campos inmutables (no se alteran aunque vengan distintos): placas,
 # subMarca, sucursal, tanque (+ id, que es la clave).
 
 
