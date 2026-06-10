@@ -199,6 +199,13 @@ const ymd=f=>{if(!f)return"";const d=new Date(f);return d.getFullYear()+"-"+Stri
 // Categoría del vehículo: usa v.categoria si está definida; si no, la infiere
 // (responsable ALMACEN o combustible Gas LP = montacargas; el resto = reparto). Editable en Admin/Excel.
 const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMACEN")||v.combustible==="Gas LP")?"montacargas":"reparto");
+// Campo de foto reutilizable (comprime al capturar vía readFile)
+function FotoCampo({val,set,label,capture="environment"}){
+  return(<div style={{marginBottom:8}}><label>{label}</label>
+    <div className="pb">{!val&&<><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>Toca para capturar</div></>}{val&&<img src={val} alt={label}/>}<input type="file" accept="image/*" capture={capture} onChange={e=>readFile(e,set)}/></div>
+    {val&&<button className="bs" style={{marginTop:4,width:"100%",fontSize:11}} onClick={()=>set(null)}>Cambiar</button>}
+  </div>);
+}
 function csvDownload(nombre,cols,filas){
   const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
   const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(","))].join("\r\n");
@@ -387,9 +394,10 @@ function ModCombustible({cat,items,rol,sucursalesUser,session,refrescar,showToas
   return(
     <div>
       {rol!=="analista"&&<div className="tr">
-        {["form","history"].map(v=><button key={v} className={"trb"+(view===v?" act":"")} onClick={()=>{setView(v);setSel(null);}}>{v==="form"?"Nueva Solicitud":"Historial"}</button>)}
+        {[["form","Solicitud"],["reporte","Reporte de carga"],["history","Historial"]].map(([v,l])=><button key={v} className={"trb"+(view===v?" act":"")} onClick={()=>{setView(v);setSel(null);}}>{l}</button>)}
       </div>}
       {view==="form"&&rol!=="analista"&&<SolForm cat={cat} items={items} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>}
+      {view==="reporte"&&rol!=="analista"&&<RepForm cat={cat} items={items} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>}
       {view==="history"&&!sel&&<SolHistory items={items} rol={rol} onSelect={s=>{setSel(s);setView("detail");}}/>}
       {view==="detail"&&sel&&<SolDetail sol={sel} rol={rol} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>}
     </div>
@@ -487,16 +495,115 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   );
 }
 
+// ─── REPORTE DE CARGA REALIZADA (formato PDF) ───────────────────────
+function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDone}){
+  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const solicitante=yo||{id:null,nombre:session.nombre||session.email,mail:session.email};
+  const DKEY="gpa_rep_draft_"+session.email;
+  const draftRef=useRef(undefined);
+  if(draftRef.current===undefined){try{draftRef.current=JSON.parse(localStorage.getItem(DKEY))||{};}catch{draftRef.current={};}}
+  const D=draftRef.current;
+  const[veh,setVeh]=useState(D.veh||(availVeh[0]?String(availVeh[0].id):""));
+  const[km,setKm]=useState(D.km||"");
+  const[fotoAntes,setFotoAntes]=useState(D.fotoAntes||null);const[fotoDespues,setFotoDespues]=useState(D.fotoDespues||null);
+  const[lleno,setLleno]=useState(D.lleno||"Si");
+  const[fotoBomba,setFotoBomba]=useState(D.fotoBomba||null);
+  const[litros,setLitros]=useState(D.litros||"");const[precioLitro,setPrecioLitro]=useState(D.precioLitro||"");const[monto,setMonto]=useState(D.monto||"");
+  const[fotoTicket,setFotoTicket]=useState(D.fotoTicket||null);const[ubic,setUbic]=useState(D.ubic||null);
+  const[fotoPersona,setFotoPersona]=useState(D.fotoPersona||null);const[obs,setObs]=useState(D.obs||"");const[sig,setSig]=useState(D.sig||null);
+  const[step,setStep]=useState(D.step||1);const[busy,setBusy]=useState(false);const[geo,setGeo]=useState(false);
+  const[teniaBorrador]=useState(!!(D.km||D.fotoAntes||D.litros||(D.step&&D.step>1)));
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  useEffect(()=>{try{localStorage.setItem(DKEY,JSON.stringify({veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,ubic,fotoPersona,obs,sig,step}));}catch{}},[veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,ubic,fotoPersona,obs,sig,step]);
+  const descartar=()=>{try{localStorage.removeItem(DKEY);}catch{}setVeh(availVeh[0]?String(availVeh[0].id):"");setKm("");setFotoAntes(null);setFotoDespues(null);setLleno("Si");setFotoBomba(null);setLitros("");setPrecioLitro("");setMonto("");setFotoTicket(null);setUbic(null);setFotoPersona(null);setObs("");setSig(null);setStep(1);showToast("Borrador descartado");};
+  const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
+  const lastKm=items.filter(s=>String(s.vehicleId)===String(veh)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.km??null;
+  const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
+  const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
+  const obtenerUbic=()=>{
+    if(!navigator.geolocation){showToast("Este dispositivo no tiene GPS");return;}
+    setGeo(true);
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const lat=pos.coords.latitude,lng=pos.coords.longitude;let direccion="";
+      try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);const d=await r.json();direccion=d.display_name||"";}catch{}
+      setUbic({lat,lng,direccion});setGeo(false);
+    },()=>{showToast("No se pudo obtener la ubicación (permite el GPS)");setGeo(false);},{enableHighAccuracy:true,timeout:12000,maximumAge:0});
+  };
+  useEffect(()=>{if(step===2&&!ubic&&!geo)obtenerUbic();},[step]);
+  const can1=veh&&km&&!kmErr&&fotoAntes&&fotoDespues;
+  const can2=fotoBomba&&litros&&precioLitro&&monto&&fotoTicket;
+  const submit=async()=>{
+    if(!vehicle||busy||!sig||!fotoPersona)return;setBusy(true);
+    try{
+      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:ubic,userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente"};
+      const subido=await api.subirEvidencias("combustible",datos);
+      await api.crear("combustible",subido);
+      try{localStorage.removeItem(DKEY);}catch{}
+      showToast("✓ Reporte de carga enviado");await refrescar();onDone();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(
+    <div>
+      <div className="sb">{[1,2,3].map(s=><div key={s} className="sd" style={{background:step>=s?C.blue:"#e0e0e0"}}/>)}</div>
+      {teniaBorrador&&<div className="wb" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><span>📝 Retomaste un reporte no enviado.</span><button className="bd" style={{padding:"4px 10px",fontSize:11}} onClick={descartar}>Descartar</button></div>}
+      {step===1&&<>
+        <div className="card"><div className="ct">Generales del Vehículo</div>
+          <select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
+          {vehicle&&<div style={{marginTop:8,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Responsable (área)</span><span>{vehicle.responsable}</span></div><div className="dr"><span>Combustible</span><span>{vehicle.combustible}</span></div><div className="dr"><span>Precio catálogo/L</span><span>${vehicle.precio.toFixed(2)}</span></div><div className="dr"><span>Tanque</span><span>{vehicle.tanque}L</span></div><div className="dr"><span>Producto</span><span>{vehicle.producto}</span></div></div>}
+        </div>
+        <div className="card"><div className="ct">Datos del vehículo para la carga</div>
+          <label>Kilometraje al cargar combustible</label><input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="Ej. 14806"/>
+          {lastKm!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastKm.toLocaleString()} km</div>}
+          {kmErr&&<div className="eb">{kmErr}</div>}
+          <FotoCampo val={fotoAntes} set={setFotoAntes} label="Foto de km y medidor ANTES de cargar (ambos en la misma foto)"/>
+          <FotoCampo val={fotoDespues} set={setFotoDespues} label="Foto del medidor al FINALIZAR la carga"/>
+          <label>¿Se llenó el tanque?</label>
+          <div className="rr">{["Si","No"].map(o=><button key={o} className={"rb"+(lleno===o?" O":"")} onClick={()=>setLleno(o)}>{o}</button>)}</div>
+        </div>
+        <button className="bp" disabled={!can1} onClick={()=>setStep(2)}>Siguiente →</button>
+      </>}
+      {step===2&&<>
+        <div className="card"><div className="ct">Datos de la gasolinera</div>
+          <FotoCampo val={fotoBomba} set={setFotoBomba} label="Foto de la bomba al finalizar carga"/>
+          <label>Litros cargados</label><input type="number" step="0.001" value={litros} onChange={e=>setLitros(e.target.value)} placeholder="Ej. 53.229"/>
+          <label>Precio por litro (debe coincidir con fotos)</label><input type="number" step="0.01" value={precioLitro} onChange={e=>setPrecioLitro(e.target.value)} placeholder="Ej. 28.18"/>
+          <label>Monto total de la carga ($)</label><input type="number" step="0.01" value={monto} onChange={e=>setMonto(e.target.value)} placeholder="Ej. 1499.99"/>
+          <FotoCampo val={fotoTicket} set={setFotoTicket} label="Foto del ticket de carga (fecha y hora deben coincidir)"/>
+          <label>Ubicación de carga (automática)</label>
+          <div style={{fontSize:12,color:"#555",background:"#fafafa",borderRadius:6,padding:"8px 10px"}}>{geo?"Obteniendo ubicación…":ubic?(ubic.direccion||`${ubic.lat.toFixed(5)}, ${ubic.lng.toFixed(5)}`):"Sin ubicación"}</div>
+          <button className="bs" style={{width:"100%",marginTop:6}} onClick={obtenerUbic} disabled={geo}>📍 {ubic?"Actualizar ubicación":"Obtener ubicación"}</button>
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} disabled={!can2} onClick={()=>setStep(3)}>Siguiente →</button></div>
+      </>}
+      {step===3&&<>
+        <div className="card"><div className="ct">Quien realizó la carga</div>
+          <div className="dr"><span>Responsable</span><span>{solicitante.nombre}</span></div><div className="dr"><span>Correo</span><span>{solicitante.mail}</span></div>
+          <FotoCampo val={fotoPersona} set={setFotoPersona} label="Foto de quien realiza la carga en la bomba" capture="user"/>
+        </div>
+        <div className="card"><div className="ct">Firma de quien realizó la carga</div>
+          <canvas ref={sigRef} className="sig" width={340} height={130} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+          <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+          <div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{solicitante.nombre}</b><br/><span style={{fontSize:11,color:"#888"}}>Notif: {cat.config?.emailLogistica||"logística"}</span></div>
+        </div>
+        <label>Observaciones</label><textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Notas (opcional)"/>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(2)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} disabled={!sig||!fotoPersona||busy} onClick={submit}>{busy?"Enviando…":"Enviar reporte"}</button></div>
+      </>}
+    </div>
+  );
+}
+
 function SolHistory({items,rol,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
   const list=items.filter(s=>(f==="Todos"||s.status===f)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("solicitudes_combustible",["Fecha","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Monto","Estado"],list.map(s=>[fdt(s.fecha),s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.monto,s.status]));
+  const csv=()=>csvDownload("solicitudes_combustible",["Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Precio/L","Monto","Estado","Ubicacion"],list.map(s=>[fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.precioLitro||s.precio,s.monto,s.status,s.ubicacion?.direccion||""]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
       <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
       {list.length===0&&<div className="empty">No hay solicitudes</div>}
-      <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
+      <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.formato==="reporte"?"📋 Reporte":"📝 Solicitud"} · {s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
     </div>
   );
 }
@@ -505,12 +612,23 @@ function SolDetail({sol,rol,refrescar,showToast,onBack}){
   const canChange=rol==="admin"||rol==="analista"||rol==="supervisor";
   const[busy,setBusy]=useState(false);
   const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st);showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  const esRep=sol.formato==="reporte";
+  const u=sol.ubicacion;
+  const mapsUrl=u?`https://www.google.com/maps?q=${u.lat},${u.lng}`:null;
   return(
-    <div className="pdf-area" data-pdftitle="Solicitud de combustible">
+    <div className="pdf-area" data-pdftitle={esRep?"Reporte de carga de combustible":"Solicitud de combustible"}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
-      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Solicitud</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>Nivel antes</span><span>{TANK_OPTS.find(t=>t.val===sol.tankBefore)?.label}</span></div><div className="dr"><span>Litros</span><span>{sol.litros} L</span></div><div className="dr"><span>Monto</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}</div>
-      {sol.photo&&<div className="card"><div className="ct">Foto Evidencia</div><img src={sol.photo} style={{width:"100%",borderRadius:8}} alt="ev"/></div>}
-      {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
+      {esRep?<>
+        <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Generales del Vehículo</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span># Económico</span><span>{sol.economico}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sub-marca</span><span>{sol.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Tanque</span><span>{sol.tanque} L</span></div><div className="dr"><span>Responsable (área)</span><span>{sol.areaResponsable}</span></div><div className="dr"><span>Combustible</span><span>{sol.combustible}</span></div><div className="dr"><span>Precio catálogo</span><span>${sol.precio?.toFixed(2)}</span></div><div className="dr"><span>Producto</span><span>{sol.producto}</span></div></div>
+        <div className="card"><div className="ct">Datos de la carga</div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>¿Se llenó el tanque?</span><span>{sol.lleno}</span></div>{sol.fotoAntes&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto km y medidor antes de cargar</div><img src={sol.fotoAntes} style={{width:"100%",borderRadius:8}} alt="antes"/></div>}{sol.fotoDespues&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del medidor al finalizar</div><img src={sol.fotoDespues} style={{width:"100%",borderRadius:8}} alt="despues"/></div>}</div>
+        <div className="card"><div className="ct">Datos de la gasolinera</div><div className="dr"><span>Litros cargados</span><span>{sol.litros} L</span></div><div className="dr"><span>Precio por litro</span><span>${sol.precioLitro?.toFixed(2)}</span></div><div className="dr"><span>Monto total</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.fotoBomba&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto de la bomba al finalizar</div><img src={sol.fotoBomba} style={{width:"100%",borderRadius:8}} alt="bomba"/></div>}{sol.fotoTicket&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del ticket</div><img src={sol.fotoTicket} style={{width:"100%",borderRadius:8}} alt="ticket"/></div>}{u&&<div className="dr" style={{marginTop:6}}><span>Ubicación</span><span>{u.direccion||`${u.lat?.toFixed(5)}, ${u.lng?.toFixed(5)}`}</span></div>}{mapsUrl&&<a className="no-print" href={mapsUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:C.blue}}>Ver en mapa →</a>}</div>
+        <div className="card"><div className="ct">Quien realizó la carga</div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Correo</span><span>{sol.mail}</span></div>{sol.fotoPersona&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto en la bomba</div><img src={sol.fotoPersona} style={{width:"100%",borderRadius:8}} alt="persona"/></div>}{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}<div style={{marginTop:6,fontSize:11,color:"#888"}}>Notificación: {sol.mail?"logisticaalmacenes@gpa.com.mx":"logística"}</div></div>
+        {sol.firma&&<div className="card"><div className="ct">Firma de quien realizó la carga</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
+      </>:<>
+        <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Solicitud</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>Nivel antes</span><span>{TANK_OPTS.find(t=>t.val===sol.tankBefore)?.label}</span></div><div className="dr"><span>Litros</span><span>{sol.litros} L</span></div><div className="dr"><span>Monto</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}</div>
+        {sol.photo&&<div className="card"><div className="ct">Foto Evidencia</div><img src={sol.photo} style={{width:"100%",borderRadius:8}} alt="ev"/></div>}
+        {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
+      </>}
       {canChange&&<div className="card no-print"><div className="ct">Cambiar Estado</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
     </div>
   );
