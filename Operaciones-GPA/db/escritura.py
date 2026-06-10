@@ -76,7 +76,7 @@ def merge_registro(tipo: str, rid: str, parche: dict) -> None:
 
 # ── Catálogos ────────────────────────────────────────────────────
 # Campos que SÍ se pueden modificar en un vehículo existente.
-EDITABLES_VEH = ("responsable", "combustible", "precio", "producto", "activo")
+EDITABLES_VEH = ("responsable", "combustible", "precio", "producto", "activo", "categoria")
 # Campos inmutables (no se alteran aunque vengan distintos): economico, placas,
 # subMarca, sucursal, tanque (+ id, que es la clave).
 
@@ -134,6 +134,7 @@ def guardar_vehiculo(v: dict) -> dict:
         "combustible": v.get("combustible", "Gasolina"),
         "producto": v.get("producto", ""),
         "precio": v.get("precio", 0),
+        "categoria": v.get("categoria") or "reparto",
         "activo": v.get("activo", True),
     }
     t.put_item(Item={"PK": m.PK_VEHICLE, "SK": sk, **m.to_dynamo(nuevo)})
