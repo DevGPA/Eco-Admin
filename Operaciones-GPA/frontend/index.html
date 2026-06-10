@@ -813,7 +813,7 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
   const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
   const mc=cat.vehicles.filter(v=>v.activo&&catVeh(v)==="montacargas"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
-  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} items={items} session={session} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
+  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} registros={items} session={session} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
   if(view==="detail"&&sel)return<MCDetail rec={sel} canAuth={canAuth} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>;
   if(view==="history")return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("home")}>← Inicio</button><MCHistory items={items} onSelect={r=>{setSel(r);setView("detail");}}/></div>;
   return(
@@ -832,7 +832,7 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
   );
 }
 
-function MCForm({tipo,cat,mc,items,session,sucursalesUser,refrescar,showToast,onDone}){
+function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToast,onDone}){
   const items=tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;
   const yo=cat.users.find(u=>u.mail===session.email)||null;
   const availMC=mc.filter(v=>!sucursalesUser||sucursalesUser.includes(v.sucursal));
@@ -847,7 +847,7 @@ function MCForm({tipo,cat,mc,items,session,sucursalesUser,refrescar,showToast,on
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(eq));
   // Horas de trabajo: no menor al último ni más de 100 h por encima del último registro
-  const lastHoras=(items||[]).filter(r=>String(r.vehicleId)===String(eq)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.horas??null;
+  const lastHoras=(registros||[]).filter(r=>String(r.vehicleId)===String(eq)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.horas??null;
   const horasN=parseFloat(horas);
   const horasErr=horas!==""&&lastHoras!=null?(horasN<lastHoras?`No puede ser menor al último: ${lastHoras} h`:horasN-lastHoras>100?`No puede exceder 100 h del último (${lastHoras} h)`:null):null;
   const CHUNK=10;const chunks=[];for(let i=0;i<items.length;i+=CHUNK)chunks.push(items.slice(i,i+CHUNK));
