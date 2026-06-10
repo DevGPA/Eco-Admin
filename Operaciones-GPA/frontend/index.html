@@ -706,7 +706,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
     if(!vehicle||!user||!km||!fotoKm||!sig||busy)return;
     setBusy(true);
     try{
-      const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig};
+      const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig,status:"Aprobado"};
       const subido=await api.subirEvidencias("checklist",datos);
       await api.crear("checklist",subido);
       showToast("✓ Checklist enviado");await refrescar();onDone();
@@ -789,7 +789,7 @@ function CLHistory({items,onSelect}){
       <div className="tr">{["Todos","semanal","mensual"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="Todos"?"Todos":x==="semanal"?"Semanal":"Mensual"}</button>)}</div>
       <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
       {list.length===0&&<div className="empty">No hay checklists</div>}
-      <div className="card">{list.map(c=><div key={c.id} className="li" onClick={()=>onSelect(c)}><div className="lit"><span className="lim">{c.placas} · #{c.economico}</span><span className={"bdg "+(c.tipo==="semanal"?"dpe":"dok")}>{c.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="lis">{c.responsable} · {c.sucursal}</div><div className="lis">{fdt(c.fecha)}</div></div>)}</div>
+      <div className="card">{list.map(c=><div key={c.id} className="li" onClick={()=>onSelect(c)}><div className="lit"><span className="lim">{c.placas} · #{c.economico}</span><span className={"bdg "+(c.tipo==="semanal"?"dpe":"dok")}>{c.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="lis"><span style={{color:C.green,fontWeight:600}}>✓ Aprobado</span> · {c.responsable} · {c.sucursal}</div><div className="lis">{fdt(c.fecha)}</div></div>)}</div>
     </div>
   );
 }
@@ -799,7 +799,7 @@ function CLDetail({cl,onBack}){
   return(
     <div className="pdf-area" data-pdftitle="Checklist de reparto" data-pdfsucursal={cl.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
-      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
+      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><div style={{display:"flex",gap:4}}><span className="bdg dok">✓ Aprobado</span><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
       {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
       {cl.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{cl.obs}</div></div>}
@@ -827,7 +827,7 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14,color:C.blue}}>⚡ Eléctrico</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Checklist diario · 28 puntos</div></div><div style={{fontSize:22,color:C.blue}}>→</div></div>
         </div>
       </>}
-      <div className="card" style={{cursor:"pointer"}} onClick={()=>setView("history")}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>🗂 Historial</div><div style={{fontSize:12,color:"#888",marginTop:3}}>{items.length} registro(s) · {items.filter(r=>r.status==="Pendiente").length} pendiente(s)</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>
+      <div className="card" style={{cursor:"pointer"}} onClick={()=>setView("history")}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>🗂 Historial</div><div style={{fontSize:12,color:"#888",marginTop:3}}>{items.length} registro(s)</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>
     </div>
   );
 }
@@ -858,7 +858,7 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
   const submit=async()=>{
     if(!canSubmit||busy)return;setBusy(true);
     try{
-      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Pendiente"};
+      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático"};
       const subido=await api.subirEvidencias("montacargas",datos);
       await api.crear("montacargas",subido);
       showToast("✓ Checklist enviado");await refrescar();onDone();
@@ -945,8 +945,7 @@ function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"80%",lineHeight:1.4}}>#{i+1} {item.substring(0,50)}{item.length>50?"...":""}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
       {rec.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{rec.obs}</div></div>}
       {rec.firma&&<div className="card"><div className="ct">Firma</div><img src={rec.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
-      {canAuth&&rec.status==="Pendiente"&&<div className="card no-print"><div className="ct">Autorización del Supervisor</div><p style={{fontSize:12,color:"#555",marginBottom:10}}>Revisa y autoriza o rechaza este registro.</p><button className="bgr" disabled={busy} onClick={()=>auth(true)}>✓ Aprobar checklist</button><button className="brj" disabled={busy} onClick={()=>auth(false)}>✗ Rechazar checklist</button></div>}
-      {rec.status!=="Pendiente"&&<div style={{background:rec.status==="Aprobado"?C.greenLt:C.redLt,borderRadius:8,padding:"10px 14px",fontSize:12,color:rec.status==="Aprobado"?C.green:C.red,marginTop:8,textAlign:"center",fontWeight:600}}>{rec.status==="Aprobado"?"✓ Aprobado por "+(rec.autorizadoPor||""):"✗ Rechazado por "+(rec.autorizadoPor||"")}</div>}
+      <div style={{background:C.greenLt,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.green,marginTop:8,textAlign:"center",fontWeight:600}}>✓ Aprobado (no requiere autorización)</div>
     </div>
   );
 }
