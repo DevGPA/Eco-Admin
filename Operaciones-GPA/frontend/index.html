@@ -160,6 +160,17 @@ const readFile=(e,cb)=>{
   r.readAsDataURL(f);
 };
 
+// Domicilios por sucursal (se imprimen en el encabezado del PDF según corresponda)
+const DOMICILIOS={
+  "Guadalajara":"Calzada del Águila #985-A, Col. Moderna, C.P. 44190, Guadalajara, Jalisco.",
+  "Cancun":"Calle 25 S.M. 69 Mza. 8 Lote 1 Local 6, C.P. 77510, Mpio. Benito Juárez, Cancún, Quintana Roo.",
+  "Ciudad de Mexico":"Embarcadero #11, Col. Ejido del Moral, C.P. 09040, Del. Iztapalapa, México, D.F.",
+  "Vallarta":"Callejón de la Vía #116 Int. 6, Col. Las Juntas, C.P. 48291, Puerto Vallarta, Jalisco.",
+  "Monterrey":"Av. Adolfo Ruiz Cortines #1501 Bodega 2 y 3, Col. Valle Soleado, C.P. 67130, Cd. Guadalupe, N.L.",
+  "Cabos":"Carr. Cabo San Lucas-Todos Santos Km 123 Bodega 3, Col. Los Cangrejos, C.P. 23473, Cabo San Lucas, B.C.S.",
+  "Cedis":"Av. 8 de Julio 2705, Col. Colón Industrial, C.P. 44940, Guadalajara, Jalisco."
+};
+
 // Genera un PDF con diseño corporativo (encabezado GPA + el formato lleno).
 // Toma el contenido del detalle (.pdf-area), quita botones (.no-print) y convierte
 // las imágenes de S3 a dataURL para evitar problemas de CORS al renderizar.
@@ -167,20 +178,25 @@ async function descargarPDFCorp(){
   const area=document.querySelector(".pdf-area");
   if(!area||typeof html2pdf==="undefined"){window.print();return;}
   const titulo=area.dataset.pdftitle||"Formato GPA";
+  const suc=area.dataset.pdfsucursal||"";
+  const domicilio=DOMICILIOS[suc]||"";
   const clone=area.cloneNode(true);
   clone.querySelectorAll(".no-print").forEach(n=>n.remove());
   const imgs=[...clone.querySelectorAll("img")];
-  // Convierte cada imagen de S3 a dataURL (evita CORS) y acota su tamaño visual
+  // Convierte cada imagen a dataURL (evita CORS). Si alguna no se puede incrustar
+  // (p. ej. el mapa), se OMITE para no romper ni dejar el PDF en blanco.
   await Promise.all(imgs.map(async img=>{
-    try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}catch(e){}
-    img.style.maxWidth="100%";img.style.maxHeight="70mm";img.style.height="auto";
+    try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});img.style.maxWidth="100%";img.style.maxHeight="70mm";img.style.height="auto";}
+    catch(e){img.remove();}
   }));
   const head=document.createElement("div");
   head.innerHTML='<div style="display:flex;align-items:center;gap:12px;border-bottom:3px solid '+C.blue+';padding-bottom:10px;margin-bottom:14px">'
     +'<div style="width:46px;height:46px;background:'+C.blue+';color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px">GPA</div>'
     +'<div style="flex:1"><div style="font-size:15px;font-weight:800;color:'+C.blue+'">General de Productos para el Agua</div>'
-    +'<div style="font-size:12px;color:#555">'+titulo+'</div></div>'
-    +'<div style="font-size:10px;color:#888;text-align:right">'+new Date().toLocaleString("es-MX")+'</div></div>';
+    +'<div style="font-size:12px;color:#555">'+titulo+(suc?' — '+suc:'')+'</div>'
+    +(domicilio?'<div style="font-size:9px;color:#777;margin-top:2px;line-height:1.3">'+domicilio+'</div>':'')
+    +'</div>'
+    +'<div style="font-size:10px;color:#888;text-align:right;white-space:nowrap">'+new Date().toLocaleString("es-MX")+'</div></div>';
   const wrap=document.createElement("div");
   // position:absolute fuera de pantalla (NO opacity:0, eso saldría en blanco): conserva layout real
   wrap.style.cssText="width:190mm;padding:4mm;background:#fff;font-family:-apple-system,Segoe UI,sans-serif;color:#222;position:absolute;left:-9999px;top:0";
@@ -615,13 +631,14 @@ function SolDetail({sol,rol,refrescar,showToast,onBack}){
   const esRep=sol.formato==="reporte";
   const u=sol.ubicacion;
   const mapsUrl=u?`https://www.google.com/maps?q=${u.lat},${u.lng}`:null;
+  const mapImg=u?`https://staticmap.openstreetmap.de/staticmap.php?center=${u.lat},${u.lng}&zoom=15&size=260x120&markers=${u.lat},${u.lng},red-pushpin`:null;
   return(
-    <div className="pdf-area" data-pdftitle={esRep?"Reporte de carga de combustible":"Solicitud de combustible"}>
+    <div className="pdf-area" data-pdftitle={esRep?"Reporte de carga de combustible":"Solicitud de combustible"} data-pdfsucursal={sol.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
       {esRep?<>
         <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Generales del Vehículo</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span># Económico</span><span>{sol.economico}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sub-marca</span><span>{sol.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Tanque</span><span>{sol.tanque} L</span></div><div className="dr"><span>Responsable (área)</span><span>{sol.areaResponsable}</span></div><div className="dr"><span>Combustible</span><span>{sol.combustible}</span></div><div className="dr"><span>Precio catálogo</span><span>${sol.precio?.toFixed(2)}</span></div><div className="dr"><span>Producto</span><span>{sol.producto}</span></div></div>
         <div className="card"><div className="ct">Datos de la carga</div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>¿Se llenó el tanque?</span><span>{sol.lleno}</span></div>{sol.fotoAntes&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto km y medidor antes de cargar</div><img src={sol.fotoAntes} style={{width:"100%",borderRadius:8}} alt="antes"/></div>}{sol.fotoDespues&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del medidor al finalizar</div><img src={sol.fotoDespues} style={{width:"100%",borderRadius:8}} alt="despues"/></div>}</div>
-        <div className="card"><div className="ct">Datos de la gasolinera</div><div className="dr"><span>Litros cargados</span><span>{sol.litros} L</span></div><div className="dr"><span>Precio por litro</span><span>${sol.precioLitro?.toFixed(2)}</span></div><div className="dr"><span>Monto total</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.fotoBomba&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto de la bomba al finalizar</div><img src={sol.fotoBomba} style={{width:"100%",borderRadius:8}} alt="bomba"/></div>}{sol.fotoTicket&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del ticket</div><img src={sol.fotoTicket} style={{width:"100%",borderRadius:8}} alt="ticket"/></div>}{u&&<div className="dr" style={{marginTop:6}}><span>Ubicación</span><span>{u.direccion||`${u.lat?.toFixed(5)}, ${u.lng?.toFixed(5)}`}</span></div>}{mapsUrl&&<a className="no-print" href={mapsUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:C.blue}}>Ver en mapa →</a>}</div>
+        <div className="card"><div className="ct">Datos de la gasolinera</div><div className="dr"><span>Litros cargados</span><span>{sol.litros} L</span></div><div className="dr"><span>Precio por litro</span><span>${sol.precioLitro?.toFixed(2)}</span></div><div className="dr"><span>Monto total</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.fotoBomba&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto de la bomba al finalizar</div><img src={sol.fotoBomba} style={{width:"100%",borderRadius:8}} alt="bomba"/></div>}{sol.fotoTicket&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del ticket</div><img src={sol.fotoTicket} style={{width:"100%",borderRadius:8}} alt="ticket"/></div>}{u&&<div className="dr" style={{marginTop:6}}><span>Ubicación</span><span>{u.direccion||`${u.lat?.toFixed(5)}, ${u.lng?.toFixed(5)}`}</span></div>}{mapImg&&<img src={mapImg} onError={e=>{e.target.style.display="none";}} style={{width:260,maxWidth:"100%",borderRadius:6,marginTop:6,border:"1px solid #eee"}} alt="mapa de referencia"/>}{mapsUrl&&<div className="no-print"><a href={mapsUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:C.blue}}>Ver en mapa →</a></div>}</div>
         <div className="card"><div className="ct">Quien realizó la carga</div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Correo</span><span>{sol.mail}</span></div>{sol.fotoPersona&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto en la bomba</div><img src={sol.fotoPersona} style={{width:"100%",borderRadius:8}} alt="persona"/></div>}{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}<div style={{marginTop:6,fontSize:11,color:"#888"}}>Notificación: {sol.mail?"logisticaalmacenes@gpa.com.mx":"logística"}</div></div>
         {sol.firma&&<div className="card"><div className="ct">Firma de quien realizó la carga</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
       </>:<>
@@ -780,7 +797,7 @@ function CLHistory({items,onSelect}){
 function CLDetail({cl,onBack}){
   const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
   return(
-    <div className="pdf-area" data-pdftitle="Checklist de reparto">
+    <div className="pdf-area" data-pdftitle="Checklist de reparto" data-pdfsucursal={cl.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
@@ -921,7 +938,7 @@ function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
   const[busy,setBusy]=useState(false);
   const auth=async ok=>{setBusy(true);try{await api.cambiarEstado("montacargas",rec.id,ok?"Aprobado":"Rechazado");showToast(ok?"✓ Checklist aprobado":"✗ Checklist rechazado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
-    <div className="pdf-area" data-pdftitle="Checklist de montacargas">
+    <div className="pdf-area" data-pdftitle="Checklist de montacargas" data-pdfsucursal={rec.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
@@ -1076,7 +1093,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
       </>}
       {sec==="sucursales"&&<>
         <div className="card" style={{marginBottom:12}}><label>Nueva sucursal</label><div style={{display:"flex",gap:8}}><input type="text" value={newSuc} onChange={e=>setNewSuc(e.target.value)} placeholder="Nombre"/><button className="bp" style={{width:"auto",padding:"8px 14px",marginTop:0,whiteSpace:"nowrap"}} disabled={busy} onClick={()=>{if(!newSuc.trim())return;wrap(async()=>{await api.adminSucursal({nombre:newSuc.trim()});setNewSuc("");showToast("Sucursal agregada");});}}>+ Agregar</button></div></div>
-        <div className="card">{cat.sucursales.map(s=><div key={s} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{s}</span><button className="bd" disabled={busy} onClick={()=>wrap(async()=>{await api.adminSucursal({nombre:s,eliminar:true});showToast("Eliminada");})}>Eliminar</button></div></div>)}</div>
+        <div className="card">{cat.sucursales.map(s=><div key={s} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{s}</span><button className="bd" disabled={busy} onClick={()=>wrap(async()=>{await api.adminSucursal({nombre:s,eliminar:true});showToast("Eliminada");})}>Eliminar</button></div>{DOMICILIOS[s]&&<div className="lis">{DOMICILIOS[s]}</div>}</div>)}</div>
         <div className="card"><div className="ct">Correos de Notificación</div>
           <label>Logística (combustible)</label><input type="text" defaultValue={cat.config?.emailLogistica||""} onBlur={e=>wrap(()=>api.adminConfig({...cat.config,emailLogistica:e.target.value}))}/>
           <label>Riesgos (checklists)</label><input type="text" defaultValue={cat.config?.emailRiesgos||""} onBlur={e=>wrap(()=>api.adminConfig({...cat.config,emailRiesgos:e.target.value}))}/>
