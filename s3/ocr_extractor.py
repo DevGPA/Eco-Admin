@@ -134,15 +134,20 @@ def _ocr_textract(imagen_png: bytes, client=None) -> dict:
 
 # RFC mexicano: 3-4 letras (incluye Ñ y &) + 6 dígitos de fecha + 3 de homoclave.
 _RFC_RE  = re.compile(r"[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}")
+# Variante de BÚSQUEDA tolerante a separadores: algunas plantillas imprimen el RFC
+# con guiones/puntos/espacios (p.ej. "GPA-840221-9Y1" en las facturas de GPA, vs
+# "GPA8402219Y1" pegado en las cartas porte). Se normaliza quitando separadores.
+_RFC_FIND_RE = re.compile(r"[A-ZÑ&]{3,4}[-.\s]?\d{6}[-.\s]?[A-Z0-9]{3}")
 # Folio fiscal (UUID) del CFDI: NO es el folio serie-número que se necesita.
 _UUID_RE = re.compile(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}", re.I)
 
 
 def _norm_rfc(s) -> Optional[str]:
-    """RFC normalizado (mayúsculas, sin espacios) si es válido; si no, None."""
+    """RFC normalizado (mayúsculas, sin separadores) si es válido; si no, None.
+    Quita guiones/puntos/espacios: 'GPA-840221-9Y1' → 'GPA8402219Y1'."""
     if not s:
         return None
-    t = re.sub(r"\s+", "", str(s)).upper()
+    t = re.sub(r"[-.\s]", "", str(s)).upper()
     return t if _RFC_RE.fullmatch(t) else None
 
 
@@ -159,11 +164,14 @@ def _lineas_texto(blocks) -> list[dict]:
 
 
 def _rfcs_en_lineas(lineas) -> list[dict]:
-    """Todos los RFC del texto crudo, con su posición [{'rfc','top','left'}]."""
+    """Todos los RFC del texto crudo, con su posición [{'rfc','top','left'}].
+    Tolera RFC con separadores (guiones/puntos) y los normaliza."""
     res = []
     for ln in lineas:
-        for m in _RFC_RE.finditer(ln["text"].upper()):
-            res.append({"rfc": m.group(), "top": ln["top"], "left": ln["left"]})
+        for m in _RFC_FIND_RE.finditer(ln["text"].upper()):
+            tok = re.sub(r"[-.\s]", "", m.group())
+            if _RFC_RE.fullmatch(tok):
+                res.append({"rfc": tok, "top": ln["top"], "left": ln["left"]})
     return res
 
 

@@ -100,6 +100,16 @@ def test_norm_rfc_valida_y_rechaza():
     assert _norm_rfc(None) is None
 
 
+def test_rfc_con_separadores_se_normaliza():
+    # Las facturas de GPA imprimen el RFC con guiones; debe reconocerse igual.
+    assert _norm_rfc("GPA-840221-9Y1") == "GPA8402219Y1"
+    assert _norm_rfc("R.F.C. GPA-840221-9Y1") is None  # con prefijo no es fullmatch
+    # En el texto crudo (línea "R.F.C. GPA-840221-9Y1 ...") sí debe extraerlo:
+    lineas = [{"text": "R.F.C. GPA-840221-9Y1 REG. EDO 62305", "top": 0.15, "left": 0.1}]
+    rfcs = [r["rfc"] for r in ocr._rfcs_en_lineas(lineas)]
+    assert "GPA8402219Y1" in rfcs
+
+
 def test_tipo_documento_por_palabras_clave():
     assert _tipo_documento([{"text": "Complemento Carta Porte", "top": 0, "left": 0}]) == "CP"
     assert _tipo_documento([{"text": "CFDI de Ingreso", "top": 0, "left": 0}]) == "FV"
