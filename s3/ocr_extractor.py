@@ -126,8 +126,105 @@ def _ocr_textract(imagen_png: bytes, client=None) -> dict:
     return _parse_textract(resp)
 
 
+# ── Parseo robusto desde el texto crudo ───────────────────────────
+# Las *Queries* de Textract son poco fiables en estos escaneos (devuelven el
+# nombre de la empresa en vez del RFC, una etiqueta en vez del receptor, el UUID
+# en vez del folio…). Por eso reforzamos cada campo con el texto crudo (bloques
+# LINE + geometría) y dejamos la Query solo como una señal más.
+
+# RFC mexicano: 3-4 letras (incluye Ñ y &) + 6 dígitos de fecha + 3 de homoclave.
+_RFC_RE  = re.compile(r"[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}")
+# Folio fiscal (UUID) del CFDI: NO es el folio serie-número que se necesita.
+_UUID_RE = re.compile(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}", re.I)
+
+
+def _norm_rfc(s) -> Optional[str]:
+    """RFC normalizado (mayúsculas, sin espacios) si es válido; si no, None."""
+    if not s:
+        return None
+    t = re.sub(r"\s+", "", str(s)).upper()
+    return t if _RFC_RE.fullmatch(t) else None
+
+
+def _lineas_texto(blocks) -> list[dict]:
+    """Líneas OCR con su geometría: [{'text','top','left'}], en orden de lectura."""
+    out = []
+    for b in blocks:
+        if b.get("BlockType") == "LINE":
+            bb = (b.get("Geometry") or {}).get("BoundingBox") or {}
+            out.append({"text": b.get("Text", ""),
+                        "top": float(bb.get("Top", 0.0)),
+                        "left": float(bb.get("Left", 0.0))})
+    return out
+
+
+def _rfcs_en_lineas(lineas) -> list[dict]:
+    """Todos los RFC del texto crudo, con su posición [{'rfc','top','left'}]."""
+    res = []
+    for ln in lineas:
+        for m in _RFC_RE.finditer(ln["text"].upper()):
+            res.append({"rfc": m.group(), "top": ln["top"], "left": ln["left"]})
+    return res
+
+
+def _rfc_cerca_de(labels, rfcs_pos, lineas) -> Optional[str]:
+    """RFC más cercano (preferentemente por debajo) a la primera etiqueta dada."""
+    tops = [ln["top"] for ln in lineas if any(k in ln["text"].upper() for k in labels)]
+    if not tops or not rfcs_pos:
+        return None
+    lt = min(tops)
+    cand = sorted(rfcs_pos, key=lambda r: (0 if r["top"] >= lt else 1, abs(r["top"] - lt)))
+    return cand[0]["rfc"]
+
+
+def _emisor_receptor(eq, rq, rfcs_pos, lineas):
+    """(emisor, receptor) combinando las Queries (si son RFC válidos), las
+    etiquetas Emisor/Receptor y, en último caso, el orden de lectura."""
+    if eq and rq:
+        return eq, rq
+    uniq = list(dict.fromkeys(
+        r["rfc"] for r in sorted(rfcs_pos, key=lambda x: (round(x["top"], 3), x["left"]))))
+    emisor   = eq or _rfc_cerca_de(["EMISOR"],   rfcs_pos, lineas) or (uniq[0] if uniq else None)
+    receptor = rq or _rfc_cerca_de(["RECEPTOR"], rfcs_pos, lineas) or (uniq[1] if len(uniq) > 1 else None)
+    if emisor and receptor == emisor and len(uniq) > 1:
+        receptor = next((u for u in uniq if u != emisor), receptor)
+    return emisor, receptor
+
+
+def _tipo_documento(lineas) -> Optional[str]:
+    """Tipo por palabras clave: CP (carta porte/traslado) o FV (ingreso/factura)."""
+    txt = " ".join(ln["text"] for ln in lineas).upper()
+    if "CARTA PORTE" in txt or "CARTAPORTE" in txt or "TRASLADO" in txt:
+        return "CP"
+    if "INGRESO" in txt or "FACTURA" in txt:
+        return "FV"
+    return None
+
+
+def _monto_cerca_de(labels, lineas) -> Optional[float]:
+    """Mayor monto con decimales en la línea que contiene la etiqueta (p.ej. Sub-Total)."""
+    for ln in lineas:
+        u = ln["text"].upper()
+        if any(k in u for k in labels):
+            nums = [float(x.replace(",", "")) for x in re.findall(r"[\d,]+\.\d{2}", ln["text"])]
+            if nums:
+                return max(nums)
+    return None
+
+
+def _folio_no_fiscal(lineas) -> Optional[str]:
+    """Folio (serie-número) cerca de 'Folio', excluyendo 'Folio Fiscal'/UUID."""
+    for ln in lineas:
+        u = ln["text"].upper()
+        if "FOLIO" in u and "FISCAL" not in u and not _UUID_RE.search(ln["text"]):
+            m = re.search(r"FOLIO\W*([A-Z]{0,3}[-\s]?\d{3,})", u)
+            if m:
+                return m.group(1).replace(" ", "")
+    return None
+
+
 def _parse_textract(resp: dict) -> dict:
-    """Convierte la respuesta de Textract (QUERIES + TABLES) al dict de página."""
+    """Convierte la respuesta de Textract (QUERIES + TABLES + LINES) al dict de página."""
     blocks = resp.get("Blocks", [])
     by_id = {b["Id"]: b for b in blocks}
 
@@ -141,7 +238,7 @@ def _parse_textract(resp: dict) -> dict:
                         out.append(w.get("Text", ""))
         return " ".join(out).strip()
 
-    # Campos escalares desde las QUERIES
+    # Campos escalares desde las QUERIES (señal débil; se valida/repara abajo)
     campos = {}
     for b in blocks:
         if b.get("BlockType") == "QUERY":
@@ -151,20 +248,57 @@ def _parse_textract(resp: dict) -> dict:
                     ans = by_id.get(rel["Ids"][0], {}).get("Text")
             campos[b.get("Query", {}).get("Alias")] = ans
 
+    # --- Refuerzo con texto crudo ---
+    lineas = _lineas_texto(blocks)
+    rfcs_pos = _rfcs_en_lineas(lineas)
+    rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
+    tipo_doc = _tipo_documento(lineas)
+    emisor, receptor = _emisor_receptor(_norm_rfc(campos.get("rfcEmisor")),
+                                        _norm_rfc(campos.get("rfcReceptor")),
+                                        rfcs_pos, lineas)
+
+    # Alinear roles con GPA: en un CP, GPA es receptor; en una FV, GPA es emisor.
+    # Así el RFC de la fletera (emisor del CP) queda correcto y la clasificación es directa.
+    g = (RFC_GPA or "").strip().upper()
+    if g and g in rfcs_detectados:
+        otros = [r for r in rfcs_detectados if r != g]
+        if tipo_doc == "CP":
+            receptor = g
+            if not emisor or emisor == g:
+                emisor = otros[0] if otros else emisor
+        elif tipo_doc == "FV":
+            emisor = g
+            if not receptor or receptor == g:
+                receptor = otros[0] if otros else receptor
+
+    # Folio: descartar el UUID (folio fiscal); preferir serie-número cerca de "Folio".
+    folio = campos.get("folio")
+    if folio and _UUID_RE.search(str(folio)):
+        folio = None
+    folio = folio or _folio_no_fiscal(lineas)
+
+    # Subtotal: preferir el monto junto a la etiqueta Sub-Total (la Query suele tomar
+    # una línea suelta); caer a la Query solo si no se halló la etiqueta.
+    subtotal = _monto_cerca_de(["SUB-TOTAL", "SUBTOTAL", "SUB TOTAL"], lineas)
+    if subtotal is None:
+        subtotal = _num(campos.get("subtotal"))
+
     return {
-        "rfcEmisor":     campos.get("rfcEmisor"),
-        "rfcReceptor":   campos.get("rfcReceptor"),
-        "subtotal":      _num(campos.get("subtotal")),
+        "rfcEmisor":     emisor,
+        "rfcReceptor":   receptor,
+        "rfcsDetectados": rfcs_detectados,
+        "tipoDoc":       tipo_doc,
+        "subtotal":      subtotal,
         "moneda":        (campos.get("moneda") or "").upper() or None,
         "tipoCambio":    _num(campos.get("tipoCambio")) or None,
-        "folio":         campos.get("folio"),
+        "folio":         folio,
         "fecha":         campos.get("fecha"),
         "comentarios":   campos.get("comentarios"),
         "origenEstado":  campos.get("origenEstado"),
         "origenCiudad":  campos.get("origenCiudad"),
         "destinoEstado": campos.get("destinoEstado"),
         "destinoCiudad": campos.get("destinoCiudad"),
-        "fletaRFC":      campos.get("rfcEmisor"),   # en un CP, la fletera es el emisor
+        "fletaRFC":      emisor,   # en un CP, la fletera es el emisor
         "partidas":      _partidas_de_tablas(blocks, by_id, _texto),
     }
 
@@ -247,6 +381,21 @@ def clasificar_por_rfc(rfc_emisor: Optional[str], rfc_receptor: Optional[str],
     return "ERROR"
 
 
+def clasificar_pagina(p: dict, rfc_gpa: str = RFC_GPA) -> str:
+    """Clasifica una página combinando señales: rol del RFC (emisor/receptor) y,
+    como respaldo, presencia del RFC de GPA en el texto + tipo de documento."""
+    c = clasificar_por_rfc(p.get("rfcEmisor"), p.get("rfcReceptor"), rfc_gpa)
+    if c in ("CP", "FV"):
+        return c
+    # Respaldo: GPA aparece en el documento pero los roles no quedaron claros.
+    g = (rfc_gpa or "").strip().upper()
+    if g and g in [str(r).upper() for r in (p.get("rfcsDetectados") or [])]:
+        tipo = (p.get("tipoDoc") or "").upper()
+        if tipo in ("CP", "FV"):
+            return tipo
+    return "ERROR"
+
+
 def _num(valor) -> float:
     """Extrae el primer número de un texto, tolerando $, comas (miles) y unidades.
 
@@ -275,7 +424,7 @@ def armar_caso(paginas: list[dict], folio_archivo: str = "") -> dict:
     """
     cps, fvs, ajenas = [], [], []
     for p in paginas:
-        clase = clasificar_por_rfc(p.get("rfcEmisor"), p.get("rfcReceptor"))
+        clase = clasificar_pagina(p)
         (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
 
     if not cps:
@@ -374,7 +523,7 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
     """
     cps, fvs, ajenas = [], [], []
     for p in paginas:
-        clase = clasificar_por_rfc(p.get("rfcEmisor"), p.get("rfcReceptor"))
+        clase = clasificar_pagina(p)
         (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
 
     casos, usadas = [], set()
@@ -394,6 +543,14 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         casos.append(_construir_caso(cp, match, folio_archivo))
 
     fvs_sin_cp = [fvs[i].get("folio") for i in range(len(fvs)) if i not in usadas]
+    # Observabilidad: un PDF que no arma casos antes desaparecía sin rastro.
+    if not casos:
+        logger.warning("%s: 0 casos (CP=%d FV=%d ajenas=%d). RFCs detectados: %s",
+                       folio_archivo or "PDF", len(cps), len(fvs), len(ajenas),
+                       sorted({r for p in paginas for r in (p.get("rfcsDetectados") or [])}))
+    else:
+        logger.info("%s: %d caso(s) (CP=%d FV=%d ajenas=%d)",
+                    folio_archivo or "PDF", len(casos), len(cps), len(fvs), len(ajenas))
     return {"casos": casos, "totalCP": len(cps), "totalFV": len(fvs),
             "fvsSinCP": fvs_sin_cp, "paginasAjenas": len(ajenas),
             "folioArchivo": folio_archivo}

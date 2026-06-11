@@ -6,9 +6,10 @@ import json
 
 import s3.ocr_extractor as ocr
 from s3.ocr_extractor import (
-    clasificar_por_rfc, armar_caso, _parse_json,
+    clasificar_por_rfc, clasificar_pagina, armar_caso, _parse_json,
     emparejar_casos, _folios_referenciados, _fv_coincide,
     caso_a_solicitud, _query_ascii, TEXTRACT_QUERIES,
+    _parse_textract, _norm_rfc, _tipo_documento, _lineas_texto,
 )
 from motor.catalogos import RFC_GPA
 
@@ -63,6 +64,97 @@ def test_clasificacion_ignora_mayusculas_y_espacios():
 
 def test_clasificacion_ambos_none_es_error():
     assert clasificar_por_rfc(None, None) == "ERROR"
+
+
+# ── Parseo robusto desde texto crudo (refuerzo de las Queries) ────
+import itertools
+_idseq = itertools.count(1)
+
+
+def _line(text, top=0.0, left=0.0):
+    return {"Id": f"l-{next(_idseq)}", "BlockType": "LINE", "Text": text,
+            "Geometry": {"BoundingBox": {"Top": top, "Left": left}}}
+
+
+def _query(alias, answer):
+    """Bloque QUERY + su ANSWER (lo que devuelven las Queries de Textract)."""
+    qid, aid = f"q-{alias}", f"a-{alias}"
+    blocks = [{"Id": qid, "BlockType": "QUERY", "Query": {"Alias": alias},
+               "Relationships": [{"Type": "ANSWER", "Ids": [aid]}]}]
+    blocks.append({"Id": aid, "BlockType": "QUERY_RESULT", "Text": answer})
+    return blocks
+
+
+def _resp(lines, queries=None):
+    blocks = list(lines)
+    for alias, ans in (queries or {}).items():
+        blocks += _query(alias, ans)
+    return {"Blocks": blocks}
+
+
+def test_norm_rfc_valida_y_rechaza():
+    assert _norm_rfc("gpa8402219y1") == "GPA8402219Y1"   # moral, 12
+    assert _norm_rfc("XAXX010101000") == "XAXX010101000"  # física, 13
+    assert _norm_rfc("TRES GUERRAS") is None              # nombre, no RFC
+    assert _norm_rfc("Origen") is None
+    assert _norm_rfc(None) is None
+
+
+def test_tipo_documento_por_palabras_clave():
+    assert _tipo_documento([{"text": "Complemento Carta Porte", "top": 0, "left": 0}]) == "CP"
+    assert _tipo_documento([{"text": "CFDI de Ingreso", "top": 0, "left": 0}]) == "FV"
+    assert _tipo_documento([{"text": "Documento cualquiera", "top": 0, "left": 0}]) is None
+
+
+def test_parse_repara_rfc_basura_de_query_con_texto_crudo():
+    # La Query devuelve basura (nombre/etiqueta), pero el RFC está en el texto.
+    resp = _resp(
+        lines=[
+            _line("CARTA PORTE - Traslado", top=0.02),
+            _line("Emisor", top=0.10), _line("RFC: TGU920101AB1", top=0.12),
+            _line("Receptor", top=0.20), _line("RFC: GPA8402219Y1", top=0.22),
+            _line("Folio Fiscal: EAB78FF3-1013-4CA2-BD30-95F44BCC0DDB", top=0.30),
+            _line("Folio: 118295254", top=0.33),
+            _line("Sub-Total: $5,000.00 MXN", top=0.40),
+        ],
+        queries={"rfcEmisor": "TRES GUERRAS", "rfcReceptor": "Origen",
+                 "folio": "EAB78FF3-1013-4CA2-BD30-95F44BCC0DDB", "subtotal": "41.47"},
+    )
+    p = _parse_textract(resp)
+    assert p["rfcEmisor"] == "TGU920101AB1"      # reparado desde el texto
+    assert p["rfcReceptor"] == "GPA8402219Y1"    # GPA como receptor (CP)
+    assert p["tipoDoc"] == "CP"
+    assert p["folio"] == "118295254"             # NO el UUID
+    assert p["subtotal"] == 5000.0               # etiqueta Sub-Total, no la línea suelta
+    assert clasificar_pagina(p) == "CP"
+    assert p["fletaRFC"] == "TGU920101AB1"       # la fletera (emisor del CP)
+
+
+def test_parse_factura_gpa_emisor_es_fv():
+    resp = _resp(
+        lines=[
+            _line("Factura - CFDI de Ingreso", top=0.02),
+            _line("Emisor RFC GPA8402219Y1", top=0.10),
+            _line("Receptor RFC TGU920101AB1", top=0.20),
+            _line("Sub-Total 1,200.00 USD", top=0.40),
+        ],
+        queries={"rfcEmisor": "GPA", "rfcReceptor": "CLIENTE", "subtotal": "1200.00"},
+    )
+    p = _parse_textract(resp)
+    assert p["rfcEmisor"] == "GPA8402219Y1"
+    assert p["tipoDoc"] == "FV"
+    assert clasificar_pagina(p) == "FV"
+
+
+def test_clasificar_pagina_fallback_por_tipo_cuando_roles_ambiguos():
+    # GPA aparece en el texto pero no se pudo fijar emisor/receptor.
+    p = {"rfcEmisor": None, "rfcReceptor": None,
+         "rfcsDetectados": ["GPA8402219Y1"], "tipoDoc": "CP"}
+    assert clasificar_pagina(p) == "CP"
+    # Sin GPA en el documento → ajena.
+    p2 = {"rfcEmisor": None, "rfcReceptor": None,
+          "rfcsDetectados": ["TGU920101AB1"], "tipoDoc": "CP"}
+    assert clasificar_pagina(p2) == "ERROR"
 
 
 # ── armar_caso ────────────────────────────────────────────────────
