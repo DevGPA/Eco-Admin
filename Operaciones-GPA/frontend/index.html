@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"/>
 <meta name="theme-color" content="#185FA5"/>
 <link rel="manifest" href="manifest.webmanifest"/>
-<link rel="apple-touch-icon" href="icon.svg"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <title>GPA — Control de Unidades</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -288,7 +288,7 @@ function Login({onLogin,onSetNewPassword}){
   return(
     <div className="lw">
       <style>{GCS}</style>
-      <div className="logo" style={{width:64,height:64,fontSize:20,marginBottom:16}}>GPA</div>
+      <div style={{width:120,height:120,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center"}}><img src="logo.png" alt="GPA Aqua" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/></div>
       <div style={{fontSize:17,fontWeight:700,color:"#222",marginBottom:4,textAlign:"center"}}>General de Productos para el Agua</div>
       <div style={{fontSize:13,color:"#888",marginBottom:24}}>Sistema de Control de Unidades</div>
       <div style={{width:"100%",maxWidth:340}}>
@@ -380,7 +380,7 @@ function App(){
       {toast&&<div className="toast">{toast}</div>}
       <div className="hdr">
         <div className="hdr-l">
-          <div className="logo">GPA</div>
+          <div className="logo"><img src="logo.png" alt="GPA" style={{width:"100%",height:"100%",objectFit:"contain"}}/></div>
           <div>
             <div style={{fontSize:13,fontWeight:700}}>GPA Control Unidades</div>
             <div style={{fontSize:10,opacity:.75}}>{session.nombre} · <span className={"bdg "+rolBadge(rol)} style={{fontSize:9,padding:"1px 6px"}}>{rolLabel(rol)}</span></div>

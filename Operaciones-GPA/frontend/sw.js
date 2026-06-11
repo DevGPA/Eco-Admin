@@ -3,10 +3,11 @@
 // reciente desde la red y solo cae al caché cuando no hay conexión. Así, cada
 // vez que se publica una nueva versión, los usuarios la reciben (sin quedarse
 // con una copia vieja). Las llamadas a API/Cognito/S3 nunca se cachean.
-const CACHE = "gpa-ops-v3";
+const CACHE = "gpa-ops-v4";
 const SHELL = [
   "./", "./index.html", "./gpa-api.js", "./config.js",
-  "./manifest.webmanifest", "./icon.svg",
+  "./manifest.webmanifest", "./logo.png",
+  "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (e) => {
