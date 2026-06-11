@@ -167,6 +167,29 @@ def test_clasificar_pagina_fallback_por_tipo_cuando_roles_ambiguos():
     assert clasificar_pagina(p2) == "ERROR"
 
 
+# ── Consolidación de factura multipágina ──────────────────────────
+def test_factura_multipagina_no_duplica_subtotal():
+    # 1 carta porte + factura de 2 páginas que REPITEN el mismo subtotal.
+    cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=1500, moneda="MXN", folio="CP1")
+    fv_p1 = fv(subtotal=1200, folio="F-555", tc=17.5)
+    fv_p2 = fv(subtotal=1200, folio="F-555", tc=17.5)   # misma factura, repite subtotal
+    res = emparejar_casos([cp_pag, fv_p1, fv_p2], folio_archivo="ARCH")
+    assert res["totalFV"] == 2 and res["totalFacturas"] == 1   # 2 páginas → 1 factura
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["montoVentaFV"] == 1200      # NO 2400 (no se duplica)
+
+
+def test_factura_multipagina_subtotales_distintos_toma_mayor():
+    # Sin folio fiable y subtotales distintos → toma el mayor (suele ser el total).
+    cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=900, moneda="MXN", folio="CP2")
+    fv_p1 = fv(subtotal=300, folio=None, tc=17.5)
+    fv_p2 = fv(subtotal=950, folio=None, tc=17.5)
+    res = emparejar_casos([cp_pag, fv_p1, fv_p2], folio_archivo="ARCH2")
+    assert res["totalFacturas"] == 1
+    assert res["casos"][0]["montoVentaFV"] == 950
+
+
 # ── armar_caso ────────────────────────────────────────────────────
 def test_caso_cp_mas_fv_ok():
     res = armar_caso([cp(132.00), fv(4.41)], folio_archivo="116162584")

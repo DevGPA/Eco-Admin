@@ -20,6 +20,7 @@ import re
 import json
 import logging
 import unicodedata
+from collections import Counter
 from typing import Optional
 
 import boto3
@@ -487,6 +488,45 @@ def _fv_coincide(fv_folio: Optional[str], refs: list[str]) -> bool:
     return any(d == r or d.endswith(r) or r.endswith(d) for r in refs)
 
 
+def _fv_consolidada(pages: list[dict]) -> dict:
+    """Funde las páginas OCR de UNA factura en una sola FV. Como cada página de la
+    factura REPITE el Sub-Total (no es acumulable), el subtotal representativo es el
+    valor que más se repite; si todas difieren, el mayor (suele ser el total)."""
+    subs = [round(_num(p.get("subtotal")), 2) for p in pages if _num(p.get("subtotal")) > 0]
+    if subs:
+        conteo = Counter(subs).most_common(1)[0]
+        subtotal = conteo[0] if conteo[1] > 1 else max(subs)
+    else:
+        subtotal = 0.0
+    base = next((p for p in pages if p.get("tipoCambio")), pages[0])
+    return {
+        "subtotal":    subtotal,
+        "moneda":      next((p.get("moneda") for p in pages if p.get("moneda")), base.get("moneda")),
+        "tipoCambio":  next((p.get("tipoCambio") for p in pages if p.get("tipoCambio")), None),
+        "folio":       next((p.get("folio") for p in pages if p.get("folio")), None),
+        "comentarios": base.get("comentarios"),
+        "rfcEmisor":   base.get("rfcEmisor"),
+        "partidas":    [pt for p in pages for pt in (p.get("partidas") or [])],
+    }
+
+
+def _consolidar_fvs(fv_pages: list[dict]) -> list[dict]:
+    """Agrupa páginas FV en facturas (1 FV por factura) por orden de lectura:
+    - un folio NUEVO inicia una factura distinta (se sumarán entre sí);
+    - mismo folio, o página sin folio (continuación), pertenece a la factura en curso
+      (su Sub-Total se repite, NO se suma).
+    Así varias facturas de un CP siguen sumándose, pero una factura multipágina cuenta
+    una sola vez."""
+    grupos = []
+    for p in fv_pages:
+        d = _digitos(p.get("folio"))
+        if grupos and (not d or d == _digitos(grupos[-1][0].get("folio"))):
+            grupos[-1].append(p)        # continuación / misma factura
+        else:
+            grupos.append([p])          # folio nuevo → factura distinta
+    return [_fv_consolidada(g) for g in grupos]
+
+
 def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
     if not fvs:
         return {"status": "ERROR", "error": "SIN_FV_VINCULADA",
@@ -534,34 +574,40 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         clase = clasificar_pagina(p)
         (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
 
+    # Consolidar páginas FV en facturas (una factura multipágina = UNA FV, sin sumar
+    # su Sub-Total repetido). Si hay una sola carta porte, todas las páginas FV del
+    # PDF son su factura.
+    facturas = _consolidar_fvs(fvs)
+
     casos, usadas = [], set()
-    unico = (len(cps) == 1 and len(fvs) == 1)   # un solo CP + una sola FV
     for cp in cps:
         refs = _folios_referenciados(cp.get("comentarios"))
         match = []
-        for i, fv in enumerate(fvs):
+        for i, fv in enumerate(facturas):
             if _fv_coincide(fv.get("folio"), refs):
                 match.append(fv)
                 usadas.add(i)
-        # Fallback: si hay exactamente 1 CP y 1 FV y el comentario no los enlazó
-        # (o el OCR no lo captó), emparejarlos de todos modos.
-        if not match and unico:
-            match = [fvs[0]]
-            usadas.add(0)
+        # Si los Comentarios del CP enlazan folios de FV → son facturas distintas
+        # (se suman). Si NO hay enlace y el PDF trae un solo CP, las páginas FV son
+        # su factura (posiblemente multipágina): se consolidan en UNA. Con varios CP
+        # sin enlace no se puede desambiguar a ciegas → queda SIN_FV_VINCULADA.
+        if not match and len(cps) == 1 and fvs:
+            match = [_fv_consolidada(fvs)]
+            usadas.update(range(len(facturas)))
         casos.append(_construir_caso(cp, match, folio_archivo))
 
-    fvs_sin_cp = [fvs[i].get("folio") for i in range(len(fvs)) if i not in usadas]
+    fvs_sin_cp = [facturas[i].get("folio") for i in range(len(facturas)) if i not in usadas]
     # Observabilidad: un PDF que no arma casos antes desaparecía sin rastro.
     if not casos:
-        logger.warning("%s: 0 casos (CP=%d FV=%d ajenas=%d). RFCs detectados: %s",
-                       folio_archivo or "PDF", len(cps), len(fvs), len(ajenas),
+        logger.warning("%s: 0 casos (CP=%d FV_pag=%d facturas=%d ajenas=%d). RFCs: %s",
+                       folio_archivo or "PDF", len(cps), len(fvs), len(facturas), len(ajenas),
                        sorted({r for p in paginas for r in (p.get("rfcsDetectados") or [])}))
     else:
-        logger.info("%s: %d caso(s) (CP=%d FV=%d ajenas=%d)",
-                    folio_archivo or "PDF", len(casos), len(cps), len(fvs), len(ajenas))
+        logger.info("%s: %d caso(s) (CP=%d FV_pag=%d facturas=%d ajenas=%d)",
+                    folio_archivo or "PDF", len(casos), len(cps), len(fvs), len(facturas), len(ajenas))
     return {"casos": casos, "totalCP": len(cps), "totalFV": len(fvs),
-            "fvsSinCP": fvs_sin_cp, "paginasAjenas": len(ajenas),
-            "folioArchivo": folio_archivo}
+            "totalFacturas": len(facturas), "fvsSinCP": fvs_sin_cp,
+            "paginasAjenas": len(ajenas), "folioArchivo": folio_archivo}
 
 
 # ── Caso → entrada del endpoint /evaluar ──────────────────────────
