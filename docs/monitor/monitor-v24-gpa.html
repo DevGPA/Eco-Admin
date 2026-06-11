@@ -844,7 +844,6 @@ input::placeholder{color:var(--ink3);font-weight:400;}
   </div>
 </div>
 
-<div class="ovl" id="ovl" onclick="closeFolder()"></div>
 
 
 <!-- ══ UPLOAD SCREEN — Paso 2 después del login ══ -->
@@ -964,19 +963,14 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     <span class="vc-chip">spec v2.4</span>
     <div class="user-badge" id="userBadge" onclick="doLogout()"><span class="ub-dot"></span><span id="userEmail">—</span></div>
     <div class="lv"><span class="lvd"></span>Motor activo</div>
-    <button class="tbtn fbtn" id="fbtn" onclick="openFolder()">
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      Carpeta
-    </button>
     <button class="tbtn" onclick="toggleTheme()">☀ / ☽</button>
   </div>
-  <input type="file" id="fi" webkitdirectory multiple accept=".pdf,.PDF" onchange="onFI(this)">
 </header>
 <div class="teal-accent-bar"></div>
 
 <!-- VIEW TABS -->
 <div class="vtabs">
-  <button class="vt active" onclick="sw('post',this)">Post-ejecución <span class="vb vb-go">3 batches · abr 2026</span></button>
+  <button class="vt active" onclick="sw('post',this)">Post-ejecución</button>
   <button class="vt" onclick="sw('pre',this)">Pre-ejecución <span class="vb vb-warn">Simulador v2.4</span></button>
 </div>
 
@@ -985,20 +979,19 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 <div class="date-filter" id="dateFilter">
   <span class="df-label">Período</span>
   <div class="df-inputs">
-    <input type="date" class="df-input" id="dfFrom" value="2026-04-01" onchange="applyFilter()">
+    <input type="date" class="df-input" id="dfFrom" onchange="applyFilter()">
     <span class="df-sep">→</span>
-    <input type="date" class="df-input" id="dfTo" value="2026-04-30" onchange="applyFilter()">
+    <input type="date" class="df-input" id="dfTo" onchange="applyFilter()">
   </div>
   <button class="df-btn" onclick="applyFilter()">Filtrar</button>
   <button class="df-clear" onclick="clearFilter()">Limpiar</button>
   <div class="df-presets">
-    <button class="df-preset active" onclick="setPreset('abr26',this)">Abr 2026</button>
-    <button class="df-preset" onclick="setPreset('mar26',this)">Mar 2026</button>
-    <button class="df-preset" onclick="setPreset('q1',this)">Q1 2026</button>
+    <button class="df-preset" onclick="setPreset('mesActual',this)">Este mes</button>
     <button class="df-preset" onclick="setPreset('mes',this)">Último mes</button>
-    <button class="df-preset" onclick="setPreset('todo',this)">Todo</button>
+    <button class="df-preset" onclick="setPreset('q1',this)">Q1 2026</button>
+    <button class="df-preset active" onclick="setPreset('todo',this)">Todo</button>
   </div>
-  <span class="df-status" id="dfStatus">22/04 – 30/04/2026 · 8 docs</span>
+  <span class="df-status" id="dfStatus"></span>
 </div>
 
 
@@ -1192,33 +1185,6 @@ input::placeholder{color:var(--ink3);font-weight:400;}
   <button class="bb" onclick="clrSel()">✕</button>
 </div>
 
-<!-- FOLDER PANEL -->
-<div class="fp" id="fpanel">
-  <div class="fph">
-    <div class="fph-l">
-      <div class="fph-t">📁 Carpeta de documentos</div>
-      <div class="fph-p" id="fpPath">Sin carpeta seleccionada</div>
-    </div>
-    <button class="fpx" onclick="closeFolder()">✕</button>
-  </div>
-  <div class="fptb">
-    <button class="fpsl" onclick="triggerFP()">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      Seleccionar carpeta
-    </button>
-    <button class="fpev" id="fpev" onclick="evalBatch()">Evaluar batch →</button>
-  </div>
-  <div class="fpst" id="fpSt" style="display:none">
-    <div class="fss"><div class="fsd all"></div><span id="fpTot">0</span> archivos</div>
-    <div class="fss"><div class="fsd fv"></div><span id="fpFV">0</span> FV</div>
-    <div class="fss"><div class="fsd cp"></div><span id="fpCP">0</span> CP/CFDI</div>
-    <div class="fss"><div class="fsd ptx"></div><span id="fpPTX">0</span> PTX</div>
-    <div class="fss"><div class="fsd xml"></div><span id="fpXML">0</span> XML</div>
-  </div>
-  <div class="fpbs" id="fpBody"><div class="fpe">Selecciona una carpeta para ver los documentos disponibles a evaluar con el motor v2.4.</div></div>
-  <div class="fpfo">Formatos: PDF · XML · CFDI 4.0 + CP · PTX/GCCR<br>Fleteras: Tresguerras · Estrella · Oriente · J.Obregon · Tres Guerras · Estafeta · PTX · Hormik · G.Franco · E.Camacho ✓</div>
-</div>
-
 <script>
 function toggleTheme(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);try{localStorage.setItem('gpa-v24-th',t);}catch(e){}}
 try{const s=localStorage.getItem('gpa-v24-th');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}
@@ -1227,34 +1193,6 @@ function ck(el,e){e.stopPropagation();el.classList.toggle('on');el.closest('.car
 function selCard(){}
 function updBulk(){const n=document.querySelectorAll('.chk.on').length;document.getElementById('bn').textContent=n;document.getElementById('bulk').classList.toggle('vis',n>0);}
 function clrSel(){document.querySelectorAll('.chk.on').forEach(c=>c.classList.remove('on'));document.querySelectorAll('.card.sel').forEach(c=>c.classList.remove('sel'));updBulk();}
-function openFolder(){document.getElementById('fpanel').classList.add('open');document.getElementById('ovl').classList.add('show');}
-function closeFolder(){document.getElementById('fpanel').classList.remove('open');document.getElementById('ovl').classList.remove('show');}
-async function triggerFP(){if(window.showDirectoryPicker){try{const d=await window.showDirectoryPicker({mode:'read'});await readDir(d,d.name);return;}catch(e){if(e.name==='AbortError')return;}}document.getElementById('fi').click();}
-function onFI(inp){const fs=Array.from(inp.files);if(!fs.length)return;const fn=fs[0].webkitRelativePath.split('/')[0];document.getElementById('fpPath').textContent=fn+' · '+fs.length+' archivos';procFiles(fs.map(f=>({name:f.name,size:f.size,path:f.webkitRelativePath})));}
-async function readDir(dh,path){const fs=[];for await(const e of dh.values()){if(e.kind==='file'){const f=await e.getFile();fs.push({name:f.name,size:f.size,path:path+'/'+f.name});}}document.getElementById('fpPath').textContent=path+' · '+fs.length+' archivos';procFiles(fs);}
-function clf(n){const u=n.toUpperCase();const ext=u.split('.').pop();if(ext==='XML')return'xml';if(ext==='PDF'){if(/^(FA|FC|FV|FM|FLC)/.test(u))return'fv';if(/^(GCCR|GCR)/.test(u))return'ptx';if(/^(FAC|GDL|ACRED)/.test(u))return'cfdi';if(/^(1[0-9]{8,}|CP|JC|HP|JD|M8|VP|M83)/.test(u))return'cp';return'unk';}return'unk';}
-function fmt(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(0)+'KB';return(b/1048576).toFixed(1)+'MB';}
-function procFiles(files){
-  const rel=files.filter(f=>/\.pdf$/i.test(f.name));
-  const cl=rel.map(f=>({...f,cls:clf(f.name)}));
-  const fv=cl.filter(f=>f.cls==='fv'),cp=cl.filter(f=>f.cls==='cp'),xml=cl.filter(f=>f.cls==='xml'),ptx=cl.filter(f=>f.cls==='ptx'),cfdi=cl.filter(f=>f.cls==='cfdi'),unk=cl.filter(f=>f.cls==='unk');
-  document.getElementById('fpSt').style.display='flex';
-  document.getElementById('fpTot').textContent=rel.length;
-  document.getElementById('fpFV').textContent=fv.length;
-  document.getElementById('fpCP').textContent=cp.length+cfdi.length;
-  document.getElementById('fpPTX').textContent=ptx.length;
-  document.getElementById('fpXML').textContent=xml.length;
-  const fe=document.getElementById('fpev');if(rel.length)fe.classList.add('show');
-  document.getElementById('fbtn').classList.add('loaded');
-  const doc=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`;
-  function mkS(title,dc,bc,bt,fs,col=false){
-    if(!fs.length)return'';
-    const rows=fs.map(f=>`<div class="fi"><div class="fii pdf">${doc}</div><div class="fin"><div class="finm">${f.name}</div><div class="fim">${fmt(f.size)}</div></div><span class="fib ${bc}">${bt}</span></div>`).join('');
-    return`<div class="fpsec ${col?'collapsed':''}"><div class="fpsh" onclick="this.parentElement.classList.toggle('collapsed')"><div class="fpst2"><span class="fsd ${dc}"></span>${title}<span class="fpsn">${fs.length}</span></div><span class="fpc">▾</span></div><div class="fpsb">${rows}</div></div>`;
-  }
-  document.getElementById('fpBody').innerHTML=!rel.length?'<div class="fpe">No se encontraron archivos compatibles.</div>':mkS('Facturas de venta (FV)','fv','fv','FV',fv)+mkS('Cartas porte (CP)','cp','cp','CP',cp)+mkS('PTX / GCCR consolidado','ptx','ptx','PTX',ptx)+mkS('CFDI 4.0 + complemento CP','cfdi','cfdi','CFDI',cfdi)+mkS('XML complementos','xml','xml','XML',xml,true)+mkS('Sin clasificar','all','unk','?',unk,true);
-}
-function evalBatch(){alert('Motor v2.4 procesará cada documento:\n• CPs Tresguerras → C1–C5 completo\n• GCCR PTX → línea por línea con FV vinculada\n• CFDI 4.0 → complemento CP como carta porte\n• GS0229/31/48 → rutas especiales\n\nFunción completa en implementación de backend GPA.');}
 let orig=null,sap='normal',lc=0;
 const DEST_OK=['Jalisco','Nuevo León','Tamaulipas','Coahuila','Yucatán','Quintana Roo','Guerrero','Veracruz','Puebla','Guanajuato','Querétaro','Michoacán','Nayarit','Sinaloa','Sonora','CDMX','Edo. México','Morelos','San Luis Potosí','Aguascalientes','Chihuahua','Durango','Zacatecas','Hidalgo','Campeche','Tabasco','BCS','BCN','Colima'];
 // Oaxaca: NO incluido → R-301 automático
@@ -1399,21 +1337,27 @@ const FOLIO_FECHAS = {
   'FA10314864':'2026-04-14',
 };
 
-// Asignar data-fecha a las tarjetas al cargar
+// Rango amplio por defecto (año pasado → fin del próximo año) para que el
+// tablero cargue TODOS los casos reales sin depender de fechas hardcodeadas.
+function _rangoAmplio() {
+  const y = new Date().getFullYear();
+  return { desde: (y - 1) + '-01-01', hasta: (y + 1) + '-12-31' };
+}
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.card').forEach(card => {
-    const cn = card.querySelector('.cn');
-    if (!cn) return;
-    const folio = cn.textContent.trim().split(' ')[0];
-    const fecha = FOLIO_FECHAS[folio];
-    if (fecha) card.dataset.fecha = fecha;
-  });
+  const r = _rangoAmplio();
+  const f = document.getElementById('dfFrom'), t = document.getElementById('dfTo');
+  if (f && !f.value) f.value = r.desde;
+  if (t && !t.value) t.value = r.hasta;
   updateStatus();
 });
 
 function applyFilter() {
   const from = document.getElementById('dfFrom').value;
   const to   = document.getElementById('dfTo').value;
+  // Re-consultar el backend con el rango elegido (datos reales vía SDK).
+  // Sin esto, el filtro solo ocultaba tarjetas ya presentes y nunca pedía
+  // los registros del rango al API.
+  if (window.gpaBridge && gpaBridge.refreshKanban) { try { gpaBridge.refreshKanban(); } catch (e) {} }
   let shown  = 0;
   document.querySelectorAll('.card').forEach(card => {
     const f = card.dataset.fecha;
@@ -1440,15 +1384,17 @@ function setPreset(p, btn) {
   btn.classList.add('active');
   const now = new Date();
   let from='', to='';
-  if (p==='abr26')  { from='2026-04-01'; to='2026-04-30'; }
-  if (p==='mar26')  { from='2026-03-01'; to='2026-03-31'; }
-  if (p==='q1')     { from='2026-01-01'; to='2026-03-31'; }
+  if (p==='mesActual') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    to   = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+  }
+  if (p==='q1')     { from = now.getFullYear()+'-01-01'; to = now.getFullYear()+'-03-31'; }
   if (p==='mes')    {
     const d = new Date(); d.setMonth(d.getMonth()-1);
     from = d.toISOString().slice(0,10);
     to   = new Date().toISOString().slice(0,10);
   }
-  if (p==='todo')   { from=''; to=''; }
+  if (p==='todo')   { const r=_rangoAmplio(); from=r.desde; to=r.hasta; }
   document.getElementById('dfFrom').value = from;
   document.getElementById('dfTo').value   = to;
   applyFilter();
@@ -2201,12 +2147,6 @@ async function startEvaluation() {
     ? `Subidos ${okN}/${total} · ${errN} con error · el motor procesa los demás…`
     : `✓ ${okN} documentos subidos · el motor los está procesando…`;
   if (errN) console.error('Errores de subida:', errores);
-
-  if (typeof procFiles === 'function') {
-    procFiles(classifiedFiles.map(f => ({ name: f.name, size: f.size || 0 })));
-    const fbtn = document.getElementById('fbtn');
-    if (fbtn) fbtn.classList.add('loaded');
-  }
 
   // Pasar al monitor y refrescar el Kanban. El procesamiento del backend es
   // asíncrono (OCR + motor por cada PDF tarda segundos), así que refrescamos
