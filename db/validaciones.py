@@ -20,12 +20,21 @@ def _table():
 
 ESTADOS_APROBADOS = {"AUTO_APROBADA", "APROBADA_MANUAL"}
 
+# Estados que NO bloquean re-procesar el mismo folio: veredictos negativos de
+# la MÁQUINA. Si el motor rechazó por datos mal extraídos (OCR), volver a subir
+# el PDF debe re-evaluar y REEMPLAZAR ese registro, no quedar sellado por R-092.
+# Los estados con intervención humana o riesgo de doble pago (aprobadas, en
+# revisión/escaladas, rechazo manual) sí bloquean.
+ESTADOS_REEMPLAZABLES = {"AUTO_RECHAZADA", "REEMPLAZADA"}
+
 
 def verificar_unicidad(folio_cp: str, folios_fv: list[str]) -> dict:
     """
     Capa 0 — Verifica R-091 y R-092 antes de evaluar.
 
-    R-092: Una CP no puede existir en NINGUNA solicitud (cualquier estado).
+    R-092: Una CP no puede tener otra solicitud ACTIVA (en revisión, escalada,
+           aprobada o con rechazo manual). Un AUTO_RECHAZADA previo no bloquea:
+           se devuelve en "reemplaza" para que la nueva evaluación lo sustituya.
     R-091: Una FV no puede estar en una solicitud APROBADA.
 
     Returns:
@@ -33,18 +42,20 @@ def verificar_unicidad(folio_cp: str, folios_fv: list[str]) -> dict:
           "valido": True | False,
           "codigo": "R-091" | "R-092" | None,
           "concepto": str,
-          "detalle": str
+          "detalle": str,
+          "reemplaza": [sol_id, ...]   # solo si válido y hay previos a sustituir
         }
     """
     # ── R-092: CP duplicada ──────────────────────────────────────
     resp_cp = _table().query(
         KeyConditionExpression=Key("PK").eq(f"CP#{folio_cp}"),
-        Limit=1,
         ProjectionExpression="SK, estado",
     )
-    if resp_cp["Count"] > 0:
-        sol_ref = resp_cp["Items"][0]["SK"].replace("SOL#", "")
-        estado_ref = resp_cp["Items"][0].get("estado", "DESCONOCIDO")
+    previos = resp_cp.get("Items", [])
+    activos = [i for i in previos if i.get("estado") not in ESTADOS_REEMPLAZABLES]
+    if activos:
+        sol_ref = activos[0]["SK"].replace("SOL#", "")
+        estado_ref = activos[0].get("estado", "DESCONOCIDO")
         return {
             "valido":   False,
             "codigo":   "R-092",
@@ -55,6 +66,7 @@ def verificar_unicidad(folio_cp: str, folios_fv: list[str]) -> dict:
                 f"Una CP no puede usarse más de una vez."
             ),
         }
+    reemplaza = [i["SK"].replace("SOL#", "") for i in previos]
 
     # ── R-091: FV en solicitud aprobada ─────────────────────────
     for folio_fv in folios_fv:
@@ -76,7 +88,10 @@ def verificar_unicidad(folio_cp: str, folios_fv: list[str]) -> dict:
                     ),
                 }
 
-    return {"valido": True}
+    out = {"valido": True}
+    if reemplaza:
+        out["reemplaza"] = reemplaza
+    return out
 
 
 def existe_solicitud(sol_id: str) -> bool:

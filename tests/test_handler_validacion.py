@@ -108,3 +108,36 @@ def test_upload_url_extension_a_minusculas(monkeypatch):
     resp = _route_upload_url(_evento({"filename": "FACTURA.PDF", "fecha": "2026-05-07"}))
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])["key"].endswith(".pdf")
+
+
+# ── Re-evaluación: el previo AUTO_RECHAZADA se marca REEMPLAZADA ──────
+def test_evaluar_reemplaza_rechazo_previo(monkeypatch):
+    import handler as h
+
+    marcados = []
+    monkeypatch.setattr(h, "verificar_unicidad",
+                        lambda cp, fvs: {"valido": True, "reemplaza": ["viejo1", "viejo2"]})
+    monkeypatch.setattr(h, "guardar_solicitud",
+                        lambda res: {"id": "nuevo123", "fechaEvaluacion": "2026-06-12T00:00:00"})
+    monkeypatch.setattr(h, "cambiar_estado",
+                        lambda sid, estado, uid, com="": marcados.append((sid, estado)))
+
+    resp = h._route_evaluar(_evento(_body_valido()))
+    assert resp["statusCode"] == 201
+    assert ("viejo1", "REEMPLAZADA") in marcados
+    assert ("viejo2", "REEMPLAZADA") in marcados
+
+
+def test_evaluar_no_truena_si_reemplazo_falla(monkeypatch):
+    # Un previo corrupto no debe tumbar la evaluación nueva (ya guardada).
+    import handler as h
+
+    monkeypatch.setattr(h, "verificar_unicidad",
+                        lambda cp, fvs: {"valido": True, "reemplaza": ["fantasma"]})
+    monkeypatch.setattr(h, "guardar_solicitud",
+                        lambda res: {"id": "nuevo123", "fechaEvaluacion": "2026-06-12T00:00:00"})
+    def _boom(*a, **k): raise ValueError("Solicitud fantasma no encontrada")
+    monkeypatch.setattr(h, "cambiar_estado", _boom)
+
+    resp = h._route_evaluar(_evento(_body_valido()))
+    assert resp["statusCode"] == 201

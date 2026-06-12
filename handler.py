@@ -116,7 +116,7 @@ def _route_evaluar(event):
         return _err("tipoCambioRef debe ser numérico",400)
     if tc<=0:
         return _err("tipoCambioRef debe ser mayor a 0",400)
-    if b.get("destinoEstado")=="Chiapas" and not b.get("destinoCiudad"):
+    if normalizar_destino(str(b.get("destinoEstado") or "")).upper()=="CHIAPAS" and not b.get("destinoCiudad"):
         return _err("Chiapas requiere destinoCiudad. Autorizadas: Tapachula, Tuxtla Gutiérrez.",400)
     val=verificar_unicidad(b["folioCP"],b["foliosFV"])
     if not val["valido"]:
@@ -125,6 +125,14 @@ def _route_evaluar(event):
     sol=_build_solicitud_input(b)
     resultado=evaluar(sol)
     reg=guardar_solicitud(resultado)
+    # Re-procesamiento: los AUTO_RECHAZADA previos del mismo folio quedan
+    # REEMPLAZADA (fuera del Kanban; el historial se conserva para auditoría).
+    for prev in val.get("reemplaza",[]):
+        try:
+            cambiar_estado(prev,"REEMPLAZADA","MOTOR_V24",
+                           f"Reevaluación del folio {b['folioCP']} → {reg['id']}")
+        except Exception as e:
+            logger.warning("No se pudo marcar REEMPLAZADA %s: %s",prev,e)
     logger.info("EVALUAR %s → %s user=%s",b["folioCP"],resultado.codigo_motor,_uid(event))
     return _ok({"id":reg["id"],"folioCP":b["folioCP"],"codigoMotor":resultado.codigo_motor,
                 "concepto":resultado.concepto_motor,"estado":resultado.estado,
@@ -340,13 +348,18 @@ def _handle_s3(event):
             for caso in res.get("casos",[]):
                 if caso.get("status")!="OK":
                     logger.warning("S3 %s caso %s: %s",key,caso.get("folioCP"),caso.get("error"))
+                    # Visible en el monitor (EN_REVISION): un documento que el OCR
+                    # no pudo armar debe revisarlo un humano, no perderse en logs.
+                    _guardar_caso_error(caso,key)
                     resultados.append({"key":key,"folioCP":caso.get("folioCP"),"error":caso.get("error")})
                     continue
                 sol=caso_a_solicitud(caso)
                 resp=_route_evaluar({"requestContext":{},"path":"/evaluar","httpMethod":"POST","body":json.dumps(sol)})
                 resultados.append({"key":key,"folioCP":caso["folioCP"],"status":resp["statusCode"],"body":json.loads(resp["body"])})
         except Exception as exc:
-            logger.error("S3 %s: %s",key,exc); resultados.append({"key":key,"error":str(exc)})
+            logger.error("S3 %s: %s",key,exc)
+            _guardar_caso_error({"error":"OCR_FALLIDO","detalle":str(exc)},key)
+            resultados.append({"key":key,"error":str(exc)})
     return {"batchItemFailures":[],"resultados":resultados}
 
 def _handle_sqs(event):
@@ -358,6 +371,24 @@ def _handle_sqs(event):
             if resp["statusCode"] not in(200,201,409): failures.append({"itemIdentifier":mid})
         except: failures.append({"itemIdentifier":mid})
     return {"batchItemFailures":failures}
+
+def _guardar_caso_error(caso,key):
+    """Persiste un caso que el OCR no pudo armar (SIN_TIPO_CAMBIO, SIN_FV_VINCULADA,
+    SIN_CARTA_PORTE…) como EN_REVISION para que aparezca en el monitor."""
+    try:
+        import uuid; from datetime import datetime,timezone; from db.escritura import _dynamo_client
+        ahora=datetime.now(timezone.utc).isoformat(); sid=str(uuid.uuid4())
+        folio=str(caso.get("folioCP") or caso.get("folioArchivo") or key.rsplit("/",1)[-1])
+        _dynamo_client().put_item(TableName=os.environ.get("DYNAMO_TABLE","gpa_fletes_dev"),
+            Item={"PK":{"S":f"SOL#{sid}"},"SK":{"S":"#META"},"estado":{"S":"EN_REVISION"},
+                  "codigoMotor":{"S":str(caso.get("error","OCR_ERROR"))},
+                  "conceptoMotor":{"S":"Documento requiere revisión (OCR)"},
+                  "tipoOperacion":{"S":"VENTA_CLIENTE"},
+                  "folioCP":{"S":folio},"fechaEmision":{"S":ahora[:10]},
+                  "fechaEvaluacion":{"S":ahora},
+                  "detalle":{"S":str(caso.get("detalle",""))},
+                  "archivoS3":{"S":key}})
+    except Exception as e: logger.warning("No se pudo guardar caso de error OCR: %s",e)
 
 def _guardar_bloqueada(body,val):
     try:

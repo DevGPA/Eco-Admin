@@ -336,6 +336,11 @@ class GpaApi {
    * @returns {{ EN_REVISION, ESCALADA, aprobadas, rechazadas, kpis }}
    */
   async cargarKanban(desde, hasta) {
+    // KPIs: si el filtro abarca UN solo mes, ese mes; con un rango amplio
+    // (p.ej. "Todo"), el mes actual — pedir el mes de `desde` daría los KPIs
+    // de un mes viejo (ceros) aunque el tablero sí tenga casos.
+    const unMes = desde && hasta && desde.slice(0, 7) === hasta.slice(0, 7);
+    const kpiRef = unMes ? desde : new Date().toISOString().slice(0, 10);
     const [revision, escaladas, autoAprob, manualAprob, autoRech, manualRech, kpisData] =
       await Promise.all([
         this.monitor({ estado: 'EN_REVISION', desde, hasta }),
@@ -345,8 +350,8 @@ class GpaApi {
         this.monitor({ estado: 'AUTO_RECHAZADA',   desde, hasta }),
         this.monitor({ estado: 'RECHAZADA_MANUAL', desde, hasta }),
         this.kpis(
-          parseInt(desde.slice(0, 4)),
-          parseInt(desde.slice(5, 7))
+          parseInt(kpiRef.slice(0, 4)),
+          parseInt(kpiRef.slice(5, 7))
         ),
       ]);
 
