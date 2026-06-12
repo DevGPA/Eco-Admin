@@ -190,6 +190,20 @@ def test_factura_multipagina_subtotales_distintos_toma_mayor():
     assert res["casos"][0]["montoVentaFV"] == 950
 
 
+def test_un_cp_con_varias_facturas_distintas_suma_subtotales():
+    # 1 carta porte + 2 facturas DISTINTAS (folios distintos) sin enlace en los
+    # Comentarios → todas son del CP y se SUMAN sus subtotales (no el mayor).
+    cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=900, moneda="MXN", folio="CP3")
+    fv_a = fv(subtotal=1000, folio="F-100", tc=17.5)
+    fv_b = fv(subtotal=500,  folio="F-200", tc=17.5)
+    res = emparejar_casos([cp_pag, fv_a, fv_b], folio_archivo="ARCH3")
+    assert res["totalFacturas"] == 2                 # 2 folios → 2 facturas
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["montoVentaFV"] == 1500              # 1000 + 500 (suma), no 1000
+    assert set(caso["foliosFV"]) == {"F-100", "F-200"}
+
+
 # ── armar_caso ────────────────────────────────────────────────────
 def test_caso_cp_mas_fv_ok():
     res = armar_caso([cp(132.00), fv(4.41)], folio_archivo="116162584")

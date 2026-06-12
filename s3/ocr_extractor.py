@@ -587,12 +587,13 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
             if _fv_coincide(fv.get("folio"), refs):
                 match.append(fv)
                 usadas.add(i)
-        # Si los Comentarios del CP enlazan folios de FV → son facturas distintas
-        # (se suman). Si NO hay enlace y el PDF trae un solo CP, las páginas FV son
-        # su factura (posiblemente multipágina): se consolidan en UNA. Con varios CP
-        # sin enlace no se puede desambiguar a ciegas → queda SIN_FV_VINCULADA.
-        if not match and len(cps) == 1 and fvs:
-            match = [_fv_consolidada(fvs)]
+        # Si los Comentarios del CP enlazan folios de FV → esas facturas (se suman).
+        # Si NO hay enlace y el PDF trae un solo CP, TODAS las facturas del PDF son
+        # suyas: 1 factura (multipágina, ya sin duplicar su Sub-Total) o N facturas
+        # distintas, en cuyo caso se SUMAN sus subtotales (cada folio = una factura).
+        # Con varios CP sin enlace no se puede desambiguar a ciegas → SIN_FV_VINCULADA.
+        if not match and len(cps) == 1 and facturas:
+            match = list(facturas)
             usadas.update(range(len(facturas)))
         casos.append(_construir_caso(cp, match, folio_archivo))
 
