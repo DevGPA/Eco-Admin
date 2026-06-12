@@ -77,6 +77,27 @@ def test_evaluar_destino(estado, ciudad, esperado):
     assert evaluar_destino(estado, ciudad) == esperado
 
 
+# El OCR (y los usuarios) escriben el estado de muchas formas; la comparación
+# debe ser insensible a acentos/mayúsculas y aceptar sinónimos oficiales.
+@pytest.mark.parametrize("estado,esperado", [
+    ("JALISCO", "OK"),                          # mayúsculas del OCR
+    ("NUEVO LEON", "OK"),                       # sin acento
+    ("Yucatan", "OK"),
+    ("queretaro", "OK"),
+    ("Estado de México", "OK"),                 # → Edo. México
+    ("ESTADO DE MEXICO", "OK"),
+    ("Ciudad de México", "OK"),                 # → CDMX
+    ("Distrito Federal", "OK"),
+    ("Veracruz de Ignacio de la Llave", "OK"),  # nombre constitucional
+    ("Coahuila de Zaragoza", "OK"),
+    ("Michoacán de Ocampo", "OK"),
+    ("Baja California Sur", "OK"),              # → BCS
+    ("OAXACA", "R-301"),                        # no cubierto, en mayúsculas
+])
+def test_evaluar_destino_variantes_ocr(estado, esperado):
+    assert evaluar_destino(estado) == esperado
+
+
 # ── es_cargo_envio (Capa 1b) ──────────────────────────────────────
 def test_cargo_envio_sku_y_desc_ok():
     assert es_cargo_envio("00400000000000", "CARGO POR ENVIO") is True

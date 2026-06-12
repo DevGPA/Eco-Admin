@@ -315,24 +315,32 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     cp  = sol.carta_porte
     fvs = sol.facturas_venta
 
-    # Pre-calcular montos
+    # Pre-calcular montos.
+    # El MONTO del pedido es el Sub-Total de la(s) FV (regla GPA): es el dato
+    # fiable del documento. Los renglones (partidas) aportan las CATEGORÍAS
+    # (costal/accesorios/elegible); sus importes solo suplen el monto cuando
+    # no hay subtotal. Renglones sin importe (OCR de tablas incompleto) se
+    # ignoran para montos — no deben producir falsos R-101/R-202.
     todas_partidas = [p for fv in fvs for p in fv.partidas]
-    monto_usd  = sum(p.importe_usd for p in todas_partidas)
-    equipo_usd = sum(p.importe_usd for p in todas_partidas
+    partidas_v  = [p for p in todas_partidas if p.importe_usd > 0]
+    monto_fv    = sum(fv.subtotal_usd for fv in fvs)
+    monto_usd   = monto_fv if monto_fv > 0 else sum(p.importe_usd for p in partidas_v)
+    equipo_usd = sum(p.importe_usd for p in partidas_v
                      if p.categoria in ("EQUIPO", "RECUBRIMIENTO"))
-    costal_g_usd = sum(p.importe_usd for p in todas_partidas
+    costal_g_usd = sum(p.importe_usd for p in partidas_v
                        if p.categoria == "EXCLUIDO_GRANDE")
-    accs_usd   = sum(p.importe_usd for p in todas_partidas
+    accs_usd   = sum(p.importe_usd for p in partidas_v
                      if p.categoria == "EXCLUIDO_RESTRINGIDO")
     tiene_costal = costal_g_usd > 0
     tiene_accs   = accs_usd > 0
     tiene_elig   = equipo_usd > 0
 
-    # Si no hay partidas, usar subtotales de FV
-    if not todas_partidas:
-        monto_usd  = sum(fv.subtotal_usd for fv in fvs)
+    # Sin partidas con importe (no las hay, o el OCR no leyó la tabla): el
+    # monto FV es la única señal → se asume elegible y C2 queda en manos del
+    # subtotal (no hay evidencia de costal/accesorios para castigar).
+    if not partidas_v:
         equipo_usd = monto_usd
-        tiene_elig = True
+        tiene_elig = monto_usd > 0
 
     flete_usd  = cp.subtotal_sin_impuestos / tc_ref
     pct_flete  = flete_usd / monto_usd if monto_usd else 0
@@ -436,6 +444,16 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     ))
 
     # ── C4b Sucursal ─────────────────────────────────────────────
+    # Vacío = el documento no permitió determinar el origen (OCR) → eso NO es
+    # una violación de la regla: va a revisión humana, no a auto-rechazo.
+    if not cp.origen_sucursal:
+        criterios.append(CriterioDetalle(
+            "C4b Sucursal", "WARN", "no identificado",
+            "Origen no legible/no mapeado a plaza GPA → revisión manual"
+        ))
+        res = _res("R-401-S")
+        res.estado = "EN_REVISION"
+        return res
     if cp.origen_sucursal not in SUCURSALES_VALIDAS:
         criterios.append(CriterioDetalle(
             "C4b Sucursal", "FAIL", cp.origen_sucursal,
@@ -448,6 +466,14 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     ))
 
     # ── C4c Fletera ───────────────────────────────────────────────
+    if not cp.transportista_rfc:
+        criterios.append(CriterioDetalle(
+            "C4c Fletera", "WARN", "no identificado",
+            "RFC de la fletera no legible en el documento → revisión manual"
+        ))
+        res = _res("R-402")
+        res.estado = "EN_REVISION"
+        return res
     if cp.transportista_rfc not in FLETERAS_AUTORIZADAS:
         criterios.append(CriterioDetalle(
             "C4c Fletera", "FAIL", cp.transportista_rfc,

@@ -533,3 +533,29 @@ def test_caso_a_solicitud_usd_no_convierte():
             "partidas": [{"descripcion": "Bomba", "cantidad": 2, "importe": 200.0}]}
     sol = caso_a_solicitud(caso)
     assert sol["partidas"][0]["precioUnitarioUSD"] == pytest.approx(100.0)  # 200/2, sin factor
+
+
+def test_caso_a_solicitud_incluye_monto_venta_fv():
+    # El Sub-Total de la FV (montoVentaFV) debe viajar al /evaluar: es la
+    # fuente del monto del pedido (C1/C5), no la suma de renglones de tabla.
+    caso = {"status": "OK", "folioCP": "X", "foliosFV": ["F1"], "fletaRFC": HORMIK,
+            "fleteSinIvaMXN": 1000.0, "tipoCambioRef": 17.5, "monedaFV": "USD",
+            "montoVentaFV": 845.50, "origenSucursal": "GDL", "partidas": []}
+    sol = caso_a_solicitud(caso)
+    assert sol["montoVentaFV"] == pytest.approx(845.50)
+    assert sol["monedaFV"] == "USD"
+
+
+# ── _fecha_iso ────────────────────────────────────────────────────
+@pytest.mark.parametrize("crudo,esperado", [
+    ("2026-05-07", "2026-05-07"),
+    ("2026-05-07T10:33:00", "2026-05-07"),
+    ("07/05/2026", "2026-05-07"),          # dd/mm/yyyy del OCR
+    ("7-5-2026", "2026-05-07"),
+    ("12 de mayo de 2026", "2026-05-12"),
+    ("FECHA: 07/05/2026 10:33", "2026-05-07"),
+    ("sin fecha", None),
+    (None, None),
+])
+def test_fecha_iso(crudo, esperado):
+    assert ocr._fecha_iso(crudo) == esperado

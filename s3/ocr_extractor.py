@@ -221,6 +221,31 @@ def _monto_cerca_de(labels, lineas) -> Optional[float]:
     return None
 
 
+_MESES_ES = {"ENE": 1, "FEB": 2, "MAR": 3, "ABR": 4, "MAY": 5, "JUN": 6,
+             "JUL": 7, "AGO": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DIC": 12}
+
+
+def _fecha_iso(valor) -> Optional[str]:
+    """Normaliza la fecha OCR a YYYY-MM-DD. Las fechas se guardan como RANGE
+    key de los GSI y se filtran por rango lexicográfico: '12/05/2026' rompería
+    todas las consultas por fecha. Devuelve None si no se reconoce."""
+    if not valor:
+        return None
+    s = str(valor).strip()
+    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)              # ya ISO
+    if m:
+        return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    m = re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})", s)        # dd/mm/yyyy
+    if m:
+        return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+    m = re.search(r"(\d{1,2})\s+DE\s+([A-ZÁÉÍÓÚ]+)\s+DE\s+(\d{4})", s.upper())
+    if m:                                                          # 12 de mayo de 2026
+        mes = _MESES_ES.get(m.group(2)[:3])
+        if mes:
+            return f"{m.group(3)}-{mes:02d}-{int(m.group(1)):02d}"
+    return None
+
+
 def _folio_no_fiscal(lineas) -> Optional[str]:
     """Folio (serie-número) cerca de 'Folio', excluyendo 'Folio Fiscal'/UUID."""
     for ln in lineas:
@@ -301,7 +326,7 @@ def _parse_textract(resp: dict) -> dict:
         "moneda":        (campos.get("moneda") or "").upper() or None,
         "tipoCambio":    _num(campos.get("tipoCambio")) or None,
         "folio":         folio,
-        "fecha":         campos.get("fecha"),
+        "fecha":         _fecha_iso(campos.get("fecha")),
         "comentarios":   campos.get("comentarios"),
         "origenEstado":  campos.get("origenEstado"),
         "origenCiudad":  campos.get("origenCiudad"),
@@ -641,6 +666,10 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
         "fletaRFC": caso.get("fletaRFC") or "",
         "partidas": partidas,
         "fleteBaseMXN": caso.get("fleteSinIvaMXN", 0.0),
+        # Monto de la venta = Sub-Total de la(s) FV (regla de negocio). Es la
+        # fuente del C1/C5; los renglones de tabla solo aportan las categorías.
+        "montoVentaFV": _num(caso.get("montoVentaFV")),
+        "monedaFV": moneda,
         "tipoCambioRef": tc,
         "campoEntregaFV": "ENTREGA_DOMICILIO",
         "fechaEmision": fecha_emision or caso.get("fechaEmision") or "",

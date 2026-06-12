@@ -22,7 +22,7 @@ from dataclasses import asdict
 from typing import Any
 from motor.evaluador import (SolicitudInput, evaluar,
                               CartaPorte, FacturaVenta, Partida, LineaCargo)
-from motor.catalogos import R_CONCEPTOS
+from motor.catalogos import R_CONCEPTOS, normalizar_destino
 from db.validaciones import verificar_unicidad
 from db.escritura    import guardar_solicitud, cambiar_estado
 from db.queries      import (get_cola_revision, get_por_rango_fecha, get_kpis_mes,
@@ -188,7 +188,17 @@ def _build_solicitud_input(b: dict) -> SolicitudInput:
         )
         for p in b.get("partidas",[])
     ]
-    subtotal_usd = sum(p.importe_usd for p in partidas)
+    # Monto de la venta: el Sub-Total declarado de la FV manda (regla GPA: "el
+    # monto de la venta sale de la FV"). La suma de partidas es solo el respaldo
+    # cuando no viene declarado (p. ej. requests manuales del API).
+    monto_decl = 0.0
+    try: monto_decl = float(b.get("montoVentaFV") or 0)
+    except (TypeError, ValueError): monto_decl = 0.0
+    moneda_fv = str(b.get("monedaFV") or "USD").upper()
+    if monto_decl > 0:
+        subtotal_usd = monto_decl / tc_ref if moneda_fv == "MXN" else monto_decl
+    else:
+        subtotal_usd = sum(p.importe_usd for p in partidas)
     folios_fv = b.get("foliosFV") or []
     campo_entrega = b.get("campoEntregaFV","ENTREGA_DOMICILIO")
     # Una FV principal con todas las partidas; los folios adicionales se registran vacíos
@@ -216,7 +226,9 @@ def _build_solicitud_input(b: dict) -> SolicitudInput:
         codigo_sap=str(b.get("codigoSAP","")),
         tipo_servicio_cp="ENTREGA_DOMICILIO" if campo_entrega=="ENTREGA_DOMICILIO" else "OCURRE",
         destino_ciudad=str(b.get("destinoCiudad","")),
-        destino_estado=str(b["destinoEstado"]),
+        # Canónico del catálogo ("JALISCO"→"Jalisco", "Estado de México"→"Edo. México")
+        # para que DynamoDB/monitor/auditor guarden un solo nombre por estado.
+        destino_estado=normalizar_destino(str(b["destinoEstado"])),
         origen_sucursal=str(b["origenSucursal"]),
         tipo_vehiculo=str(b.get("tipoVehiculo","PALLET")),
         numero_pallets=int(b.get("numeroPallets",0)),

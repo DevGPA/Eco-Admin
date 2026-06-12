@@ -104,21 +104,64 @@ CHIAPAS_CIUDADES_OK = {"tapachula", "tuxtla gutiérrez", "tuxtla gutierrez"}
 
 # Oaxaca: NO cubierto → R-301
 
+# ── Canonicalización del estado destino ──────────────────────────
+# El OCR (y los usuarios) escriben el estado de muchas formas: "JALISCO",
+# "Nuevo Leon", "Estado de México", "Veracruz de Ignacio de la Llave"…
+# El catálogo se indexa NORMALIZADO (sin acentos, mayúsculas) y se aceptan
+# sinónimos/nombres constitucionales. Comparar por igualdad exacta producía
+# R-301 (rechazo) masivo para destinos perfectamente cubiertos.
+_DESTINOS_NORM = {_normalizar(d): d for d in DESTINOS_CATALOGO}
+_DESTINOS_ALIAS = {
+    "ESTADO DE MEXICO": "Edo. México", "EDO MEX": "Edo. México",
+    "EDO DE MEXICO": "Edo. México", "EDOMEX": "Edo. México",
+    "MEXICO": "Edo. México",   # en CFDI, estado "México" = Estado de México
+    "CIUDAD DE MEXICO": "CDMX", "CD DE MEXICO": "CDMX", "CD. DE MEXICO": "CDMX",
+    "DISTRITO FEDERAL": "CDMX", "DF": "CDMX", "CD MX": "CDMX",
+    "BAJA CALIFORNIA SUR": "BCS", "B.C.S.": "BCS", "BCS": "BCS",
+    "BAJA CALIFORNIA": "BCN", "BAJA CALIFORNIA NORTE": "BCN", "B.C.": "BCN",
+    "VERACRUZ DE IGNACIO DE LA LLAVE": "Veracruz",
+    "COAHUILA DE ZARAGOZA": "Coahuila",
+    "MICHOACAN DE OCAMPO": "Michoacán",
+    "QUERETARO DE ARTEAGA": "Querétaro",
+    "SLP": "San Luis Potosí", "S.L.P.": "San Luis Potosí",
+    "QROO": "Quintana Roo", "Q ROO": "Quintana Roo", "Q. ROO": "Quintana Roo",
+    "NL": "Nuevo León", "N.L.": "Nuevo León",
+}
+
+
+def normalizar_destino(estado: Optional[str]) -> str:
+    """Nombre canónico del catálogo para el texto del estado, o el texto tal
+    cual (limpio) si no se reconoce. Tolera acentos, mayúsculas y sinónimos."""
+    n = _normalizar(estado or "")
+    if not n:
+        return ""
+    if n in _DESTINOS_NORM:
+        return _DESTINOS_NORM[n]
+    alias = {_normalizar(k): v for k, v in _DESTINOS_ALIAS.items()}
+    if n in alias:
+        return alias[n]
+    # No-catálogo pero con forma canónica conocida (Oaxaca/Chiapas u otros)
+    return (estado or "").strip()
+
+
 def evaluar_destino(estado: str, ciudad: str = "") -> str:
     """
     Retorna 'OK', 'R-301' o 'R-302' según el destino.
     R-302 = ciudad borderline (requiere revisión del aprobador).
+    La comparación es insensible a acentos/mayúsculas y acepta sinónimos.
     """
-    if not estado:
+    canon = normalizar_destino(estado)
+    n = _normalizar(canon)
+    if not n:
         return "R-301"
-    if estado == "Oaxaca":
+    if n == "OAXACA":
         return "R-301"
-    if estado == "Chiapas":
-        ciudad_norm = ciudad.strip().lower()
-        if any(c in ciudad_norm for c in CHIAPAS_CIUDADES_OK):
+    if n == "CHIAPAS":
+        ciudad_norm = _normalizar(ciudad).lower()
+        if any(_normalizar(c).lower() in ciudad_norm for c in CHIAPAS_CIUDADES_OK):
             return "OK"
         return "R-302"  # Otra ciudad de Chiapas → borderline
-    if estado in DESTINOS_CATALOGO:
+    if canon in DESTINOS_CATALOGO:
         return "OK"
     return "R-301"
 

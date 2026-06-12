@@ -3,15 +3,18 @@ from conftest import SKU_EQUIPO, SKU_COSTAL
 
 
 # ── C1 Monto ──────────────────────────────────────────────────────
+# El monto del pedido es el Sub-Total de la FV (regla GPA); el subtotal del
+# fixture debe ser coherente con las partidas del escenario.
 def test_c1_monto_insuficiente_limpio_r101(run_eval, make_fv, make_partida):
-    fv = make_fv(partidas=[make_partida(sku=SKU_EQUIPO, precio=300.0)])
+    fv = make_fv(subtotal=300.0, partidas=[make_partida(sku=SKU_EQUIPO, precio=300.0)])
     res = run_eval(fv=fv)
     assert res.codigo_motor == "R-101"
     assert res.estado == "AUTO_RECHAZADA"
 
 
 def test_c1_costal_sin_minimo_1000_r103(run_eval, make_fv, make_partida):
-    fv = make_fv(partidas=[make_partida(sku=SKU_COSTAL, precio=500.0, peso=50.0)])
+    fv = make_fv(subtotal=500.0,
+                 partidas=[make_partida(sku=SKU_COSTAL, precio=500.0, peso=50.0)])
     res = run_eval(fv=fv)
     assert res.codigo_motor == "R-103"
 
@@ -25,7 +28,8 @@ def test_c1_costal_equipo_insuficiente_r102(run_eval, make_fv, make_partida):
 
 # Accesorio = producto restringido por tipo (<25 kg), p.ej. "PEGA VENECIANO".
 def test_c1_accesorios_sin_minimo_r104(run_eval, make_fv, make_partida):
-    fv = make_fv(partidas=[make_partida(descripcion="PEGA VENECIANO", precio=500.0, peso=2.0)])
+    fv = make_fv(subtotal=500.0,
+                 partidas=[make_partida(descripcion="PEGA VENECIANO", precio=500.0, peso=2.0)])
     res = run_eval(fv=fv)
     assert res.codigo_motor == "R-104"
 
@@ -67,9 +71,33 @@ def test_c4b_sucursal_no_valida_r401s(run_eval, make_cp):
     assert res.codigo_motor == "R-401-S"
 
 
+def test_c4b_origen_ilegible_va_a_revision(run_eval, make_cp):
+    # Vacío = el OCR no pudo leer/mapear el origen. No leer un dato no es
+    # violar la regla: requiere revisión humana, no auto-rechazo.
+    res = run_eval(cp=make_cp(origen_sucursal=""))
+    assert res.codigo_motor == "R-401-S"
+    assert res.estado == "EN_REVISION"
+
+
 def test_c4c_fletera_no_autorizada_r402(run_eval, make_cp):
     res = run_eval(cp=make_cp(transportista_rfc="NOAUTORIZADA999"))
     assert res.codigo_motor == "R-402"
+
+
+def test_c4c_fletera_ilegible_va_a_revision(run_eval, make_cp):
+    res = run_eval(cp=make_cp(transportista_rfc=""))
+    assert res.codigo_motor == "R-402"
+    assert res.estado == "EN_REVISION"
+
+
+def test_monto_manda_subtotal_fv_sobre_partidas(run_eval, make_fv, make_partida):
+    # El Sub-Total de la FV es el monto del pedido aunque el OCR haya leído la
+    # tabla de renglones incompleta (importes en cero) → no debe dar R-101/R-202.
+    fv = make_fv(subtotal=800.0,
+                 partidas=[make_partida(descripcion="Reflector LED", precio=0.0, peso=2.0)])
+    res = run_eval(fv=fv)
+    assert res.codigo_motor not in ("R-101", "R-202")
+    assert res.monto_base_usd == 800.0
 
 
 # ── C5 Proporción de flete ────────────────────────────────────────
