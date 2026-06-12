@@ -23,8 +23,10 @@ frontend:
         - cp frontend/gpa-api.js dist/gpa-api.js
         - cp docs/monitor/simulador-v22.html dist/simulador.html
         - cp docs/specs/api-reference.html dist/api-reference.html
-        # Cargar el SDK en el monitor (queda en modo demo hasta configurar GPA_CONFIG)
-        - sed -i 's#</body>#  <script src="gpa-api.js"></script>\n</body>#' dist/index.html
+        # Cargar el SDK en el monitor con cache-busting: el ?v=<hash> cambia cuando
+        # cambia gpa-api.js, forzando al navegador a bajar la version nueva (sin esto,
+        # un gpa-api.js viejo cacheado deja el Kanban vacio porque le falta cargarKanban).
+        - VER=$(sha256sum frontend/gpa-api.js | cut -c1-8); sed -i "s#</body>#  <script src=\"gpa-api.js?v=$VER\"></script>\n</body>#" dist/index.html
   artifacts:
     baseDirectory: dist
     files:
