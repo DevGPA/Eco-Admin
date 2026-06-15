@@ -29,6 +29,28 @@ ESTADOS_KANBAN = [
 ]
 
 
+# Los items de índice CP#/FV# llevan estado+fechaEmision (los necesita la Capa 0
+# de unicidad), así que también caen en estado-fecha-idx. El monitor solo quiere
+# la SOLICITUD (#META), que es la que tiene código/monto/folio; sin este filtro
+# se cuentan 3 items por solicitud y el Kanban pinta tarjetas vacías (undefined).
+SOLO_META = Attr("SK").eq("#META")
+
+
+def _query_meta(**kw) -> list:
+    """Query a estado-fecha-idx que devuelve SOLO los #META, paginando para no
+    perder registros si el filtro descarta más de 1 MB de items de índice."""
+    items, lek = [], None
+    while True:
+        if lek:
+            kw["ExclusiveStartKey"] = lek
+        resp = _table().query(IndexName="estado-fecha-idx",
+                              FilterExpression=SOLO_META, **kw)
+        items.extend(resp.get("Items", []))
+        lek = resp.get("LastEvaluatedKey")
+        if not lek:
+            return items
+
+
 def get_cola_revision(fecha_desde: str = None) -> list:
     """
     Solicitudes EN_REVISION para columna del kanban.
@@ -37,13 +59,7 @@ def get_cola_revision(fecha_desde: str = None) -> list:
     kce = Key("estado").eq("EN_REVISION")
     if fecha_desde:
         kce = kce & Key("fechaEmision").gte(fecha_desde)
-
-    resp = _table().query(
-        IndexName="estado-fecha-idx",
-        KeyConditionExpression=kce,
-        ScanIndexForward=False,   # más recientes primero
-    )
-    return resp.get("Items", [])
+    return _query_meta(KeyConditionExpression=kce, ScanIndexForward=False)
 
 
 def get_por_rango_fecha(
@@ -55,15 +71,13 @@ def get_por_rango_fecha(
     Filtro del selector de fechas del dashboard.
     GSI: estado-fecha-idx · SK BETWEEN desde AND hasta
     """
-    resp = _table().query(
-        IndexName="estado-fecha-idx",
+    return _query_meta(
         KeyConditionExpression=(
             Key("estado").eq(estado) &
             Key("fechaEmision").between(desde, hasta)
         ),
         ScanIndexForward=False,
     )
-    return resp.get("Items", [])
 
 
 def get_kpis_mes(anio: int, mes: int) -> dict:

@@ -90,6 +90,21 @@ def test_c4c_fletera_ilegible_va_a_revision(run_eval, make_cp):
     assert res.estado == "EN_REVISION"
 
 
+def test_c3_destino_ilegible_va_a_revision(run_eval, make_cp):
+    # Destino vacío = el OCR no lo leyó. No es un destino "no cubierto" (R-301
+    # auto-rechazo); es ilegible → revisión humana.
+    res = run_eval(cp=make_cp(destino_estado=""))
+    assert res.codigo_motor == "R-301"
+    assert res.estado == "EN_REVISION"
+
+
+def test_c3_destino_no_cubierto_si_rechaza(run_eval, make_cp):
+    # Pero un destino LEÍDO y fuera de catálogo sí se auto-rechaza.
+    res = run_eval(cp=make_cp(destino_estado="Oaxaca"))
+    assert res.codigo_motor == "R-301"
+    assert res.estado == "AUTO_RECHAZADA"
+
+
 def test_monto_manda_subtotal_fv_sobre_partidas(run_eval, make_fv, make_partida):
     # El Sub-Total de la FV es el monto del pedido aunque el OCR haya leído la
     # tabla de renglones incompleta (importes en cero) → no debe dar R-101/R-202.

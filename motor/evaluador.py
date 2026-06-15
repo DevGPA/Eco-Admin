@@ -220,6 +220,14 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             "Capa 2 · GS0229", "INFO", cp.codigo_sap,
             f"BACK_ORDER desde {cp.origen_sucursal}"
         ))
+        if not (cp.destino_estado or "").strip():
+            criterios.append(CriterioDetalle(
+                "C3 Destino", "WARN", "no identificado",
+                "Back Order con destino no legible → revisión manual"
+            ))
+            res = _res("R-301")
+            res.estado = "EN_REVISION"
+            return res
         dest_result = evaluar_destino(cp.destino_estado, cp.destino_ciudad)
         criterios.append(CriterioDetalle(
             "C3 Destino", "PASS" if dest_result == "OK" else "FAIL",
@@ -413,6 +421,17 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     ))
 
     # ── C3 Destino ────────────────────────────────────────────────
+    # Destino vacío = el OCR no lo leyó. No leer un dato no es violar la regla:
+    # va a revisión humana (un humano confirma si el destino está cubierto), no
+    # a auto-rechazo R-301. R-301 se reserva para destinos LEÍDOS y no cubiertos.
+    if not (cp.destino_estado or "").strip():
+        criterios.append(CriterioDetalle(
+            "C3 Destino", "WARN", "no identificado",
+            "Destino no legible en el documento → revisión manual"
+        ))
+        res = _res("R-301")
+        res.estado = "EN_REVISION"
+        return res
     dest_result = evaluar_destino(cp.destino_estado, cp.destino_ciudad)
     if dest_result == "R-301":
         criterios.append(CriterioDetalle(
