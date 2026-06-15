@@ -213,11 +213,23 @@ async function descargarPDFCorp(){
   doc.setFontSize(8);doc.setTextColor(150);doc.text(new Date().toLocaleString("es-MX"),PW-M,y+4,{align:"right"});
   y+=hb;doc.setDrawColor(24,95,165);doc.setLineWidth(0.6);doc.line(M,y,PW-M,y);y+=5;
 
+  // Chequeo de montacargas: ~30 puntos en DOS columnas (texto + resultado) para ahorrar hojas
+  const compactChequeo=card=>{
+    const ct=card.querySelector(".ct");heading(ct?ct.textContent:"Chequeo visual completo");
+    const rows=[...card.children].filter(c=>c.tagName==="DIV"&&!(c.classList&&c.classList.contains("ct")));
+    const items=rows.map(r=>{const sp=r.querySelectorAll("span");return {txt:(sp[0]?sp[0].textContent:"").trim(),res:(sp.length?sp[sp.length-1].textContent:"").trim()};});
+    const half=Math.ceil(items.length/2),colW=CW/2-1,lineH=4.3;
+    const colColor=res=>res==="O"?[46,107,17]:res==="P"?[163,45,45]:[120,120,120];
+    const cell=(it,x)=>{if(!it)return;doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,colColor(it.res));doc.text((it.res||"").substring(0,3),x,y);doc.setFont("helvetica","normal");doc.setTextColor(70);const t=doc.splitTextToSize(it.txt,colW-9)[0]||"";doc.text(t,x+8,y);};
+    for(let i=0;i<half;i++){ensure(lineH);cell(items[i],M);cell(items[i+half],M+CW/2+1);y+=lineH;}
+    y+=2;
+  };
   // Recorrido del detalle
   const INL=["SPAN","B","A","STRONG","EM","SMALL","I"];
   const walk=node=>{
     for(const el of node.children){
       const tag=el.tagName;
+      if(el.classList&&el.classList.contains("card")){const ct0=el.querySelector(".ct");if(ct0&&/chequeo visual/i.test(ct0.textContent)){compactChequeo(el);continue;}}
       if(tag==="IMG"){const s=el.getAttribute("src");if(s&&s.indexOf("data:")===0)addImg(s);continue;}
       if(tag==="BR")continue;
       if(el.classList&&el.classList.contains("ct")){heading(el.textContent);continue;}
