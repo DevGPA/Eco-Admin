@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script src="gpa-api.js"></script>
@@ -174,46 +174,64 @@ const DOMICILIOS={
 // Genera un PDF con diseño corporativo (encabezado GPA + el formato lleno).
 // Toma el contenido del detalle (.pdf-area), quita botones (.no-print) y convierte
 // las imágenes de S3 a dataURL para evitar problemas de CORS al renderizar.
+// Convierte una URL (S3/local) a dataURL; null si falla.
+async function _aDataURL(url){
+  try{const r=await fetch(url);const b=await r.blob();return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}
+  catch(e){return null;}
+}
+// Genera el PDF con jsPDF DIRECTAMENTE (texto vectorial + imágenes), recorriendo el
+// contenido del detalle (.pdf-area). NO usa html2canvas → funciona en iPhone/Android/PC
+// (html2canvas rasterizaba en blanco en iOS Safari).
 async function descargarPDFCorp(){
   const area=document.querySelector(".pdf-area");
-  if(!area||typeof html2pdf==="undefined"){window.print();return;}
+  if(!area)return;
+  const JS=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
+  if(!JS){window.print();return;} // respaldo si no cargó la librería
   const titulo=area.dataset.pdftitle||"Formato GPA";
   const suc=area.dataset.pdfsucursal||"";
   const domicilio=DOMICILIOS[suc]||"";
   const clone=area.cloneNode(true);
   clone.querySelectorAll(".no-print").forEach(n=>n.remove());
-  const imgs=[...clone.querySelectorAll("img")];
-  // Convierte cada imagen a dataURL (evita CORS). Si alguna no se puede incrustar
-  // (p. ej. el mapa), se OMITE para no romper ni dejar el PDF en blanco.
-  await Promise.all(imgs.map(async img=>{
-    try{const r=await fetch(img.src);const b=await r.blob();img.src=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});img.style.maxWidth="100%";img.style.maxHeight="55mm";img.style.height="auto";}
-    catch(e){img.remove();}
-  }));
-  const head=document.createElement("div");
-  head.innerHTML='<div style="display:flex;align-items:center;gap:12px;border-bottom:3px solid '+C.blue+';padding-bottom:10px;margin-bottom:14px">'
-    +'<div style="width:46px;height:46px;background:'+C.blue+';color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px">GPA</div>'
-    +'<div style="flex:1"><div style="font-size:15px;font-weight:800;color:'+C.blue+'">General de Productos para el Agua</div>'
-    +'<div style="font-size:12px;color:#555">'+titulo+(suc?' — '+suc:'')+'</div>'
-    +(domicilio?'<div style="font-size:9px;color:#777;margin-top:2px;line-height:1.3">'+domicilio+'</div>':'')
-    +'</div>'
-    +'<div style="font-size:10px;color:#888;text-align:right;white-space:nowrap">'+new Date().toLocaleString("es-MX")+'</div></div>';
-  const wrap=document.createElement("div");
-  // position:absolute fuera de pantalla (NO opacity:0, eso saldría en blanco): conserva layout real
-  wrap.style.cssText="width:190mm;padding:4mm;background:#fff;font-family:-apple-system,Segoe UI,sans-serif;color:#222;position:absolute;left:-9999px;top:0";
-  wrap.appendChild(head);wrap.appendChild(clone);
-  document.body.appendChild(wrap);
-  // Espera a que las imágenes (ya dataURL) decodifiquen, si no el PDF sale en blanco
-  await Promise.all([...wrap.querySelectorAll("img")].map(im=>im.decode?im.decode().catch(()=>{}):Promise.resolve()));
+  // Imágenes → dataURL (las que no se puedan, se omiten)
+  for(const img of [...clone.querySelectorAll("img")]){const d=await _aDataURL(img.getAttribute("src"));if(d)img.setAttribute("src",d);else img.remove();}
+  const logoData=await _aDataURL("logo.png");
+
+  const doc=new JS({unit:"mm",format:"a4"});
+  const PW=210,PH=297,M=12,CW=PW-2*M;let y=M;
+  const ensure=h=>{if(y+h>PH-M){doc.addPage();y=M;}};
+  const heading=t=>{t=(t||"").trim();if(!t)return;y+=2;ensure(8);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(24,95,165);doc.text(t,M,y);y+=2;doc.setDrawColor(225);doc.setLineWidth(0.2);doc.line(M,y,PW-M,y);y+=4;};
+  const para=(t,o)=>{t=(t||"").trim();if(!t)return;o=o||{};const sz=o.size||10;doc.setFont("helvetica",o.bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor.apply(doc,o.color||[40,40,40]);const ls=doc.splitTextToSize(t,CW);for(const ln of ls){ensure(sz*0.5+1);doc.text(ln,M,y);y+=sz*0.42+1.8;}};
+  const kv=(l,v)=>{l=(l||"").trim();v=(v==null?"":String(v)).trim();if(!l&&!v)return;doc.setFontSize(10);const L=doc.splitTextToSize(l,CW*0.44),R=doc.splitTextToSize(v,CW*0.52);const rows=Math.max(L.length,R.length);ensure(rows*4.6+1);doc.setFont("helvetica","normal");doc.setTextColor(120);doc.text(L,M,y);doc.setTextColor(40);doc.text(R,M+CW*0.46,y);y+=rows*4.6+1.5;};
+  const addImg=d=>{try{const p=doc.getImageProperties(d);const s=Math.min((CW*0.62)/p.width,58/p.height);const w=p.width*s,h=p.height*s;ensure(h+3);doc.addImage(d,(p.fileType==="PNG"?"PNG":"JPEG"),M,y,w,h);y+=h+3;}catch(e){}};
+
+  // Encabezado corporativo
+  if(logoData){try{const lp=doc.getImageProperties(logoData);const lh=15,lw=Math.min(lp.width*(lh/lp.height),22);doc.addImage(logoData,"PNG",M,y,lw,lh);}catch(e){}}
+  doc.setFont("helvetica","bold");doc.setFontSize(13);doc.setTextColor(24,95,165);doc.text("General de Productos para el Agua",M+24,y+5);
+  doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(80);doc.text(titulo+(suc?" — "+suc:""),M+24,y+10);
+  let hb=18;
+  if(domicilio){doc.setFontSize(7.5);doc.setTextColor(120);const dl=doc.splitTextToSize(domicilio,CW-26);doc.text(dl,M+24,y+14);hb=14+dl.length*3;}
+  doc.setFontSize(8);doc.setTextColor(150);doc.text(new Date().toLocaleString("es-MX"),PW-M,y+4,{align:"right"});
+  y+=hb;doc.setDrawColor(24,95,165);doc.setLineWidth(0.6);doc.line(M,y,PW-M,y);y+=5;
+
+  // Recorrido del detalle
+  const INL=["SPAN","B","A","STRONG","EM","SMALL","I"];
+  const walk=node=>{
+    for(const el of node.children){
+      const tag=el.tagName;
+      if(tag==="IMG"){const s=el.getAttribute("src");if(s&&s.indexOf("data:")===0)addImg(s);continue;}
+      if(tag==="BR")continue;
+      if(el.classList&&el.classList.contains("ct")){heading(el.textContent);continue;}
+      if(el.classList&&el.classList.contains("dr")){const sp=el.querySelectorAll("span");kv(sp[0]&&sp[0].textContent,sp[sp.length-1]&&sp[sp.length-1].textContent);continue;}
+      const kids=[...el.children];
+      if(kids.length>=2&&kids.every(c=>INL.includes(c.tagName))){const sp=kids;kv(sp[0].textContent,sp.slice(1).map(s=>s.textContent).join(" "));continue;}
+      if(kids.length===0){para(el.textContent);continue;}
+      walk(el);
+    }
+  };
+  walk(clone);
+
   const fname=titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10)+".pdf";
-  // Escala adaptativa: los checklists largos reducen la escala para no exceder el
-  // límite del lienzo del navegador (que dejaba el PDF en blanco).
-  const W=wrap.scrollWidth||720,H=wrap.scrollHeight||1000;
-  let escala=Math.min(2,15000/H,15000/W,Math.sqrt(15000000/(W*H)));
-  if(!isFinite(escala)||escala<=0)escala=1;
-  escala=Math.max(0.6,escala);
-  try{await html2pdf().set({margin:[8,8,8,8],filename:fname,image:{type:"jpeg",quality:0.9},html2canvas:{scale:escala,useCORS:true,backgroundColor:"#fff",logging:false,imageTimeout:0},jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},pagebreak:{mode:["css","legacy"]}}).from(wrap).save();}
-  catch(e){alert("No se pudo generar el PDF: "+e.message);}
-  finally{wrap.remove();}
+  try{doc.save(fname);}catch(e){try{window.open(doc.output("bloburl"),"_blank");}catch(e2){alert("No se pudo generar el PDF: "+e.message);}}
 }
 
 // Fecha local YYYY-MM-DD (para filtros por día) y descarga de CSV genérica
