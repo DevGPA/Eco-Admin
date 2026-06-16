@@ -1659,24 +1659,42 @@ async function submitNewPassword() {
   }
 }
 
-function onLoginSuccess(email, silent) {
-  // Compartir sesión Y configuración con el SDK (gpa-api.js) para que el
-  // Kanban y las llamadas al API usen el mismo endpoint y token de Cognito.
-  // Sin este puente, el SDK se queda en "demo offline" (GPA_CONFIG vacío) y
-  // el tablero nunca carga datos reales aunque API_CONFIG esté configurado.
-  if (typeof gpaApi !== 'undefined') {
-    gpaApi.apiUrl   = API_CONFIG.apiUrl;
-    gpaApi.region   = API_CONFIG.region;
-    gpaApi.poolId   = API_CONFIG.poolId;
-    gpaApi.clientId = API_CONFIG.clientId;
-    if (_session.token) {
-      gpaApi._token      = _session.token;
-      gpaApi._refreshTkn = _session.refresh || null;
-      gpaApi._tokenExp   = _session.exp || (Date.now() + 3600000);
-      gpaApi._userId     = email;
-    }
+// Puente con el SDK (gpa-api.js): le pasa el MISMO endpoint y token de Cognito
+// que usa el monitor, para que el Kanban consulte el API real. Devuelve true si
+// el SDK ya existía y quedó configurado. Es idempotente: se puede llamar varias
+// veces (en login, y al cargar la página cuando el SDK ya está disponible).
+function conectarSDK(email) {
+  if (typeof gpaApi === 'undefined') return false;   // SDK aún no cargado
+  gpaApi.apiUrl   = API_CONFIG.apiUrl;
+  gpaApi.region   = API_CONFIG.region;
+  gpaApi.poolId   = API_CONFIG.poolId;
+  gpaApi.clientId = API_CONFIG.clientId;
+  if (_session && _session.token) {
+    gpaApi._token      = _session.token;
+    gpaApi._refreshTkn = _session.refresh || null;
+    gpaApi._tokenExp   = _session.exp || (Date.now() + 3600000);
+    gpaApi._userId     = email || _session.email;
   }
-  // Cargar el tablero con los casos reales ya evaluados (históricos del mes).
+  return true;
+}
+
+// Conectar el SDK en cuanto la página termina de cargar (el script gpa-api.js
+// se inyecta al final del body, DESPUÉS de los scripts del monitor). Esto cubre
+// el caso de sesión RESTAURADA: onLoginSuccess corre durante el parseo, cuando
+// gpaApi todavía no existe, así que sin esto el SDK se quedaba sin token y el
+// tablero fallaba con "Inicia sesión primero".
+window.addEventListener('load', () => {
+  if (conectarSDK() && _session && _session.token &&
+      typeof gpaBridge !== 'undefined' && gpaBridge.refreshKanban) {
+    try { gpaBridge.refreshKanban(); } catch (e) {}
+  }
+});
+
+function onLoginSuccess(email, silent) {
+  // Compartir sesión Y configuración con el SDK para que el Kanban use el mismo
+  // endpoint/token. Si el SDK aún no cargó (sesión restaurada en el parseo), el
+  // listener de 'load' de arriba lo reintenta cuando ya está disponible.
+  conectarSDK(email);
   if (typeof gpaBridge !== 'undefined' && gpaBridge.refreshKanban) {
     try { gpaBridge.refreshKanban(); } catch (e) { /* SDK aún no listo */ }
   }
