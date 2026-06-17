@@ -78,8 +78,10 @@ def cargar_catalogos() -> dict:
     veh = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_VEHICLE)))
     usr = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_USER)))
     suc = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_SUCURSAL)))
+    mod = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_MODULO)))
+    plt = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_PLANTILLA)))
     cfg = t.get_item(Key={"PK": m.PK_CONFIG, "SK": m.SK_CONFIG}).get("Item") or {}
-    for lst in (veh, usr, suc):
+    for lst in (veh, usr, suc, mod, plt):
         for it in lst:
             _limpiar(it)
     cfg = _limpiar(m.from_dynamo(cfg))
@@ -87,5 +89,13 @@ def cargar_catalogos() -> dict:
         "vehicles":   sorted(veh, key=lambda v: str(v.get("economico", ""))),
         "users":      sorted(usr, key=lambda u: str(u.get("nombre", ""))),
         "sucursales": sorted([s["nombre"] for s in suc]),
+        "modulos":    sorted(mod, key=lambda x: (x.get("orden", 100), str(x.get("nombre", "")))),
+        "plantillas": sorted(plt, key=lambda x: str(x.get("nombre", ""))),
         "config":     cfg,
     }
+
+
+def get_plantilla(clave: str) -> dict | None:
+    resp = _t().get_item(Key={"PK": m.PK_PLANTILLA, "SK": m.sk_plantilla(clave)})
+    item = resp.get("Item")
+    return _limpiar(m.from_dynamo(item)) if item else None

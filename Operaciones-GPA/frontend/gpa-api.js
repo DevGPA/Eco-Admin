@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas" };
-const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC" };
+const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM" };
 const SES_KEY = "gpa_ops_session";
 
 class GpaApi {
@@ -193,6 +193,19 @@ class GpaApi {
   adminPrecioCombustible(combustible, precio) { return this._fetch("POST", "/admin/precio-combustible", { combustible, precio }); }
   async adminCuentas() { return (await this._fetch("GET", "/admin/cuentas")).items || []; }
   adminCuenta(c)      { return this._fetch("POST", "/admin/cuenta", c); }
+
+  // ── Motor de formularios dinámicos ─────────────────────────────
+  adminModulo(mod)    { return this._fetch("POST", "/admin/modulo", mod); }
+  adminPlantilla(p)   { return this._fetch("POST", "/admin/plantilla", p); }
+  async listarFormulario(clave) {
+    return (await this._fetch("GET", `/formulario?clave=${encodeURIComponent(clave)}`)).items || [];
+  }
+  crearFormulario(plantillaClave, datos) {
+    return this._fetch("POST", "/formulario", { plantillaClave, datos });
+  }
+  cambiarEstadoFormulario(clave, id, st) {
+    return this._fetch("POST", `/formulario/${id}/estado?clave=${encodeURIComponent(clave)}`, { status: st });
+  }
 
   // ── Evidencias: sube un data-URL a S3 y devuelve la clave ──────
   async subirEvidencia(tipo, dataUrl) {

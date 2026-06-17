@@ -12,8 +12,11 @@
 #   POST  /montacargas                  crear checklist de montacargas
 #   GET   /montacargas                  listar
 #   POST  /montacargas/{id}/estado      aprobar / rechazar
-#   POST  /evidencias/url-subida        URL prefirmada para subir foto/firma
-#   POST  /admin/vehiculo|responsable|sucursal|config   (solo admin)
+#   POST  /formulario                   crear registro de formulario dinámico
+#   GET   /formulario?clave=...          listar registros de una plantilla
+#   POST  /formulario/{id}/estado        aprobar / rechazar (?clave=...)
+#   POST  /evidencias/url-subida         URL prefirmada para subir foto/firma
+#   POST  /admin/vehiculo|responsable|sucursal|config|modulo|plantilla  (solo admin)
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -23,8 +26,9 @@ from db import modelos as m
 from db.escritura import (crear_registro, cambiar_estado,
                           guardar_vehiculo, guardar_responsable,
                           guardar_sucursal, eliminar_sucursal, guardar_config,
-                          actualizar_precio_por_combustible)
-from db.queries import listar_registros, get_registro, cargar_catalogos
+                          actualizar_precio_por_combustible,
+                          guardar_modulo, guardar_plantilla)
+from db.queries import listar_registros, get_registro, cargar_catalogos, get_plantilla
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -43,7 +47,7 @@ EMAIL_LOGIS  = os.environ.get("EMAIL_LOGISTICA", "")
 EMAIL_RIESGO = os.environ.get("EMAIL_RIESGOS", "")
 
 # Patrón de una clave de evidencia en S3 (para resolver a URL prefirmada al leer)
-_KEY_RE = re.compile(r"^(SOL|CL|MC)/[0-9a-f]{32}\.(jpg|png|webp)$")
+_KEY_RE = re.compile(r"^(SOL|CL|MC|FRM)/[0-9a-f]{32}\.(jpg|png|webp)$")
 
 
 # ── Respuestas ───────────────────────────────────────────────────
@@ -63,8 +67,11 @@ def _csv(x):
     return [s.strip() for s in (x or "").split(",") if s.strip()]
 
 
-# Mapa tipo de registro → nombre de módulo (para el control de acceso)
-MODULO = {m.SOL: "combustible", m.CL: "checklist", m.MC: "montacargas"}
+# Mapa tipo de registro → módulo(s) que conceden acceso (control de acceso).
+# CL/MC aceptan "mtto" (nueva navegación unificada) o las claves antiguas.
+MODULO = {m.SOL: ("combustible",),
+          m.CL:  ("mtto", "checklist"),
+          m.MC:  ("mtto", "montacargas")}
 
 
 def _claims(event) -> dict:
@@ -84,8 +91,13 @@ def _claims(event) -> dict:
 
 
 def _modulo_ok(cl, modulo) -> bool:
+    """`modulo` puede ser una clave (str) o varias (tuple/list); basta una coincidencia.
+    Lista de módulos vacía en la cuenta = acceso a todos."""
     mods = cl.get("modulos") or []
-    return (not mods) or (modulo in mods)
+    if not mods:
+        return True
+    acept = (modulo,) if isinstance(modulo, str) else tuple(modulo)
+    return any(x in mods for x in acept)
 
 
 def _body(event) -> dict:
@@ -152,11 +164,19 @@ def lambda_handler(event, context):
         if route == "POST /montacargas/{id}/estado":
             return _estado(m.MC, event, cl)
 
+        # ── Formularios dinámicos (motor de plantillas) ──
+        if route == "POST /formulario":
+            return _crear_form(_body(event), cl)
+        if route == "GET /formulario":
+            return _listar_form(event, cl)
+        if route == "POST /formulario/{id}/estado":
+            return _estado_form(event, cl)
+
         # ── Evidencias ──
         if route == "POST /evidencias/url-subida":
             b = _body(event)
             tipo = b.get("tipo", "SOL")
-            if tipo not in (m.SOL, m.CL, m.MC):
+            if tipo not in (m.SOL, m.CL, m.MC, "FRM"):
                 return _err("tipo inválido")
             return _resp(url_subida(tipo, b.get("contentType", "image/jpeg")))
 
@@ -216,6 +236,64 @@ def _estado(tipo, event, cl):
     return _resp({"ok": True, "status": nuevo})
 
 
+# ── Formularios dinámicos (motor de plantillas) ──────────────────
+def _plantilla_activa(clave):
+    """Devuelve la plantilla activa o lanza ValueError si no existe / inactiva."""
+    if not clave:
+        raise ValueError("Falta la clave del formulario")
+    plt = get_plantilla(str(clave).strip().lower())
+    if not plt:
+        raise ValueError("Formulario no encontrado")
+    if not plt.get("activo", True):
+        raise ValueError("Formulario inactivo")
+    return plt
+
+
+def _crear_form(body, cl):
+    if cl["rol"] == "analista":
+        return _err("El analista no captura registros", 403)
+    plt = _plantilla_activa(body.get("plantillaClave"))
+    if not _modulo_ok(cl, plt.get("modulo")):
+        return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    datos = dict(body.get("datos") or {})
+    datos["plantillaClave"] = plt["clave"]
+    datos["plantillaNombre"] = plt.get("nombre") or plt["clave"]
+    datos["modulo"] = plt.get("modulo")
+    datos["solicitante"] = cl["nombre"] or cl["email"]
+    datos["status"] = "Pendiente" if plt.get("requiereAutorizacion") else "Aprobado"
+    sucursal = datos.get("sucursal") or cl["sucursal"] or "SIN_SUCURSAL"
+    res = crear_registro(m.tipo_formulario(plt["clave"]), datos, sucursal, cl["email"])
+    return _resp({**res, "ok": True, "status": datos["status"]})
+
+
+def _listar_form(event, cl):
+    clave = (event.get("queryStringParameters") or {}).get("clave")
+    plt = _plantilla_activa(clave)
+    if not _modulo_ok(cl, plt.get("modulo")):
+        return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    regs = listar_registros(m.tipo_formulario(plt["clave"]),
+                            cl["rol"], cl["sucursales"], cl["email"])
+    return _resp({"items": [_resolver_urls(r) for r in regs]})
+
+
+def _estado_form(event, cl):
+    if cl["rol"] not in ("admin", "analista", "supervisor"):
+        return _err("No autorizado para cambiar estado", 403)
+    clave = (event.get("queryStringParameters") or {}).get("clave")
+    plt = _plantilla_activa(clave)
+    tipo = m.tipo_formulario(plt["clave"])
+    rid = (event.get("pathParameters") or {}).get("id")
+    if not rid:
+        return _err("Falta id")
+    nuevo = _body(event).get("status")
+    if not nuevo:
+        return _err("Falta status")
+    if not get_registro(tipo, rid):
+        return _err("Registro no encontrado", 404)
+    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"])
+    return _resp({"ok": True, "status": nuevo})
+
+
 def _texto_notif(tipo, datos, sucursal, cl, rid, email_dest):
     etiqueta = {m.SOL: "Solicitud de combustible",
                 m.CL:  "Checklist de reparto",
@@ -252,6 +330,10 @@ def _admin(route, body):
             return _err("Faltan 'combustible' y 'precio'")
         n = actualizar_precio_por_combustible(comb, precio)
         return _resp({"ok": True, "actualizados": n})
+    elif route == "POST /admin/modulo":
+        return _resp(guardar_modulo(body))
+    elif route == "POST /admin/plantilla":
+        return _resp(guardar_plantilla(body))
     else:
         return _err("Ruta admin no encontrada", 404)
     return _resp({"ok": True})

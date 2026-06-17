@@ -159,6 +159,23 @@ Resources:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/precio-combustible }
 
+        # ── Motor de formularios dinámicos (catálogos + registros genéricos) ──
+        AdminModulo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/modulo }
+        AdminPlantilla:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/plantilla }
+        FormularioCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /formulario }
+        FormularioListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /formulario }
+        FormularioEstado:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/formulario/{id}/estado' }
+
         # Health (sin auth)
         Health:
           Type: HttpApi
@@ -367,7 +384,7 @@ Resources:
           AttributeDataType: String
           Mutable: true
           StringAttributeConstraints: { MinLength: '0', MaxLength: '80' }
-        # Acceso por módulos (CSV: combustible,checklist,montacargas,admin). Vacío = todos.
+        # Acceso por módulos (CSV: combustible,mtto,seguridad,admin + claves de módulos dinámicos). Vacío = todos.
         - Name: modulos
           AttributeDataType: String
           Mutable: true

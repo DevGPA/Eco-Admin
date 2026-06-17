@@ -44,8 +44,9 @@ const GCS=`
 .hdr{background:${C.blue};color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
 .hdr-l{display:flex;align-items:center;gap:10px}
 .logo{width:34px;height:34px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;color:${C.blue};font-size:12px;flex-shrink:0}
-.nav{display:flex;border-top:1px solid #e0e0e0;background:#fff;position:sticky;bottom:0;z-index:20}
-.nav button{flex:1;padding:8px 2px 6px;background:none;border:none;cursor:pointer;font-size:9px;color:#888;display:flex;flex-direction:column;align-items:center;gap:2px}
+.nav{display:flex;border-top:1px solid #e0e0e0;background:#fff;position:sticky;bottom:0;z-index:20;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav button{flex:1 0 auto;min-width:62px;padding:8px 4px 6px;background:none;border:none;cursor:pointer;font-size:9px;color:#888;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap}
 .nav button.act{color:${C.blue};border-top:2px solid ${C.blue}}
 .nav svg{width:19px;height:19px}
 .pg{flex:1;padding:14px;overflow-y:auto;padding-bottom:20px}
@@ -393,16 +394,24 @@ function App(){
   const sucursalesUser=(session.sucursales&&session.sucursales.length)?session.sucursales:null; // null = todas
   const userMods=(session.modulos&&session.modulos.length)?session.modulos:null;                 // null = todos
 
+  // Plantillas activas por clave de módulo (motor de formularios dinámicos)
+  const plantillasDe=clave=>(cat.plantillas||[]).filter(p=>p.modulo===clave&&p.activo!==false);
+  const BUILTIN_IDS=["combustible","mtto","seguridad","admin"];
+  // Módulos dinámicos creados como dato (Admin → Módulos); inertes si no hay ninguno
+  const dynMods=(cat.modulos||[]).filter(mo=>mo.activo!==false&&!BUILTIN_IDS.includes(mo.clave))
+    .map(mo=>({id:mo.clave,label:mo.nombre||mo.clave,icon:ICON_DOC,dyn:true}));
   const opModules=[
     {id:"combustible",label:"Combustible",icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"},
     {id:"mtto",label:"Mtto",icon:"M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437"},
     {id:"seguridad",label:"Seguridad",icon:"M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"},
+    ...dynMods,
   ].filter(mo=>!userMods||userMods.includes(mo.id)||(mo.id==="mtto"&&(userMods.includes("checklist")||userMods.includes("montacargas"))));
   const modules=[
     ...opModules,
     ...(rol==="admin"?[{id:"admin",label:"Admin",icon:"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"}]:[]),
   ];
   const mod=modules.find(x=>x.id===module)?module:(modules[0]&&modules[0].id);
+  const dynActivo=dynMods.find(x=>x.id===mod);
 
   return(
     <div className="wrap">
@@ -423,7 +432,8 @@ function App(){
         {cat&&<>
           {mod==="combustible"&&<ModCombustible cat={cat} items={data.combustible} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("combustible")} showToast={showToast}/>}
           {mod==="mtto"&&<ModMtto cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={refrescar} showToast={showToast}/>}
-          {mod==="seguridad"&&<ModSeguridad/>}
+          {mod==="seguridad"&&<ModDinamico cat={cat} modulo="seguridad" modLabel="Seguridad Industrial" plantillas={plantillasDe("seguridad")} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
+          {dynActivo&&<ModDinamico cat={cat} modulo={dynActivo.id} modLabel={dynActivo.label} plantillas={plantillasDe(dynActivo.id)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
           {mod==="admin"&&rol==="admin"&&<ModAdmin cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
         </>}
       </div>
@@ -455,12 +465,174 @@ function ModMtto({cat,data,rol,sucursalesUser,session,refrescar,showToast}){
   );
 }
 
-// ─── MÓDULO SEGURIDAD INDUSTRIAL (contenedor para formularios futuros) ─
-function ModSeguridad(){
+// ═══ MOTOR DE FORMULARIOS DINÁMICOS ══════════════════════════════════
+// Renderiza módulos/plantillas creados como DATO (sin desplegar). Reusa los
+// tipos de campo de CLForm/MCForm, FotoCampo, useSig, FiltroFechas y el PDF.
+const ICON_DOC="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
+const SINO_OPTS=["Sí","No"];
+const TIPOS_CAMPO=["select","si_no","text","textarea","number","date","taco","vehiculo","photo","damage_list","opna"];
+// Evalúa la condición "campo:valor" de un ítem contra las respuestas actuales
+const condOK=(item,getA)=>{if(!item.cond)return true;const i=String(item.cond).indexOf(":");if(i<0)return true;const cid=item.cond.slice(0,i),cv=item.cond.slice(i+1);return String(getA(cid)??"")===cv;};
+
+// Un campo del formulario dinámico (mismo vocabulario de tipos que los checklists)
+function CampoForm({item,getA,setA,availVeh}){
+  const v=getA(item.id);const t=item.type;
+  if(t==="opna"){
+    const foto=getA(item.id+"__foto"),com=getA(item.id+"__com");
+    return(<div className="ic">
+      <div style={{fontSize:12,color:"#333",marginBottom:8,lineHeight:1.4}}>{item.label}{item.req&&<span style={{color:C.red}}> *</span>}</div>
+      <div className="rr">{["O","P","N/A"].map(opt=><button key={opt} type="button" className={`rb${v===opt?" "+(opt==="O"?"O":opt==="P"?"P":"NA"):""}`} onClick={()=>setA(item.id,opt)}>{opt}</button>)}</div>
+      {v==="P"&&<div className="prb">
+        <div style={{fontSize:11,fontWeight:700,color:C.red,marginBottom:6}}>⚠️ Problema — requerido:</div>
+        <div className="pb">{!foto&&<><div style={{fontSize:18}}>📷</div><div style={{fontSize:11,marginTop:2}}>Foto del problema</div></>}{foto&&<img src={foto} alt="p"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setA(item.id+"__foto",d))}/></div>
+        {foto&&<button type="button" className="bs" style={{width:"100%",marginTop:4,fontSize:11}} onClick={()=>setA(item.id+"__foto",null)}>Cambiar foto</button>}
+        <label style={{marginTop:8}}>Descripción del problema</label>
+        <textarea rows={2} value={com||""} onChange={e=>setA(item.id+"__com",e.target.value)} placeholder="Describe el problema..."/>
+      </div>}
+    </div>);
+  }
+  return(<div style={{marginBottom:10}}>
+    <label>{item.label}{item.req&&<span style={{color:C.red}}> *</span>}</label>
+    {t==="select"&&<select value={v||""} onChange={e=>setA(item.id,e.target.value)}><option value="">— Selecciona —</option>{(item.opts||[]).map(o=><option key={o}>{o}</option>)}</select>}
+    {t==="si_no"&&<select value={v||""} onChange={e=>setA(item.id,e.target.value)}><option value="">— Selecciona —</option>{SINO_OPTS.map(o=><option key={o}>{o}</option>)}</select>}
+    {t==="text"&&<input type="text" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+    {t==="textarea"&&<textarea rows={3} value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+    {t==="number"&&<input type="number" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+    {t==="date"&&<input type="date" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
+    {t==="taco"&&<div className="tcg">{TACO_OPTS.map(n=><button key={n} type="button" className={"tcb"+(v===n?" sel":"")} onClick={()=>setA(item.id,n)}>{n}</button>)}</div>}
+    {t==="vehiculo"&&<select value={v||""} onChange={e=>setA(item.id,e.target.value)}><option value="">— Selecciona —</option>{(availVeh||[]).map(u=><option key={u.id} value={u.id}>#{u.economico} · {u.placas}</option>)}</select>}
+    {t==="photo"&&<div><div className="pb">{!v&&<><div style={{fontSize:20}}>📷</div><div style={{fontSize:11,marginTop:2}}>Toca para capturar</div></>}{v&&<img src={v} alt={item.label}/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setA(item.id,d))}/></div>{v&&<button type="button" className="bs" style={{marginTop:4,width:"100%",fontSize:11}} onClick={()=>setA(item.id,null)}>Cambiar</button>}</div>}
+    {t==="damage_list"&&<DmgList value={v||[]} onChange={w=>setA(item.id,w)}/>}
+    {!TIPOS_CAMPO.includes(t)&&<div className="wb" style={{marginTop:4}}>Tipo de campo no soportado aún: «{t}». Se ignorará al guardar.</div>}
+  </div>);
+}
+
+// Formulario dinámico multipaso (1 sección = 1 paso) construido desde la plantilla
+function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast}){
+  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  const secs=plantilla.secciones||[];
+  const availVeh=cat.vehicles.filter(v=>v.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const sucOpts=(sucursalesUser&&!["admin","analista"].includes(rol))?sucursalesUser:cat.sucursales;
+  const[suc,setSuc]=useState(sucOpts[0]||session.sucursal||"");
+  const[ans,setAns]=useState({});const[obs,setObs]=useState("");const[sig,setSig]=useState(null);
+  const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const reqFirma=plantilla.requiereFirma!==false;
+  const total=secs.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?secs[step-1]:null;
+  const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
+  const submit=async()=>{
+    if(busy)return;
+    if(!suc)return showToast("⚠️ Falta la sucursal");
+    if(reqFirma&&!sig)return showToast("⚠️ Falta la firma");
+    setBusy(true);
+    try{
+      const datos={sucursal:suc,responsable:yo?.nombre||session.nombre,answers:ans,obs};
+      if(reqFirma)datos.firma=sig;
+      const subido=await api.subirEvidencias("formulario",datos);
+      await api.crearFormulario(plantilla.clave,subido);
+      showToast("✓ Formulario enviado");onDone&&onDone();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
   return(
     <div>
-      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>Seguridad Industrial</div>
-      <div className="card"><div className="empty">Aún no hay formularios en este módulo.<br/>Próximamente se cargarán aquí.</div></div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:700,color:C.blue}}>{plantilla.nombre}</span><span style={{fontSize:11,color:"#888"}}>Paso {step+1}/{total}</span></div>
+      <div className="sb">{Array.from({length:total}).map((_,i)=><div key={i} className="sd" style={{background:step>=i?C.blue:"#e0e0e0"}}/>)}</div>
+      {step===0&&<div>
+        <div className="card"><div className="ct">Datos Generales</div>
+          <label>Sucursal</label><select value={suc} onChange={e=>setSuc(e.target.value)}><option value="">— Selecciona —</option>{sucOpts.map(s=><option key={s}>{s}</option>)}</select>
+          <label>Responsable</label><input type="text" value={yo?.nombre||session.nombre} disabled style={{background:"#f5f5f5",color:"#888"}}/>
+        </div>
+        <button className="bp" disabled={!suc} onClick={()=>setStep(1)}>Siguiente →</button>
+      </div>}
+      {curSec&&<div>
+        <div className="card"><div className="ct">{curSec.title}</div>
+          {(curSec.items||[]).map(item=>condOK(item,getA)?<CampoForm key={item.id} item={item} getA={getA} setA={setA} availVeh={availVeh}/>:null)}
+        </div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
+      </div>}
+      {isLast&&<div>
+        <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Comentarios (si aplica)"/></div>
+        {reqFirma&&<div className="card"><div className="ct">Firma</div>
+          <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+          <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+          <div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{yo?.nombre||session.nombre}</b></div>
+        </div>}
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} disabled={busy||(reqFirma&&!sig)} onClick={submit}>{busy?"Enviando…":"Enviar"}</button></div>
+      </div>}
+    </div>
+  );
+}
+
+// Detalle de un registro dinámico (con PDF corporativo y, si aplica, autorización)
+function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy}){
+  const secs=(plantilla&&plantilla.secciones)||[];const st=reg.status||"Aprobado";
+  return(
+    <div className="pdf-area" data-pdftitle={reg.plantillaNombre||(plantilla&&plantilla.nombre)||"Formulario"} data-pdfsucursal={reg.sucursal||""}>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
+      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{reg.plantillaNombre||(plantilla&&plantilla.nombre)}</div><span className={"bdg "+bcMC(st)}>{st}</span></div>
+        <div className="dr"><span>Fecha</span><span>{fdt(reg.fecha)}</span></div>
+        <div className="dr"><span>Sucursal</span><span>{reg.sucursal}</span></div>
+        <div className="dr"><span>Responsable</span><span>{reg.responsable||reg.solicitante}</span></div>
+        {reg.autorizadoPor&&<div className="dr"><span>Autorizó</span><span>{reg.autorizadoPor}</span></div>}
+      </div>
+      {secs.map(sec=><div key={sec.id||sec.title} className="card"><div className="ct">{sec.title}</div>{(sec.items||[]).map(item=>{
+        const v=reg.answers?.[item.id];
+        if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
+        if(v==null||v==="")return null;
+        if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
+        if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;
+        if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;
+        return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{String(v)}</span></div>;
+      })}</div>)}
+      {reg.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{reg.obs}</div></div>}
+      {reg.firma&&<div className="card"><div className="ct">Firma</div><img src={reg.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{reg.responsable||reg.solicitante}</b></div></div>}
+      {reqAut&&canAuth&&st==="Pendiente"&&<div className="no-print" style={{display:"flex",gap:8}}><button className="bp" style={{flex:1,marginTop:0,background:C.green}} disabled={busy} onClick={()=>onEstado("Aprobado")}>✓ Aprobar</button><button className="bd" style={{flex:1}} disabled={busy} onClick={()=>onEstado("Rechazado")}>✗ Rechazar</button></div>}
+    </div>
+  );
+}
+
+// Historial de registros de una plantilla (filtro de fecha + CSV)
+function FormHistory({plantilla,items,loading,onSelect}){
+  const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
+  const list=(items||[]).filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const csv=()=>csvDownload("form_"+plantilla.clave,["Fecha","Sucursal","Responsable","Estado"],list.map(r=>[fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status]));
+  if(loading)return<div className="spin"/>;
+  return(
+    <div>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
+      {list.length===0&&<div className="empty">No hay registros</div>}
+      <div className="card">{list.map(r=><div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.sucursal||"—"}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.responsable||r.solicitante||"—"}</div><div className="lis">{fdt(r.fecha)}</div></div>)}</div>
+    </div>
+  );
+}
+
+// Pestaña de un módulo (integrado «seguridad» o dinámico): lista sus plantillas
+function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,showToast}){
+  const[selP,setSelP]=useState(null);const[view,setView]=useState("home");
+  const[regs,setRegs]=useState([]);const[loading,setLoading]=useState(false);const[sel,setSel]=useState(null);const[busy,setBusy]=useState(false);
+  const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
+  const cargar=async clave=>{setLoading(true);try{setRegs(await api.listarFormulario(clave));}catch(e){showToast("⚠️ "+e.message);}setLoading(false);};
+  const abrirHist=p=>{setSelP(p);setView("history");cargar(p.clave);};
+  if(view==="new"&&selP)return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("plantilla")}>← Atrás</button><FormDinamico plantilla={selP} cat={cat} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast} onDone={()=>abrirHist(selP)}/></div>;
+  if(view==="detail"&&sel&&selP){
+    const cambiar=async st=>{setBusy(true);try{await api.cambiarEstadoFormulario(selP.clave,sel.id,st);showToast("Estado actualizado");await cargar(selP.clave);setView("history");setSel(null);}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+    return<FormDinamicoDetail reg={sel} plantilla={selP} canAuth={canAuth} reqAut={selP.requiereAutorizacion} busy={busy} onEstado={cambiar} onBack={()=>{setView("history");setSel(null);}}/>;
+  }
+  if(view==="history"&&selP)return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("plantilla")}>← Atrás</button><FormHistory plantilla={selP} items={regs} loading={loading} onSelect={r=>{setSel(r);setView("detail");}}/></div>;
+  if(view==="plantilla"&&selP)return(
+    <div>
+      <button className="bs" style={{marginBottom:12}} onClick={()=>{setView("home");setSelP(null);}}>← {modLabel}</button>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:14}}>{selP.nombre}</div>
+      {canCreate&&<div className="card" style={{cursor:"pointer",borderLeft:`4px solid ${C.blue}`}} onClick={()=>{setSelP(selP);setView("new");}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14,color:C.blue}}>📝 Nuevo</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Llenar y enviar</div></div><div style={{fontSize:22,color:C.blue}}>→</div></div></div>}
+      <div className="card" style={{cursor:"pointer"}} onClick={()=>abrirHist(selP)}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>🗂 Historial</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Ver registros</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>
+    </div>
+  );
+  return(
+    <div>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>{modLabel}</div>
+      {(!plantillas||plantillas.length===0)&&<div className="card"><div className="empty">Aún no hay formularios en este módulo.<br/>Se cargan desde Admin → Formularios.</div></div>}
+      {(plantillas||[]).map(p=><div key={p.clave} className="card" style={{cursor:"pointer"}} onClick={()=>{setSelP(p);setView("plantilla");}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>{p.nombre}</div><div style={{fontSize:12,color:"#888",marginTop:3}}>{(p.secciones||[]).length} sección(es){p.requiereAutorizacion?" · requiere autorización":""}</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>)}
     </div>
   );
 }
@@ -1025,6 +1197,81 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const blankA={email:"",nombre:"",rol:"operador",sucursales:[],modulos:[],password:"",activo:true,_isNew:true};
   const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
+  // ── Motor de formularios: módulos y plantillas (Excel + vista previa) ──
+  const[modDraft,setModDraft]=useState({clave:"",nombre:"",orden:100});
+  const slug=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+  const saveModulo=()=>{const clave=slug(modDraft.clave||modDraft.nombre);if(!clave)return showToast("⚠️ Falta la clave/nombre del módulo");if(["combustible","mtto","seguridad","admin"].includes(clave))return showToast("⚠️ Esa clave está reservada");wrap(async()=>{await api.adminModulo({clave,nombre:modDraft.nombre||clave,orden:Number(modDraft.orden)||100,activo:true});setModDraft({clave:"",nombre:"",orden:100});showToast("✓ Módulo guardado");});};
+  const toggleModulo=mo=>wrap(()=>api.adminModulo({...mo,activo:!(mo.activo!==false)}));
+  const plantillasDeAdmin=clave=>(cat.plantillas||[]).filter(p=>p.modulo===clave);
+  // Formularios (plantillas)
+  const moduloOpts=[{clave:"seguridad",nombre:"Seguridad Industrial"},...((cat.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin"].includes(mo.clave)))];
+  const[fMod,setFMod]=useState(moduloOpts[0]?.clave||"seguridad");
+  const[fClave,setFClave]=useState("");const[fNombre,setFNombre]=useState("");
+  const[fFirma,setFFirma]=useState(true);const[fAut,setFAut]=useState(false);
+  const[preview,setPreview]=useState(null);const[showPrev,setShowPrev]=useState(false);
+  const TIPO_MAP={si:"si_no",sino:"si_no",sino_:"si_no",sì:"si_no",seleccion:"select",lista:"select",opcion:"select",opciones:"select",texto:"text",text:"text",parrafo:"textarea",textolargo:"textarea",textarea:"textarea",numero:"number",number:"number",fecha:"date",date:"date",foto:"photo",imagen:"photo",photo:"photo",danos:"damage_list",danios:"damage_list",damagelist:"damage_list",opna:"opna",opn:"opna",vehiculo:"vehiculo",unidad:"vehiculo",taco:"taco",select:"select"};
+  const normHdr=s=>String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,"");
+  const descargarEjemploForm=()=>{
+    if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
+    const meta=[{Clave:fClave||"mi_formulario",Nombre:fNombre||"Mi formulario",Modulo:fMod,RequiereFirma:"Si",RequiereAutorizacion:"No"}];
+    const campos=[
+      {Seccion:"Datos",Id:"area",Etiqueta:"Área inspeccionada",Tipo:"texto",Opciones:"",Obligatorio:"Si",Condicion:""},
+      {Seccion:"Datos",Id:"turno",Etiqueta:"Turno",Tipo:"seleccion",Opciones:"Matutino|Vespertino|Nocturno",Obligatorio:"Si",Condicion:""},
+      {Seccion:"Revisión",Id:"extintor",Etiqueta:"Extintor vigente",Tipo:"si_no",Opciones:"",Obligatorio:"",Condicion:""},
+      {Seccion:"Revisión",Id:"foto_ext",Etiqueta:"Foto del extintor",Tipo:"foto",Opciones:"",Obligatorio:"",Condicion:"extintor:Sí"},
+      {Seccion:"Revisión",Id:"estado_epp",Etiqueta:"Estado del EPP",Tipo:"opna",Opciones:"",Obligatorio:"",Condicion:""},
+      {Seccion:"Revisión",Id:"comentarios",Etiqueta:"Comentarios",Tipo:"parrafo",Opciones:"",Obligatorio:"",Condicion:""},
+    ];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(meta),"Formulario");
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(campos),"Campos");
+    XLSX.writeFile(wb,"ejemplo_formulario.xlsx");
+  };
+  const parseFormExcel=async file=>{
+    if(!file)return;
+    if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
+    try{
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+      const hoja=nombre=>wb.Sheets[wb.SheetNames.find(n=>normHdr(n)===nombre)];
+      let clave=fClave,nombre=fNombre,modulo=fMod,reqFirma=fFirma,reqAut=fAut;
+      const metaSheet=hoja("formulario");
+      if(metaSheet){const mr=XLSX.utils.sheet_to_json(metaSheet,{defval:""})[0]||{};for(const k in mr){const n=normHdr(k),val=String(mr[k]).trim();if(!val)continue;if(n==="clave")clave=slug(val);else if(n==="nombre")nombre=val;else if(n==="modulo")modulo=slug(val);else if(n==="requierefirma")reqFirma=/^(si|sí|true|1|x)$/i.test(val);else if(n==="requiereautorizacion")reqAut=/^(si|sí|true|1|x)$/i.test(val);}}
+      const campSheet=hoja("campos")||wb.Sheets[wb.SheetNames.filter(n=>normHdr(n)!=="formulario")[0]||wb.SheetNames[0]];
+      const filas=XLSX.utils.sheet_to_json(campSheet,{defval:""});
+      const secs=[];const idx={};let auto=0;const noSop=[];
+      for(const r of filas){
+        const o={};for(const k in r){o[normHdr(k)]=r[k];}
+        const secT=String(o.seccion||o.bloque||"General").trim()||"General";
+        const label=String(o.etiqueta||o.campo||o.label||"").trim();
+        const rawTipo=normHdr(o.tipo||o.type||"text");
+        if(!label&&!o.id)continue;
+        const tipo=TIPO_MAP[rawTipo]||rawTipo;
+        if(!TIPOS_CAMPO.includes(tipo))noSop.push((label||o.id)+" («"+(o.tipo||"")+"»)");
+        const id=slug(o.id||label||("campo_"+(++auto)))||("campo_"+(++auto));
+        const opcionesRaw=String(o.opciones||o.opts||"").trim();
+        const opts=opcionesRaw?opcionesRaw.split(/[|;]/).map(x=>x.trim()).filter(Boolean):undefined;
+        const req=/^(si|sí|true|1|x)$/i.test(String(o.obligatorio||o.req||"").trim());
+        const cond=String(o.condicion||o.cond||"").trim()||undefined;
+        const item={id,label:label||id,type:tipo};if(opts)item.opts=opts;if(req)item.req=true;if(cond)item.cond=cond;
+        if(idx[secT]===undefined){idx[secT]=secs.length;secs.push({id:slug(secT)||("sec_"+secs.length),title:secT,items:[]});}
+        secs[idx[secT]].items.push(item);
+      }
+      if(!secs.length)return showToast("⚠️ El Excel no tiene campos (hoja «Campos»)");
+      clave=clave||slug(nombre)||("form_"+secs.length);
+      setFClave(clave);setFNombre(nombre||clave);setFMod(modulo||fMod);setFFirma(reqFirma);setFAut(reqAut);
+      setPreview({clave,modulo:modulo||fMod,nombre:nombre||clave,secciones:secs,requiereFirma:reqFirma,requiereAutorizacion:reqAut,_noSop:noSop});
+      setShowPrev(true);
+      showToast("✓ "+secs.reduce((a,s)=>a+s.items.length,0)+" campo(s) en "+secs.length+" sección(es)"+(noSop.length?" · "+noSop.length+" tipo(s) no soportado(s)":""));
+    }catch(e){showToast("⚠️ "+e.message);}
+  };
+  const guardarPlantilla=()=>{
+    if(!preview)return;
+    const clave=slug(fClave||preview.clave);if(!clave)return showToast("⚠️ Falta la clave del formulario");
+    const modulo=fMod||preview.modulo;if(!modulo)return showToast("⚠️ Falta el módulo");
+    const secciones=preview.secciones.map(s=>({...s,items:s.items.filter(it=>TIPOS_CAMPO.includes(it.type))}));
+    wrap(async()=>{await api.adminPlantilla({clave,modulo,nombre:fNombre||preview.nombre||clave,secciones,requiereFirma:fFirma,requiereAutorizacion:fAut,activo:true});setPreview(null);setShowPrev(false);setFClave("");setFNombre("");showToast("✓ Formulario guardado");});
+  };
+  const togglePlantilla=p=>wrap(()=>api.adminPlantilla({...p,activo:!(p.activo!==false)}));
   // ── Reporte de cargas de combustible ──
   const[reporte,setReporte]=useState(null);
   const[rModo,setRModo]=useState("dia");const[rDia,setRDia]=useState("");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
@@ -1123,13 +1370,13 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const toggleA=a=>wrap(async()=>{await api.adminCuenta({email:a.email,nombre:a.nombre,rol:a.rol,sucursales:a.sucursales,modulos:a.modulos,activo:!a.activo});await cargarCuentas();showToast("Estado actualizado");});
   const VForm=({v,onClose})=>{const[d,setD]=useState({...v});const isN=!!v._isNew;const RO=k=>!isN&&["id","placas","subMarca","sucursal","tanque"].includes(k);return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo vehículo":"Editar vehículo"}</div>{!isN&&<div className="wb">El ID interno NO se edita (consecutivo). Editable: número económico, área responsable, combustible, precio, producto y categoría.</div>}{[["id","ID interno (consecutivo, no se reutiliza)"],["economico","Número económico (GPA)"],["placas","Placas"],["subMarca","Sub-marca"],["responsable","Área responsable"],["producto","Producto"]].map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d[k]||""} disabled={RO(k)} style={RO(k)?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,[k]:e.target.value})}/></div>)}<div className="r2"><div><label>Tanque (L)</label><input type="number" value={d.tanque} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,tanque:e.target.value})}/></div><div><label>Precio/L</label><input type="number" value={d.precio} onChange={e=>setD({...d,precio:e.target.value})}/></div></div><label>Sucursal</label><select value={d.sucursal} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><label>Combustible</label><select value={d.combustible} onChange={e=>setD({...d,combustible:e.target.value})}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select><label>Categoría (módulo)</label><select value={d.categoria||catVeh(d)} onChange={e=>setD({...d,categoria:e.target.value})}>{[["reparto","Reparto"],["montacargas","Montacargas"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveV(d)}>Guardar</button></div></div></div>);};
   const UForm=({u,onClose})=>{const[d,setD]=useState({...u});const isN=!!u._isNew;return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo responsable":"Editar responsable"}</div>{!isN&&<div className="wb">Solo editable: nombre, correo y sucursal.</div>}<label>ID</label><input type="text" value={d.id||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,id:e.target.value})}/><label>Nombre</label><input type="text" value={d.nombre} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Correo</label><input type="text" value={d.mail} onChange={e=>setD({...d,mail:e.target.value})}/><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveU(d)}>Guardar</button></div></div></div>);};
-  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (solo lectura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
+  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (solo lectura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],...(cat.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
   return(
     <div>
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
       {editU&&<UForm u={editU} onClose={()=>setEditU(null)}/>}
       {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
-      <div className="tr">{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
       {sec==="vehicles"&&<>
         <div className="card"><div className="ct">Actualizar tabla desde Excel</div>
           <button className="bs" style={{width:"100%",marginBottom:8}} disabled={busy} onClick={descargarPlantilla}>⬇ Descargar Excel actual</button>
@@ -1167,6 +1414,41 @@ function ModAdmin({cat,refrescarCat,showToast}){
         {accounts===null&&<div className="spin"/>}
         {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:""})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
         <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear la cuenta se le envía una contraseña temporal por correo; al editar puedes fijar una nueva.</div>
+      </>}
+      {sec==="modulos"&&<>
+        <div className="card"><div className="ct">Nuevo módulo</div>
+          <div style={{fontSize:11,color:"#666",marginBottom:8,lineHeight:1.5}}>Cada módulo es una pestaña en la barra inferior. Los formularios se asignan a un módulo. Crear módulos <b>no requiere desplegar</b>.</div>
+          <label>Nombre del módulo</label><input type="text" value={modDraft.nombre} onChange={e=>setModDraft({...modDraft,nombre:e.target.value,clave:modDraft.clave||slug(e.target.value)})} placeholder="Ej. Seguridad Industrial"/>
+          <div className="r2"><div><label>Clave (sin espacios)</label><input type="text" value={modDraft.clave} onChange={e=>setModDraft({...modDraft,clave:slug(e.target.value)})} placeholder="Ej. seguridad"/></div><div><label>Orden</label><input type="number" value={modDraft.orden} onChange={e=>setModDraft({...modDraft,orden:e.target.value})}/></div></div>
+          <button className="bp" disabled={busy} onClick={saveModulo}>+ Guardar módulo</button>
+        </div>
+        <div className="card"><div className="ct">Módulos ({(cat.modulos||[]).length})</div>
+          {(!cat.modulos||cat.modulos.length===0)&&<div className="empty">Aún no hay módulos. El módulo «Seguridad Industrial» ya existe como integrado.</div>}
+          {(cat.modulos||[]).map(mo=><div key={mo.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{mo.nombre||mo.clave}</span><span className={"bdg "+(mo.activo!==false?"dok":"drj")}>{mo.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">clave: {mo.clave} · orden {mo.orden??100} · {plantillasDeAdmin(mo.clave).length} formulario(s)</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bd" disabled={busy} onClick={()=>toggleModulo(mo)}>{mo.activo!==false?"Desactivar":"Activar"}</button></div></div>)}
+        </div>
+      </>}
+      {sec==="formularios"&&<>
+        {showPrev&&preview&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={()=>setShowPrev(false)}><div style={{background:"#f5f6f8",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"92vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Vista previa: {preview.nombre}</div>
+          {preview._noSop&&preview._noSop.length>0&&<div className="wb" style={{marginBottom:8}}>Tipos no soportados (se omitirán): {preview._noSop.join(", ")}</div>}
+          <div style={{fontSize:11,color:"#666",marginBottom:10}}>Así se verá el formulario. Revisa los campos y guarda.</div>
+          <FormDinamico plantilla={preview} cat={cat} rol="admin" sucursalesUser={null} session={{email:"preview",nombre:"Vista previa",sucursal:cat.sucursales[0]||""}} showToast={showToast} onDone={()=>{}}/>
+          <div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={()=>setShowPrev(false)}>Cerrar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={guardarPlantilla}>✓ Guardar formulario</button></div>
+        </div></div>}
+        <div className="card"><div className="ct">Cargar formulario desde Excel</div>
+          <div style={{fontSize:11,color:"#666",marginBottom:8,lineHeight:1.5}}>Define los campos en un Excel (hojas «Formulario» y «Campos») y súbelo. Verás una vista previa antes de guardar. Crear formularios <b>no requiere desplegar</b>.</div>
+          <label>Módulo destino</label><select value={fMod} onChange={e=>setFMod(e.target.value)}>{moduloOpts.map(mo=><option key={mo.clave} value={mo.clave}>{mo.nombre||mo.clave}</option>)}</select>
+          <div className="r2"><div><label>Clave (opcional)</label><input type="text" value={fClave} onChange={e=>setFClave(slug(e.target.value))} placeholder="auto"/></div><div><label>Nombre (opcional)</label><input type="text" value={fNombre} onChange={e=>setFNombre(e.target.value)} placeholder="del Excel"/></div></div>
+          <div className="tr" style={{marginTop:8}}><button type="button" className={"trb"+(fFirma?" act":"")} onClick={()=>setFFirma(!fFirma)}>{fFirma?"✓ ":""}Requiere firma</button><button type="button" className={"trb"+(fAut?" act":"")} onClick={()=>setFAut(!fAut)}>{fAut?"✓ ":""}Requiere autorización</button></div>
+          <button className="bs" style={{width:"100%",marginTop:10,marginBottom:8}} disabled={busy} onClick={descargarEjemploForm}>⬇ Descargar Excel de ejemplo</button>
+          <label className="bp" style={{display:"block",textAlign:"center",cursor:"pointer",position:"relative",overflow:"hidden",marginTop:0}}>📤 Subir Excel y previsualizar
+            <input type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e=>{const f=e.target.files[0];e.target.value="";parseFormExcel(f);}} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}}/>
+          </label>
+        </div>
+        <div className="card"><div className="ct">Formularios ({(cat.plantillas||[]).length})</div>
+          {(!cat.plantillas||cat.plantillas.length===0)&&<div className="empty">Aún no hay formularios.</div>}
+          {(cat.plantillas||[]).map(p=><div key={p.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{p.nombre||p.clave}</span><span className={"bdg "+(p.activo!==false?"dok":"drj")}>{p.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">módulo: {p.modulo} · {(p.secciones||[]).length} sección(es){p.requiereAutorizacion?" · autoriza":""}{p.requiereFirma!==false?" · firma":""}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bd" disabled={busy} onClick={()=>togglePlantilla(p)}>{p.activo!==false?"Desactivar":"Activar"}</button></div></div>)}
+        </div>
       </>}
       {sec==="reportes"&&<>
         <div className="card"><div className="ct">Reporte de cargas de combustible</div>

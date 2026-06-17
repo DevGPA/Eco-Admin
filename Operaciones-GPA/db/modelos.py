@@ -24,6 +24,8 @@ MC  = "MC"    # checklist de montacargas
 PK_VEHICLE  = "CAT#VEHICLE"
 PK_USER     = "CAT#USER"
 PK_SUCURSAL = "CAT#SUCURSAL"
+PK_MODULO   = "CAT#MODULO"     # módulos dinámicos (motor de formularios)
+PK_PLANTILLA= "CAT#PLANTILLA"  # plantillas de formularios dinámicos
 PK_CONFIG   = "CONFIG"
 SK_CONFIG   = "CONFIG"
 
@@ -31,6 +33,13 @@ SK_CONFIG   = "CONFIG"
 def sk_vehicle(vid)  -> str: return f"VEH#{vid}"
 def sk_user(uid)     -> str: return f"USR#{uid}"
 def sk_sucursal(n)   -> str: return f"SUC#{n}"
+def sk_modulo(clave) -> str: return f"MOD#{clave}"
+def sk_plantilla(clave) -> str: return f"PLT#{clave}"
+
+
+def tipo_formulario(clave) -> str:
+    """Tipo de registro para una plantilla dinámica (un stream por formulario)."""
+    return f"FRM#{clave}"
 
 
 # ── Claves de registros ──────────────────────────────────────────

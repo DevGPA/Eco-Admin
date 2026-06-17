@@ -158,6 +158,43 @@ def guardar_config(cfg: dict) -> None:
     _t().put_item(Item={"PK": m.PK_CONFIG, "SK": m.SK_CONFIG, **m.to_dynamo(cfg)})
 
 
+# ── Motor de formularios dinámicos ───────────────────────────────
+def guardar_modulo(mod: dict) -> dict:
+    """Crea/edita un módulo dinámico. Requiere 'clave' y 'nombre'."""
+    clave = str(mod.get("clave") or "").strip().lower()
+    if not clave:
+        raise ValueError("Falta la clave del módulo")
+    item = {
+        "clave": clave,
+        "nombre": mod.get("nombre") or clave,
+        "icono": mod.get("icono") or "",
+        "orden": mod.get("orden", 100),
+        "activo": mod.get("activo", True),
+    }
+    _t().put_item(Item={"PK": m.PK_MODULO, "SK": m.sk_modulo(clave), **m.to_dynamo(item)})
+    return {"ok": True, "clave": clave}
+
+
+def guardar_plantilla(p: dict) -> dict:
+    """Crea/edita una plantilla de formulario. Requiere 'clave', 'modulo', 'nombre', 'secciones'."""
+    clave = str(p.get("clave") or "").strip().lower()
+    if not clave:
+        raise ValueError("Falta la clave del formulario")
+    if not p.get("modulo"):
+        raise ValueError("Falta el módulo del formulario")
+    item = {
+        "clave": clave,
+        "modulo": p["modulo"],
+        "nombre": p.get("nombre") or clave,
+        "secciones": p.get("secciones") or [],
+        "requiereFirma": bool(p.get("requiereFirma", True)),
+        "requiereAutorizacion": bool(p.get("requiereAutorizacion", False)),
+        "activo": p.get("activo", True),
+    }
+    _t().put_item(Item={"PK": m.PK_PLANTILLA, "SK": m.sk_plantilla(clave), **m.to_dynamo(item)})
+    return {"ok": True, "clave": clave}
+
+
 def actualizar_precio_por_combustible(combustible: str, precio) -> int:
     """Cambio masivo: fija el precio/L de TODOS los vehículos de un tipo de
     combustible. Devuelve cuántos vehículos se actualizaron."""
