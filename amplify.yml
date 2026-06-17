@@ -33,3 +33,14 @@ frontend:
       - '**/*'
   cache:
     paths: []
+
+# Control de caché: el index.html (monitor) NO debe cachearse en el navegador,
+# o los cambios no llegan aunque Amplify ya publicó (el usuario se queda con el
+# HTML viejo). 'no-cache' obliga a revalidar contra el servidor en cada carga
+# (rápido: 304 si no cambió). El gpa-api.js sí se cachea porque va con ?v=<hash>
+# que cambia cuando cambia el archivo.
+customHeaders:
+  - pattern: '**/*.html'
+    headers:
+      - key: 'Cache-Control'
+        value: 'no-cache, must-revalidate'
