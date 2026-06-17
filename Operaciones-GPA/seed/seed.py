@@ -55,7 +55,28 @@ def cargar_catalogos(tabla):
     tabla.put_item(Item={"PK": "CONFIG", "SK": "CONFIG", **data["config"]})
     print(f"✓ Catálogos: {len(data['vehicles'])} vehículos, "
           f"{len(data['users'])} responsables, {len(data['sucursales'])} sucursales")
+    cargar_formularios(tabla)
     return data
+
+
+def cargar_formularios(tabla):
+    """Carga módulos y plantillas del motor de formularios (seed/plantillas.json).
+    Opcional: si el archivo no existe, no hace nada."""
+    ruta = AQUI / "plantillas.json"
+    if not ruta.exists():
+        return
+    data = json.loads(ruta.read_text(encoding="utf-8"))
+    mods = data.get("modulos", [])
+    plts = data.get("plantillas", [])
+    with tabla.batch_writer() as bw:
+        for m in mods:
+            clave = str(m["clave"]).strip().lower()
+            bw.put_item(Item=_to_dec({"PK": "CAT#MODULO", "SK": f"MOD#{clave}", **m, "clave": clave}))
+        for p in plts:
+            clave = str(p["clave"]).strip().lower()
+            bw.put_item(Item=_to_dec({"PK": "CAT#PLANTILLA", "SK": f"PLT#{clave}", **p, "clave": clave}))
+    if mods or plts:
+        print(f"✓ Formularios: {len(mods)} módulo(s), {len(plts)} plantilla(s)")
 
 
 DOMINIO = os.environ.get("DOMINIO_PERMITIDO", "gpa.com.mx").lower()

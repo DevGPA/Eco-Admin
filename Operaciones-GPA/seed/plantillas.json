@@ -1,0 +1,85 @@
+{
+  "modulos": [],
+  "plantillas": [
+    {
+      "clave": "insp_patines",
+      "modulo": "sucursales",
+      "nombre": "Inspección de Patines Hidráulicos Manuales",
+      "codigo": "GPA-CAD-CHK-PAT",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "a_fisica",
+          "title": "A. Condición física",
+          "items": [
+            {"id": "estructura", "label": "Estructura / chasis", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Sin daños visibles", "sev": "ok"},
+              {"t": "Golpes menores sin afectar función", "sev": "warn"},
+              {"t": "Daño estructural / doblado", "sev": "bad"}
+            ]},
+            {"id": "horquillas", "label": "Horquillas / brazos", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Rectas, sin deformación", "sev": "ok"},
+              {"t": "Ligera deformación, funciona", "sev": "warn"},
+              {"t": "Dobladas / desniveladas", "sev": "bad"}
+            ]},
+            {"id": "ruedas_carga", "label": "Ruedas de carga (bajo horquillas)", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Completas, giran libremente", "sev": "ok"},
+              {"t": "Desgaste moderado o resistencia", "sev": "warn"},
+              {"t": "Rotas, faltantes o bloqueadas", "sev": "bad"}
+            ]},
+            {"id": "rueda_trasera", "label": "Rueda trasera (dirección)", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Sin desgaste, gira sin juego", "sev": "ok"},
+              {"t": "Desgaste visible pero funcional", "sev": "warn"},
+              {"t": "Rotura, juego excesivo o plana", "sev": "bad"}
+            ]},
+            {"id": "timon", "label": "Timón / mango", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Firme, sin holgura ni grietas", "sev": "ok"},
+              {"t": "Holgura leve o grip desgastado", "sev": "warn"},
+              {"t": "Doblado, quebrado o suelto", "sev": "bad"}
+            ]}
+          ]
+        },
+        {
+          "id": "b_funcional",
+          "title": "B. Condición funcional",
+          "items": [
+            {"id": "hidraulico_sube", "label": "Hidráulico — sube carga", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Sube suave y mantiene altura", "sev": "ok"},
+              {"t": "Sube lento o pierde altura", "sev": "warn"},
+              {"t": "No sube o baja sola", "sev": "bad"}
+            ]},
+            {"id": "hidraulico_baja", "label": "Hidráulico — baja carga", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Baja controlada al accionar válvula", "sev": "ok"},
+              {"t": "Baja brusca o con retardo", "sev": "warn"},
+              {"t": "No baja o baja sola", "sev": "bad"}
+            ]},
+            {"id": "fugas", "label": "Fugas de aceite hidráulico", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Sin fugas visibles", "sev": "ok"},
+              {"t": "Ligera humedad / goteo mínimo", "sev": "warn"},
+              {"t": "Fuga activa / charco de aceite", "sev": "bad"}
+            ]},
+            {"id": "desplazamiento", "label": "Desplazamiento — jala parejo", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Avanza recto sin desviarse", "sev": "ok"},
+              {"t": "Desviación leve, corregible", "sev": "warn"},
+              {"t": "Se va de lado o rueda trabada", "sev": "bad"}
+            ]},
+            {"id": "freno", "label": "Freno de seguridad (neutro)", "type": "escala", "req": true, "nota": true, "opts": [
+              {"t": "Frena al soltar el timón", "sev": "ok"},
+              {"t": "Frena con retardo leve", "sev": "warn"},
+              {"t": "No frena / se mueve solo", "sev": "bad"}
+            ]}
+          ]
+        },
+        {
+          "id": "evidencia",
+          "title": "Evidencia fotográfica",
+          "items": [
+            {"id": "fotos", "label": "Fotos del patín (lateral, horquillas, ruedas y daños)", "type": "fotos"}
+          ]
+        }
+      ]
+    }
+  ]
+}

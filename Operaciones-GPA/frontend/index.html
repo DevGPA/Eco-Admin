@@ -109,6 +109,27 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 .tcg{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:4px}
 .tcb{padding:7px 2px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff;cursor:pointer;text-align:center}
 .tcb.sel{background:${C.blueLt};border-color:${C.blue};color:${C.blue};font-weight:700}
+/* Campo «escala» (semáforo OK/Atención/Fuera de servicio) — réplica del checklist HTML */
+.es-item{border:1px solid #d5e0ea;border-radius:6px;margin-bottom:8px;overflow:hidden}
+.es-h{background:#eaf0f6;padding:8px 10px;font-size:13px;font-weight:700;color:#1a1a1a}
+.es-opt{display:flex;align-items:center;gap:10px;padding:11px 12px;border-top:1px solid #e8e8e8;background:#fff;cursor:pointer;min-height:46px;user-select:none}
+.es-rad{width:20px;height:20px;border-radius:50%;border:2px solid #bbb;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fff}
+.es-dot{width:10px;height:10px;border-radius:50%;background:transparent}
+.es-txt{font-size:13px;color:#444;flex:1;line-height:1.3}
+.es-bdg{font-size:10px;padding:2px 7px;border-radius:3px;font-weight:700;white-space:nowrap}
+.eb-ok{background:#d5f0e0;color:#145a32}.eb-warn{background:#fdebd0;color:#784212}.eb-bad{background:#fadbd8;color:#78281f}
+.es-opt.sel-ok{background:#f0faf4}.es-opt.sel-ok .es-rad{border-color:#1e8449;background:#1e8449}.es-opt.sel-ok .es-dot{background:#fff}.es-opt.sel-ok .es-txt{color:#145a32;font-weight:700}
+.es-opt.sel-warn{background:#fef9f0}.es-opt.sel-warn .es-rad{border-color:#ca6f1e;background:#ca6f1e}.es-opt.sel-warn .es-dot{background:#fff}.es-opt.sel-warn .es-txt{color:#784212;font-weight:700}
+.es-opt.sel-bad{background:#fdf5f5}.es-opt.sel-bad .es-rad{border-color:#c0392b;background:#c0392b}.es-opt.sel-bad .es-dot{background:#fff}.es-opt.sel-bad .es-txt{color:#78281f;font-weight:700}
+.es-nota{padding:6px 10px;border-top:1px solid #eee;background:#fafafa}
+.es-nota input{width:100%;border:none;border-bottom:1px solid #ddd;font-size:12px;padding:3px 0;background:transparent;outline:none;color:#555}
+.score-bar{padding:12px 14px;border-radius:6px;margin:6px 0 12px;border:1px solid #d5e0ea;background:#eaf0f6}
+.score-bar.optimo{background:#d5f0e0;border-color:#1e8449}.score-bar.atencion{background:#fdebd0;border-color:#ca6f1e}.score-bar.fuera{background:#fadbd8;border-color:#c0392b}
+.score-lbl{font-size:14px;font-weight:700;margin-bottom:3px}.score-det{font-size:11px;color:#555}
+.fg{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.fg .ft{position:relative;width:88px;height:70px}
+.fg .ft img{width:88px;height:70px;object-fit:cover;border-radius:4px;border:1px solid #ccc;display:block}
+.fg .fx{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:${C.red};color:#fff;font-size:13px;line-height:1;cursor:pointer}
 .lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f5f6fa}
 .spin{width:34px;height:34px;border:3px solid #ddd;border-top-color:${C.blue};border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -396,7 +417,7 @@ function App(){
 
   // Plantillas activas por clave de módulo (motor de formularios dinámicos)
   const plantillasDe=clave=>(cat.plantillas||[]).filter(p=>p.modulo===clave&&p.activo!==false);
-  const BUILTIN_IDS=["combustible","mtto","seguridad","admin"];
+  const BUILTIN_IDS=["combustible","mtto","seguridad","admin","sucursales"];
   // Módulos dinámicos creados como dato (Admin → Módulos); inertes si no hay ninguno
   const dynMods=(cat.modulos||[]).filter(mo=>mo.activo!==false&&!BUILTIN_IDS.includes(mo.clave))
     .map(mo=>({id:mo.clave,label:mo.nombre||mo.clave,icon:ICON_DOC,dyn:true}));
@@ -455,12 +476,14 @@ function ModMtto({cat,data,rol,sucursalesUser,session,refrescar,showToast}){
   return(
     <div>
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:10}}>Mantenimiento</div>
-      <div className="tr">
+      <div className="tr" style={{overflowX:"auto"}}>
         <button className={"trb"+(sub==="reparto"?" act":"")} onClick={()=>setSub("reparto")}>🚚 Reparto</button>
         <button className={"trb"+(sub==="montacargas"?" act":"")} onClick={()=>setSub("montacargas")}>🏗️ Montacargas</button>
+        <button className={"trb"+(sub==="sucursales"?" act":"")} onClick={()=>setSub("sucursales")}>🏢 Sucursales</button>
       </div>
       {sub==="reparto"&&<ModChecklist cat={cat} items={data.checklist} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("checklist")} showToast={showToast}/>}
       {sub==="montacargas"&&<ModMontacargas cat={cat} items={data.montacargas} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("montacargas")} showToast={showToast}/>}
+      {sub==="sucursales"&&<ModDinamico cat={cat} modulo="sucursales" modLabel="Formularios de Sucursales" plantillas={(cat.plantillas||[]).filter(p=>p.modulo==="sucursales"&&p.activo!==false)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
     </div>
   );
 }
@@ -470,13 +493,28 @@ function ModMtto({cat,data,rol,sucursalesUser,session,refrescar,showToast}){
 // tipos de campo de CLForm/MCForm, FotoCampo, useSig, FiltroFechas y el PDF.
 const ICON_DOC="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
 const SINO_OPTS=["Sí","No"];
-const TIPOS_CAMPO=["select","si_no","text","textarea","number","date","taco","vehiculo","photo","damage_list","opna"];
+const TIPOS_CAMPO=["select","si_no","text","textarea","number","date","taco","vehiculo","photo","fotos","damage_list","opna","escala"];
+const SEV_BADGE={ok:"OK",warn:"Atención",bad:"Fuera de servicio"};
+const SEV_VAL={ok:2,warn:1,bad:0};
 // Evalúa la condición "campo:valor" de un ítem contra las respuestas actuales
 const condOK=(item,getA)=>{if(!item.cond)return true;const i=String(item.cond).indexOf(":");if(i<0)return true;const cid=item.cond.slice(0,i),cv=item.cond.slice(i+1);return String(getA(cid)??"")===cv;};
 
 // Un campo del formulario dinámico (mismo vocabulario de tipos que los checklists)
 function CampoForm({item,getA,setA,availVeh}){
   const v=getA(item.id);const t=item.type;
+  if(t==="escala"){
+    const nota=getA(item.id+"__nota");const opts=item.opts||[];
+    return(<div className="es-item">
+      <div className="es-h">{item.label}{item.req&&<span style={{color:C.red}}> *</span>}</div>
+      {opts.map((o,i)=>{const sev=o.sev||"ok";const sel=String(v)===String(i);return(
+        <div key={i} className={"es-opt"+(sel?" sel-"+sev:"")} onClick={()=>setA(item.id,i)}>
+          <div className="es-rad"><div className="es-dot"/></div>
+          <span className="es-txt">{o.t}</span>
+          <span className={"es-bdg eb-"+sev}>{SEV_BADGE[sev]}</span>
+        </div>);})}
+      {item.nota&&<div className="es-nota"><input type="text" value={nota||""} placeholder="Nota opcional" onChange={e=>setA(item.id+"__nota",e.target.value)}/></div>}
+    </div>);
+  }
   if(t==="opna"){
     const foto=getA(item.id+"__foto"),com=getA(item.id+"__com");
     return(<div className="ic">
@@ -502,6 +540,7 @@ function CampoForm({item,getA,setA,availVeh}){
     {t==="taco"&&<div className="tcg">{TACO_OPTS.map(n=><button key={n} type="button" className={"tcb"+(v===n?" sel":"")} onClick={()=>setA(item.id,n)}>{n}</button>)}</div>}
     {t==="vehiculo"&&<select value={v||""} onChange={e=>setA(item.id,e.target.value)}><option value="">— Selecciona —</option>{(availVeh||[]).map(u=><option key={u.id} value={u.id}>#{u.economico} · {u.placas}</option>)}</select>}
     {t==="photo"&&<div><div className="pb">{!v&&<><div style={{fontSize:20}}>📷</div><div style={{fontSize:11,marginTop:2}}>Toca para capturar</div></>}{v&&<img src={v} alt={item.label}/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setA(item.id,d))}/></div>{v&&<button type="button" className="bs" style={{marginTop:4,width:"100%",fontSize:11}} onClick={()=>setA(item.id,null)}>Cambiar</button>}</div>}
+    {t==="fotos"&&<div><div className="fg">{(v||[]).map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/><button type="button" className="fx" onClick={()=>setA(item.id,(v||[]).filter((_,j)=>j!==i))}>×</button></div>)}</div><label className="bs" style={{display:"block",textAlign:"center",cursor:"pointer",position:"relative",overflow:"hidden",marginTop:6}}>+ Agregar foto<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setA(item.id,[...(v||[]),d]))} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}}/></label></div>}
     {t==="damage_list"&&<DmgList value={v||[]} onChange={w=>setA(item.id,w)}/>}
     {!TIPOS_CAMPO.includes(t)&&<div className="wb" style={{marginTop:4}}>Tipo de campo no soportado aún: «{t}». Se ignorará al guardar.</div>}
   </div>);
@@ -520,6 +559,18 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   const reqFirma=plantilla.requiereFirma!==false;
   const total=secs.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?secs[step-1]:null;
   const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
+  // Resultado tipo semáforo a partir de los campos «escala» (réplica del checklist)
+  const escalaItems=secs.flatMap(s=>(s.items||[]).filter(it=>it.type==="escala"));
+  const calcResultado=()=>{
+    if(!escalaItems.length)return null;
+    let bad=0,warn=0,answered=0,sum=0;
+    escalaItems.forEach(it=>{const idx=ans[it.id];if(idx==null||idx==="")return;answered++;const o=(it.opts||[])[idx]||{};const sev=o.sev||"ok";if(sev==="bad")bad++;else if(sev==="warn")warn++;sum+=(o.val!=null?o.val:SEV_VAL[sev]);});
+    const completo=answered===escalaItems.length;
+    const nivel=!completo?"":bad>0?"fuera":warn>0?"atencion":"optimo";
+    const lbl=nivel==="fuera"?"Fuera de servicio":nivel==="atencion"?"Requiere atención":nivel==="optimo"?"Óptimo / operativo":"Completa todos los puntos para ver el resultado";
+    return{bad,warn,answered,total:escalaItems.length,sum,max:escalaItems.length*2,completo,nivel,lbl};
+  };
+  const res=calcResultado();
   const submit=async()=>{
     if(busy)return;
     if(!suc)return showToast("⚠️ Falta la sucursal");
@@ -528,6 +579,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
     try{
       const datos={sucursal:suc,responsable:yo?.nombre||session.nombre,answers:ans,obs};
       if(reqFirma)datos.firma=sig;
+      if(res){datos.resultado=res.lbl;datos.resultadoNivel=res.nivel;datos.puntaje=res.sum;datos.puntajeMax=res.max;}
       const subido=await api.subirEvidencias("formulario",datos);
       await api.crearFormulario(plantilla.clave,subido);
       showToast("✓ Formulario enviado");onDone&&onDone();
@@ -552,6 +604,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
         <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
       </div>}
       {isLast&&<div>
+        {res&&<div className={"score-bar"+(res.nivel?" "+res.nivel:"")}><div className="score-lbl">{res.lbl}</div><div className="score-det">{res.completo?`Puntaje ${res.sum}/${res.max}${res.bad?` · ${res.bad} fuera de servicio`:""}${res.warn?` · ${res.warn} en atención`:""}`:`Faltan ${res.total-res.answered} de ${res.total} puntos`}</div></div>}
         <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Comentarios (si aplica)"/></div>
         {reqFirma&&<div className="card"><div className="ct">Firma</div>
           <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
@@ -576,9 +629,12 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
         <div className="dr"><span>Responsable</span><span>{reg.responsable||reg.solicitante}</span></div>
         {reg.autorizadoPor&&<div className="dr"><span>Autorizó</span><span>{reg.autorizadoPor}</span></div>}
       </div>
+      {reg.resultado&&<div className={"score-bar"+(reg.resultadoNivel?" "+reg.resultadoNivel:"")}><div className="score-lbl">{reg.resultado}</div>{reg.puntaje!=null&&<div className="score-det">Puntaje {reg.puntaje}/{reg.puntajeMax}</div>}</div>}
       {secs.map(sec=><div key={sec.id||sec.title} className="card"><div className="ct">{sec.title}</div>{(sec.items||[]).map(item=>{
         const v=reg.answers?.[item.id];
         if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
+        if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}</div>;}
+        if(item.type==="fotos"){if(!v||!v.length)return null;return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><div className="fg">{v.map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/></div>)}</div></div>;}
         if(v==null||v==="")return null;
         if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
         if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;
@@ -596,13 +652,13 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
 function FormHistory({plantilla,items,loading,onSelect}){
   const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
   const list=(items||[]).filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("form_"+plantilla.clave,["Fecha","Sucursal","Responsable","Estado"],list.map(r=>[fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status]));
+  const csv=()=>csvDownload("form_"+plantilla.clave,["Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje"],list.map(r=>[fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:""]));
   if(loading)return<div className="spin"/>;
   return(
     <div>
       <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
       {list.length===0&&<div className="empty">No hay registros</div>}
-      <div className="card">{list.map(r=><div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.sucursal||"—"}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.responsable||r.solicitante||"—"}</div><div className="lis">{fdt(r.fecha)}</div></div>)}</div>
+      <div className="card">{list.map(r=><div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.sucursal||"—"}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.responsable||r.solicitante||"—"}{r.resultado?<span className={"bdg eb-"+(r.resultadoNivel==="fuera"?"bad":r.resultadoNivel==="atencion"?"warn":"ok")} style={{marginLeft:6}}>{r.resultado}</span>:null}</div><div className="lis">{fdt(r.fecha)}</div></div>)}</div>
     </div>
   );
 }
@@ -1204,23 +1260,24 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const toggleModulo=mo=>wrap(()=>api.adminModulo({...mo,activo:!(mo.activo!==false)}));
   const plantillasDeAdmin=clave=>(cat.plantillas||[]).filter(p=>p.modulo===clave);
   // Formularios (plantillas)
-  const moduloOpts=[{clave:"seguridad",nombre:"Seguridad Industrial"},...((cat.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin"].includes(mo.clave)))];
+  const moduloOpts=[{clave:"seguridad",nombre:"Seguridad Industrial"},{clave:"sucursales",nombre:"Sucursales (Mtto)"},...((cat.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin","sucursales"].includes(mo.clave)))];
   const[fMod,setFMod]=useState(moduloOpts[0]?.clave||"seguridad");
   const[fClave,setFClave]=useState("");const[fNombre,setFNombre]=useState("");
   const[fFirma,setFFirma]=useState(true);const[fAut,setFAut]=useState(false);
   const[preview,setPreview]=useState(null);const[showPrev,setShowPrev]=useState(false);
-  const TIPO_MAP={si:"si_no",sino:"si_no",sino_:"si_no",sì:"si_no",seleccion:"select",lista:"select",opcion:"select",opciones:"select",texto:"text",text:"text",parrafo:"textarea",textolargo:"textarea",textarea:"textarea",numero:"number",number:"number",fecha:"date",date:"date",foto:"photo",imagen:"photo",photo:"photo",danos:"damage_list",danios:"damage_list",damagelist:"damage_list",opna:"opna",opn:"opna",vehiculo:"vehiculo",unidad:"vehiculo",taco:"taco",select:"select"};
+  const TIPO_MAP={si:"si_no",sino:"si_no",sino_:"si_no",sì:"si_no",seleccion:"select",lista:"select",opcion:"select",opciones:"select",texto:"text",text:"text",parrafo:"textarea",textolargo:"textarea",textarea:"textarea",numero:"number",number:"number",fecha:"date",date:"date",foto:"photo",imagen:"photo",photo:"photo",fotos:"fotos",galeria:"fotos",evidencia:"fotos",evidencias:"fotos",danos:"damage_list",danios:"damage_list",damagelist:"damage_list",opna:"opna",opn:"opna",vehiculo:"vehiculo",unidad:"vehiculo",taco:"taco",select:"select",escala:"escala",semaforo:"escala",condicion:"escala",severidad:"escala"};
+  const SEV_MAP={ok:"ok",bien:"ok",bueno:"ok",verde:"ok",b:"ok",warn:"warn",atencion:"warn",amarillo:"warn",regular:"warn",a:"warn",bad:"bad",fuera:"bad",malo:"bad",rojo:"bad",critico:"bad",m:"bad"};
   const normHdr=s=>String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,"");
   const descargarEjemploForm=()=>{
     if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
     const meta=[{Clave:fClave||"mi_formulario",Nombre:fNombre||"Mi formulario",Modulo:fMod,RequiereFirma:"Si",RequiereAutorizacion:"No"}];
     const campos=[
-      {Seccion:"Datos",Id:"area",Etiqueta:"Área inspeccionada",Tipo:"texto",Opciones:"",Obligatorio:"Si",Condicion:""},
-      {Seccion:"Datos",Id:"turno",Etiqueta:"Turno",Tipo:"seleccion",Opciones:"Matutino|Vespertino|Nocturno",Obligatorio:"Si",Condicion:""},
-      {Seccion:"Revisión",Id:"extintor",Etiqueta:"Extintor vigente",Tipo:"si_no",Opciones:"",Obligatorio:"",Condicion:""},
-      {Seccion:"Revisión",Id:"foto_ext",Etiqueta:"Foto del extintor",Tipo:"foto",Opciones:"",Obligatorio:"",Condicion:"extintor:Sí"},
-      {Seccion:"Revisión",Id:"estado_epp",Etiqueta:"Estado del EPP",Tipo:"opna",Opciones:"",Obligatorio:"",Condicion:""},
-      {Seccion:"Revisión",Id:"comentarios",Etiqueta:"Comentarios",Tipo:"parrafo",Opciones:"",Obligatorio:"",Condicion:""},
+      {Seccion:"Datos",Id:"area",Etiqueta:"Área inspeccionada",Tipo:"texto",Opciones:"",Obligatorio:"Si",Condicion:"",Nota:""},
+      {Seccion:"Datos",Id:"turno",Etiqueta:"Turno",Tipo:"seleccion",Opciones:"Matutino|Vespertino|Nocturno",Obligatorio:"Si",Condicion:"",Nota:""},
+      {Seccion:"Condición",Id:"estructura",Etiqueta:"Estructura / chasis",Tipo:"escala",Opciones:"Sin daños visibles@ok|Golpes menores@warn|Daño estructural@bad",Obligatorio:"Si",Condicion:"",Nota:"Si"},
+      {Seccion:"Condición",Id:"extintor",Etiqueta:"Extintor vigente",Tipo:"si_no",Opciones:"",Obligatorio:"",Condicion:"",Nota:""},
+      {Seccion:"Condición",Id:"comentarios",Etiqueta:"Comentarios",Tipo:"parrafo",Opciones:"",Obligatorio:"",Condicion:"",Nota:""},
+      {Seccion:"Evidencia",Id:"fotos",Etiqueta:"Fotos de la inspección",Tipo:"fotos",Opciones:"",Obligatorio:"",Condicion:"",Nota:""},
     ];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(meta),"Formulario");
@@ -1249,10 +1306,19 @@ function ModAdmin({cat,refrescarCat,showToast}){
         if(!TIPOS_CAMPO.includes(tipo))noSop.push((label||o.id)+" («"+(o.tipo||"")+"»)");
         const id=slug(o.id||label||("campo_"+(++auto)))||("campo_"+(++auto));
         const opcionesRaw=String(o.opciones||o.opts||"").trim();
-        const opts=opcionesRaw?opcionesRaw.split(/[|;]/).map(x=>x.trim()).filter(Boolean):undefined;
         const req=/^(si|sí|true|1|x)$/i.test(String(o.obligatorio||o.req||"").trim());
         const cond=String(o.condicion||o.cond||"").trim()||undefined;
-        const item={id,label:label||id,type:tipo};if(opts)item.opts=opts;if(req)item.req=true;if(cond)item.cond=cond;
+        const item={id,label:label||id,type:tipo};
+        if(tipo==="escala"){
+          // Opciones «texto@severidad» (ok/warn/bad o bien/atencion/fuera). Sin @ → ok.
+          const partes=(opcionesRaw||"Sin daños@ok|Atención@warn|Fuera de servicio@bad").split(/[|;]/).map(x=>x.trim()).filter(Boolean);
+          item.opts=partes.map(p=>{const at=p.lastIndexOf("@");const t=at>=0?p.slice(0,at).trim():p.trim();const sev=at>=0?(SEV_MAP[normHdr(p.slice(at+1))]||"ok"):"ok";return{t,sev};});
+          if(/^(si|sí|true|1|x|nota)$/i.test(String(o.nota||"").trim()))item.nota=true;
+        }else{
+          const opts=opcionesRaw?opcionesRaw.split(/[|;]/).map(x=>x.trim()).filter(Boolean):undefined;
+          if(opts)item.opts=opts;
+        }
+        if(req)item.req=true;if(cond)item.cond=cond;
         if(idx[secT]===undefined){idx[secT]=secs.length;secs.push({id:slug(secT)||("sec_"+secs.length),title:secT,items:[]});}
         secs[idx[secT]].items.push(item);
       }
