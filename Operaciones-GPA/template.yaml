@@ -29,7 +29,7 @@ Description: >
 Globals:
   Function:
     Runtime:       python3.12
-    Architectures: [arm64]
+    Architectures: [x86_64]
     MemorySize:    512
     Timeout:       30
     Environment:
@@ -221,7 +221,7 @@ Resources:
       Description: Dependencias Python — GPA Operaciones
       ContentUri:  ./layer/
       CompatibleRuntimes: [python3.12]
-      CompatibleArchitectures: [arm64]
+      CompatibleArchitectures: [x86_64]
       RetentionPolicy: Delete
     Metadata:
       BuildMethod: python3.12
