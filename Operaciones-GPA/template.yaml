@@ -28,7 +28,7 @@ Description: >
 # ═══════════════════════════════════════════════════════════════════
 Globals:
   Function:
-    Runtime:       python3.12
+    Runtime:       python3.13
     Architectures: [x86_64]
     MemorySize:    512
     Timeout:       30
@@ -209,7 +209,7 @@ Resources:
         Env:      !Ref Env
 
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
 
   # ═══════════════════════════════════════════════════════════════
   # 2. LAYER — dependencias Python
@@ -220,11 +220,11 @@ Resources:
       LayerName:   !Sub gpa-ops-deps-${Env}
       Description: Dependencias Python — GPA Operaciones
       ContentUri:  ./layer/
-      CompatibleRuntimes: [python3.12]
+      CompatibleRuntimes: [python3.13]
       CompatibleArchitectures: [x86_64]
       RetentionPolicy: Delete
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
 
   # ═══════════════════════════════════════════════════════════════
   # 3. API GATEWAY — HTTP API v2 + Cognito JWT
