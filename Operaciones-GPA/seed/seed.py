@@ -175,6 +175,9 @@ def main():
                          "temporal y cada usuario define la suya en el primer ingreso (más seguro).")
     ap.add_argument("--solo-cuentas", action="store_true", help="No tocar catálogos")
     ap.add_argument("--solo-catalogos", action="store_true", help="No tocar Cognito")
+    ap.add_argument("--solo-formularios", action="store_true",
+                    help="Carga SOLO módulos/plantillas (seed/plantillas.json). No toca "
+                         "vehículos, responsables, sucursales, config ni Cognito. Seguro en prod.")
     args = ap.parse_args()
     forzar_cambio = not args.permanente
 
@@ -188,6 +191,12 @@ def main():
 
     if not args.tabla:
         sys.exit("Falta --tabla (o --stack, o DYNAMO_TABLE)")
+
+    # Atajo seguro para prod: solo agrega los formularios, sin tocar nada más.
+    if args.solo_formularios:
+        cargar_formularios(session.resource("dynamodb").Table(args.tabla))
+        print("\nListo (solo formularios). No se tocaron catálogos ni cuentas.")
+        return
 
     if not args.solo_cuentas:
         cargar_catalogos(session.resource("dynamodb").Table(args.tabla))
