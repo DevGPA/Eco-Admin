@@ -25,7 +25,7 @@ from typing import Optional
 
 import boto3
 
-from motor.catalogos import RFC_GPA, sucursal_de_origen
+from motor.catalogos import RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS
 
 logger = logging.getLogger(__name__)
 
@@ -201,9 +201,11 @@ def _emisor_receptor(eq, rq, rfcs_pos, lineas):
 
 
 def _tipo_documento(lineas) -> Optional[str]:
-    """Tipo por palabras clave: CP (carta porte/traslado) o FV (ingreso/factura)."""
+    """Tipo por palabras clave. CP se detecta ANTES que FV porque una carta porte
+    también dice 'INGRESO' ('CARTA DE PORTE DE INGRESOS', 'TIPO COMPROBANTE: I')."""
     txt = " ".join(ln["text"] for ln in lineas).upper()
-    if "CARTA PORTE" in txt or "CARTAPORTE" in txt or "TRASLADO" in txt:
+    if any(k in txt for k in ("CARTA PORTE", "CARTA DE PORTE", "CARTAPORTE",
+                              "COMPLEMENTO CARTA", "PORTE DE INGRESO", "TRASLADO")):
         return "CP"
     if "INGRESO" in txt or "FACTURA" in txt:
         return "FV"
@@ -676,17 +678,214 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
     }
 
 
-# ── Orquestación end-to-end (S3 → OCR → casos) ────────────────────
+# ══════════════════════════════════════════════════════════════════
+# Extracción desde la CAPA DE TEXTO del PDF (CFDI digitales)
+# ══════════════════════════════════════════════════════════════════
+# Los CFDI de GPA y sus fleteras se generan electrónicamente: el PDF trae una
+# capa de texto EXACTA. Rasterizar a imagen + OCR (Textract) sobre eso introduce
+# errores (montos basura, RFC mal leídos). Cuando hay capa de texto se lee
+# directo; el OCR queda solo como respaldo para escaneos reales (sin texto).
+#
+# Diseño independiente del proveedor donde se puede: la FACTURA siempre es de
+# GPA (mismo formato), el FLETE se suma por claves SAT de transporte (estándar),
+# TC/moneda por regex CFDI. Origen/destino y RFC de fletera dependen algo del
+# layout del CP de cada fletera; si no se leen, el caso degrada a EN_REVISION
+# (no a rechazo falso). Probado con CP de Tresguerras; afinar con más proveedores.
+
+# Claves SAT de servicios de transporte (flete, entrega, combustible, ferry…).
+_RE_CLAVE_FLETE = re.compile(r"^\s*7810\d{4}\b")
+
+# Abreviaturas de estado → nombre del catálogo (origen/destino en cartas porte).
+_EDO_ABBR = {
+    "QR": "Quintana Roo", "QROO": "Quintana Roo", "YUC": "Yucatán",
+    "JAL": "Jalisco", "NL": "Nuevo León", "BCS": "Baja California Sur",
+    "BC": "Baja California", "BCN": "Baja California", "GTO": "Guanajuato",
+    "QRO": "Querétaro", "SLP": "San Luis Potosí", "VER": "Veracruz",
+    "TAMPS": "Tamaulipas", "TAB": "Tabasco", "CHIS": "Chiapas", "OAX": "Oaxaca",
+    "SIN": "Sinaloa", "SON": "Sonora", "COAH": "Coahuila", "CHIH": "Chihuahua",
+    "DGO": "Durango", "ZAC": "Zacatecas", "AGS": "Aguascalientes", "COL": "Colima",
+    "MICH": "Michoacán", "MOR": "Morelos", "NAY": "Nayarit", "HGO": "Hidalgo",
+    "PUE": "Puebla", "GRO": "Guerrero", "CAMP": "Campeche", "TLAX": "Tlaxcala",
+}
+
+
+def _lineas_pdf_pagina(page) -> list[dict]:
+    """Líneas de una página PDF con geometría normalizada 0-1: [{text,top,left}].
+    Misma estructura que las líneas de Textract, para reusar los helpers de parseo."""
+    r = page.rect
+    W = float(r.width) or 1.0
+    H = float(r.height) or 1.0
+    out = []
+    for b in page.get_text("dict").get("blocks", []):
+        for ln in b.get("lines", []):
+            txt = "".join(s.get("text", "") for s in ln.get("spans", [])).strip()
+            if txt:
+                x0, y0, _x1, _y1 = ln["bbox"]
+                out.append({"text": txt, "top": y0 / H, "left": x0 / W})
+    return out
+
+
+def _montos_lineas(lineas):
+    """[(top,left,valor)] de todos los montos con decimales del documento."""
+    out = []
+    for ln in lineas:
+        for x in re.findall(r"[\d,]+\.\d{2}", ln["text"]):
+            out.append((ln["top"], ln["left"], float(x.replace(",", ""))))
+    return out
+
+
+def _valor_etiqueta(labels, lineas, banda=0.012):
+    """Monto asociado a una etiqueta por geometría: en su misma fila (top cercano)
+    y a la derecha. Resuelve el layout en columnas (etiqueta y valor en líneas
+    separadas, p.ej. 'Subtotal' … '811.66')."""
+    labs = [l.upper() for l in labels]
+    etis = [ln for ln in lineas if any(k in ln["text"].upper() for k in labs)]
+    ms = _montos_lineas(lineas)
+    for e in etis:
+        aqui = re.findall(r"[\d,]+\.\d{2}", e["text"])
+        if aqui:
+            return float(aqui[-1].replace(",", ""))
+        cand = sorted((abs(t - e["top"]), l, v) for (t, l, v) in ms
+                      if abs(t - e["top"]) <= banda and l > e["left"])
+        if cand:
+            return cand[0][2]
+    return None
+
+
+def _flete_sat(lineas):
+    """Flete sin IVA del CP = suma de importes de las líneas con clave SAT de
+    transporte (7810xxxx). Estándar en cualquier carta porte CFDI."""
+    tops = [ln["top"] for ln in lineas if _RE_CLAVE_FLETE.match(ln["text"])]
+    if not tops:
+        return None
+    ms = _montos_lineas(lineas)
+    total = 0.0
+    for tp in tops:
+        fila = sorted((l, v) for (t, l, v) in ms if abs(t - tp) < 0.005)
+        if fila:
+            total += fila[-1][1]   # el importe (monto más a la derecha de la fila)
+    return round(total, 2) if total > 0 else None
+
+
+def _tc_moneda(lineas):
+    full = " ".join(ln["text"] for ln in lineas).upper()
+    tc = re.search(r"TIPO DE CAMBIO[:\s]*([\d.]+)", full)
+    mon = re.search(r"MONEDA[:\s]*([A-Z]{3})", full)
+    return (float(tc.group(1)) if tc else None,
+            (mon.group(1) if mon else None))
+
+
+def _ciudad_estado(txt):
+    """'VALLADOLID, YUC.' → ('Valladolid','Yucatán'); None si no es ciudad,estado."""
+    m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]+?),\s*([A-ZÑ][A-ZÑ. ]{1,5}?)\.?$", txt.strip())
+    if not m:
+        return None
+    ciudad = " ".join(m.group(1).split()).title()
+    abbr = re.sub(r"[.\s]", "", m.group(2)).upper()
+    estado = _EDO_ABBR.get(abbr)
+    return (ciudad, estado) if estado else None
+
+
+def _origen_destino(lineas):
+    """Origen (izquierda) y destino (derecha) del CP: líneas 'Ciudad, ESTADO' en
+    el tercio superior; en la fila superior, la de menor X es origen, la mayor destino."""
+    cands = []
+    for ln in lineas:
+        if ln["top"] < 0.30:
+            ce = _ciudad_estado(ln["text"])
+            if ce:
+                cands.append((ln["top"], ln["left"], ce))
+    if not cands:
+        return (None, None, None, None)
+    cands.sort()
+    fila0 = cands[0][0]
+    fila = sorted((c for c in cands if abs(c[0] - fila0) < 0.02), key=lambda c: c[1]) or cands
+    o = fila[0][2]
+    d = fila[-1][2]
+    return (o[0], o[1], d[0], d[1])   # origenCiudad, origenEstado, destinoCiudad, destinoEstado
+
+
+def _pagina_desde_texto(lineas: list[dict]) -> dict:
+    """Construye el dict de página (mismos campos que _parse_textract) desde la
+    capa de texto del PDF. Reusa los helpers de RFC/emisor-receptor/tipo/folio."""
+    rfcs_pos = _rfcs_en_lineas(lineas)
+    rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
+    tipo_doc = _tipo_documento(lineas)
+    g = (RFC_GPA or "").strip().upper()
+    gpa_presente = bool(g and g in rfcs_detectados)
+
+    if gpa_presente and tipo_doc == "CP":
+        # CP: GPA es receptor; el emisor es la FLETERA. Usar su RFC solo si una
+        # fletera AUTORIZADA aparece en el texto; si su RFC va en la imagen del
+        # membrete (no extraíble), dejarlo vacío → C4c a revisión. NUNCA tomar el
+        # RFC del cliente/destinatario como fletera (daba R-402 falso).
+        clase, receptor = "CP", g
+        emisor = next((r for r in rfcs_detectados if r in FLETERAS_AUTORIZADAS), "")
+    elif gpa_presente and tipo_doc == "FV":
+        clase, emisor = "FV", g
+        receptor = next((r for r in rfcs_detectados if r != g), None)
+    else:
+        emisor, receptor = _emisor_receptor(None, None, rfcs_pos, lineas)
+        clase = clasificar_por_rfc(emisor, receptor)
+        if clase not in ("CP", "FV") and tipo_doc in ("CP", "FV"):
+            clase = tipo_doc
+
+    tc, moneda = _tc_moneda(lineas)
+    full = " ".join(ln["text"] for ln in lineas)
+    coment = None
+    mcom = re.search(r"(?:OBSERVACIONES|COMENTARIOS|REF)[:\s].{0,120}", full, re.I)
+    if mcom:
+        coment = mcom.group(0)
+
+    # Subtotal según el rol: CP → flete (suma claves SAT); FV → Sub-Total/Suma.
+    if clase == "CP":
+        subtotal = _flete_sat(lineas)
+        oC, oE, dC, dE = _origen_destino(lineas)
+    else:
+        subtotal = _valor_etiqueta(["SUBTOTAL", "SUB-TOTAL", "SUB TOTAL", "SUMA"], lineas)
+        oC = oE = dC = dE = None
+
+    return {
+        "rfcEmisor":      emisor,
+        "rfcReceptor":    receptor,
+        "rfcsDetectados": rfcs_detectados,
+        "tipoDoc":        tipo_doc,
+        "subtotal":       subtotal,
+        "moneda":         (moneda or "").upper() or None,
+        "tipoCambio":     tc,
+        "folio":          _folio_no_fiscal(lineas),
+        "fecha":          _fecha_iso(full),
+        "comentarios":    coment,
+        "origenEstado":   oE,
+        "origenCiudad":   oC,
+        "destinoEstado":  dE,
+        "destinoCiudad":  dC,
+        "fletaRFC":       emisor,
+        "partidas":       [],   # del texto aún no se extraen renglones (ver follow-up)
+    }
+
+
+# ── Orquestación end-to-end (S3 → texto/OCR → casos) ──────────────
 def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict:
-    """Renderiza el PDF, hace OCR de cada página y arma los casos (1 por CP)."""
-    paginas_img = render_paginas_pdf(pdf_bytes)
+    """Por cada página: si tiene CAPA DE TEXTO la lee directo (CFDI digital);
+    si no (escaneo real), rasteriza y usa OCR. Luego arma los casos (1 por CP)."""
+    import fitz
     paginas = []
-    for i, img in enumerate(paginas_img):
-        try:
-            paginas.append(ocr_pagina(img, client=client))
-        except Exception as exc:   # una página ilegible no tumba el lote
-            logger.warning("OCR falló en página %d de %s: %s", i + 1, folio_archivo, exc)
-            paginas.append({"tipoDocumento": "OTRO"})
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        for i, page in enumerate(doc):
+            try:
+                texto = page.get_text() or ""
+                if len(texto.strip()) >= 100:   # hay capa de texto → leer directo
+                    paginas.append(_pagina_desde_texto(_lineas_pdf_pagina(page)))
+                else:                            # escaneo → rasterizar + OCR
+                    png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
+                    paginas.append(ocr_pagina(png, client=client))
+            except Exception as exc:   # una página ilegible no tumba el lote
+                logger.warning("Página %d de %s ilegible: %s", i + 1, folio_archivo, exc)
+                paginas.append({"tipoDoc": "OTRO"})
+    finally:
+        doc.close()
     return emparejar_casos(paginas, folio_archivo)
 
 

@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.3"   # monitor: tablero solo #META (sin items de índice); destino ilegible → revisión
+VERSION = "2.4.4"   # OCR: lee capa de texto de CFDI digitales (monto/origen/destino reales); OCR solo en escaneos
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

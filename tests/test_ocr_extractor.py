@@ -441,8 +441,13 @@ def test_caso_a_solicitud_mapea_campos():
 
 
 def test_procesar_pdf_orquesta(monkeypatch):
-    # render simulado: 4 "páginas"; OCR simulado (independiente del backend): 2 CP + 2 FV
-    monkeypatch.setattr(ocr, "render_paginas_pdf", lambda b, dpi=None: [b"", b"", b"", b""])
+    # PDF real de 4 páginas EN BLANCO (sin capa de texto) → fuerza la vía OCR;
+    # ocr_pagina simulado devuelve 2 CP + 2 FV (independiente del backend real).
+    import fitz
+    _doc = fitz.open()
+    for _ in range(4):
+        _doc.new_page()
+    pdf_bytes = _doc.tobytes()
     paginas = iter([
         {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "FAC04927",
          "subtotal": 3330.0, "comentarios": "F-40086093", "fletaRFC": HORMIK,
@@ -456,7 +461,7 @@ def test_procesar_pdf_orquesta(monkeypatch):
          "subtotal": 15.55, "moneda": "USD", "tipoCambio": 17.55, "partidas": []},
     ])
     monkeypatch.setattr(ocr, "ocr_pagina", lambda img, client=None: next(paginas))
-    res = ocr.procesar_pdf(b"pdf", folio_archivo="FAC4927-FAC4935")
+    res = ocr.procesar_pdf(pdf_bytes, folio_archivo="FAC4927-FAC4935")
     assert len(res["casos"]) == 2
     assert res["casos"][0]["origenSucursal"] == "CDMX"   # Iztapalapa → CDMX
     assert res["casos"][0]["foliosFV"] == ["FM40086093"]
@@ -559,3 +564,82 @@ def test_caso_a_solicitud_incluye_monto_venta_fv():
 ])
 def test_fecha_iso(crudo, esperado):
     assert ocr._fecha_iso(crudo) == esperado
+
+
+# ── Extracción desde la CAPA DE TEXTO del PDF (CFDI digitales) ─────
+from s3.ocr_extractor import (
+    _pagina_desde_texto, _flete_sat, _valor_etiqueta, _ciudad_estado,
+    _origen_destino, _tc_moneda,
+)
+
+
+def test_ciudad_estado_abreviaturas():
+    assert _ciudad_estado("VALLADOLID, YUC.") == ("Valladolid", "Yucatán")
+    assert _ciudad_estado("CANCUN, Q.R.") == ("Cancun", "Quintana Roo")
+    assert _ciudad_estado("MONTERREY, N.L.") == ("Monterrey", "Nuevo León")
+    assert _ciudad_estado("texto cualquiera") is None
+
+
+def test_flete_sat_suma_claves_transporte():
+    lineas = [
+        {"text": "78101802 - Flete", "top": 0.46, "left": 0.36},
+        {"text": "1,427.96", "top": 0.46, "left": 0.87},
+        {"text": "78101801 - Entrega", "top": 0.47, "left": 0.36},
+        {"text": "438.00", "top": 0.47, "left": 0.88},
+        {"text": "78101802 - Combustible", "top": 0.48, "left": 0.36},
+        {"text": "35.00", "top": 0.48, "left": 0.89},
+    ]
+    assert _flete_sat(lineas) == 1900.96
+
+
+def test_valor_etiqueta_geometria():
+    lineas = [
+        {"text": "Subtotal", "top": 0.74, "left": 0.81},
+        {"text": "811.66", "top": 0.74, "left": 0.90},
+        {"text": "Total", "top": 0.76, "left": 0.81},
+        {"text": "941.53", "top": 0.76, "left": 0.90},
+    ]
+    assert _valor_etiqueta(["SUBTOTAL", "SUB-TOTAL"], lineas) == 811.66
+
+
+def test_tc_moneda_regex():
+    assert _tc_moneda([{"text": "Moneda: USD Tipo de Cambio: 17.45", "top": 0, "left": 0}]) == (17.45, "USD")
+
+
+def _cp_lineas():
+    return [
+        {"text": "CARTA DE PORTE DE INGRESOS", "top": 0.05, "left": 0.4},
+        {"text": "CANCUN, Q.R.", "top": 0.11, "left": 0.07},
+        {"text": "VALLADOLID, YUC.", "top": 0.11, "left": 0.35},
+        {"text": "(GPA8402219Y1)GENERAL DE PRODUCTOS", "top": 0.20, "left": 0.05},
+        {"text": "(AUPM980703941)MAURICIO AGUILAR PEREZ", "top": 0.20, "left": 0.35},
+        {"text": "78101802 - Flete", "top": 0.46, "left": 0.36}, {"text": "1,427.96", "top": 0.46, "left": 0.87},
+        {"text": "78101801 - Entrega", "top": 0.47, "left": 0.36}, {"text": "438.00", "top": 0.47, "left": 0.88},
+        {"text": "Moneda: MXN", "top": 0.03, "left": 0.5},
+    ]
+
+
+def test_pagina_texto_cp():
+    p = _pagina_desde_texto(_cp_lineas())
+    assert p["tipoDoc"] == "CP"
+    assert p["rfcReceptor"] == "GPA8402219Y1"
+    assert clasificar_pagina(p) == "CP"
+    assert p["subtotal"] == 1865.96            # 1427.96 + 438.00
+    assert p["origenCiudad"] == "Cancun" and p["origenEstado"] == "Quintana Roo"
+    assert p["destinoEstado"] == "Yucatán"
+    # Fletera en la imagen del membrete → no se asigna el RFC del cliente.
+    assert p["fletaRFC"] == "" and p["fletaRFC"] != "AUPM980703941"
+
+
+def test_pagina_texto_fv():
+    fv = [
+        {"text": "Factura  FC 20109707", "top": 0.02, "left": 0.6},
+        {"text": "R.F.C. GPA-840221-9Y1", "top": 0.10, "left": 0.05},
+        {"text": "AUPM980703941", "top": 0.12, "left": 0.05},
+        {"text": "Subtotal", "top": 0.74, "left": 0.81}, {"text": "811.66", "top": 0.74, "left": 0.90},
+        {"text": "Moneda: USD Tipo de Cambio: 17.45", "top": 0.745, "left": 0.05},
+    ]
+    p = _pagina_desde_texto(fv)
+    assert p["tipoDoc"] == "FV" and p["rfcEmisor"] == "GPA8402219Y1"
+    assert clasificar_pagina(p) == "FV"
+    assert p["subtotal"] == 811.66 and p["moneda"] == "USD" and p["tipoCambio"] == 17.45
