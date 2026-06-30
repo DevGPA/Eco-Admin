@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.5"   # OCR cross-proveedor: clasif. por RECEPTOR, flete por etiqueta/SAT, factura revuelta→OCR, complemento sin flete no crea caso fantasma
+VERSION = "2.4.6"   # Tiny Pack autorizada; catálogo de fleteras configurable por entorno (FLETERAS_EXTRA)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

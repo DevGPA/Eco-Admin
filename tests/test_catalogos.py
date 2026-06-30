@@ -126,3 +126,22 @@ def test_normalizar_quita_acentos_y_normaliza_espacios():
 
 def test_normalizar_cadena_vacia():
     assert _normalizar("") == ""
+
+
+# ── Catálogo de fleteras (alta sin tocar código vía FLETERAS_EXTRA) ──
+def test_tiny_pack_autorizada():
+    from motor.catalogos import FLETERAS_AUTORIZADAS
+    assert "TPL2402014E9" in FLETERAS_AUTORIZADAS
+
+
+def test_fleteras_extra_por_entorno():
+    import motor.catalogos as cat
+    extra = cat._cargar_fleteras_extra.__wrapped__ if hasattr(cat._cargar_fleteras_extra, "__wrapped__") else cat._cargar_fleteras_extra
+    import os
+    os.environ["FLETERAS_EXTRA"] = "xax-x01-0101000=Prueba Fletera|YYY010101ABC"
+    try:
+        d = cat._cargar_fleteras_extra()
+        assert d["XAXX010101000"] == "Prueba Fletera"   # RFC normalizado (sin guiones)
+        assert "YYY010101ABC" in d                       # sin nombre también vale
+    finally:
+        del os.environ["FLETERAS_EXTRA"]

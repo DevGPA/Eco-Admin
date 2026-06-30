@@ -175,18 +175,50 @@ def es_cargo_envio(sku_id: Optional[str], descripcion: Optional[str]) -> bool:
 
 
 # ── Fleteras autorizadas (RFC) ───────────────────────────────────
-FLETERAS_AUTORIZADAS = {
-    "ACT68080665A",  # Tres Guerras (Tresguerras)
-    "TEE070612ITA",  # Transportes y Envíos Estrella
-    "TOS0407087T2",  # Transportadora Osorio
-    "FOR630225561",  # Fletes de Oriente
-    "TJO680807GU2",  # Transportes Julián de Obregon
-    "EME880309SK5",  # Estafeta Mexicana
-    "ACA170911HY7",  # Autotransportes y Carga PTX
-    "TCH170824TH2",  # Transportes de Carga Hormik
-    "FASG781207JM9", # Gerardo Franco Sánchez (persona física)
-    "CAAE970704V91", # Evelyn M. Camacho Aviña (persona física)
+# Catálogo de fleteras autorizadas: RFC → nombre. El nombre sirve para mostrar
+# y, a futuro, para reconocer la fletera por su membrete cuando el RFC va en la
+# imagen (no en el texto).
+#
+# CÓMO AGREGAR UNA FLETERA (plan de mantenimiento):
+#   1) Inmediato / sin redespliegue de código: define la variable de entorno
+#      FLETERAS_EXTRA con "RFC=Nombre" separados por '|'. Ej:
+#        FLETERAS_EXTRA="XAXX010101000=Nueva Fletera|YYY010101ABC=Otra"
+#      Se fusiona con el catálogo base. (Se configura en samconfig/Lambda y un
+#      sam deploy de parámetros la activa; no toca el código.)
+#   2) Permanente: agrega el RFC aquí, en FLETERAS_CATALOGO.
+#   El RFC se normaliza (sin guiones/puntos/espacios, mayúsculas).
+FLETERAS_CATALOGO = {
+    "ACT68080665A": "Tres Guerras (Tresguerras)",
+    "TEE070612ITA": "Transportes y Envíos Estrella",
+    "TOS0407087T2": "Transportadora Osorio",
+    "FOR630225561": "Fletes de Oriente",
+    "TJO680807GU2": "Transportes Julián de Obregón",
+    "EME880309SK5": "Estafeta Mexicana",
+    "ACA170911HY7": "Autotransportes y Carga PTX",
+    "TCH170824TH2": "Transportes de Carga Hormik",
+    "FASG781207JM9": "Gerardo Franco Sánchez",
+    "CAAE970704V91": "Evelyn M. Camacho Aviña",
+    "TPL2402014E9":  "Tiny Pack Logística",
 }
+
+
+def _cargar_fleteras_extra() -> dict:
+    """Fleteras agregadas por entorno (FLETERAS_EXTRA="RFC=Nombre|RFC=Nombre")."""
+    out = {}
+    for item in os.environ.get("FLETERAS_EXTRA", "").split("|"):
+        item = item.strip()
+        if not item:
+            continue
+        rfc, _, nombre = item.partition("=")
+        rfc = re.sub(r"[-.\s]", "", rfc).upper()
+        if rfc:
+            out[rfc] = nombre.strip()
+    return out
+
+
+FLETERAS_CATALOGO.update(_cargar_fleteras_extra())
+# El motor compara contra el conjunto de RFCs autorizados.
+FLETERAS_AUTORIZADAS = set(FLETERAS_CATALOGO)
 
 # ── Categorías de producto ────────────────────────────────────────
 # Productos RESTRINGIDOS (no elegibles) por TIPO — palabras clave que aparecen
