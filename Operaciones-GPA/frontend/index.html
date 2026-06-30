@@ -647,10 +647,12 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
     return{bad,warn,answered,total:escalaItems.length,sum,max:escalaItems.length*2,completo,nivel,lbl};
   };
   const res=calcResultado();
+  const hoy=ymd(new Date());  // fecha local de hoy (para validar próximo servicio)
   const submit=async()=>{
     if(busy)return;
     if(!suc){setStep(0);return showToast("⚠️ Falta la sucursal");}
     for(let i=0;i<secs.length;i++){const f=faltanSec(secs[i].items);if(f.length){setStep(i+1);setMarcar(true);return showToast("⚠️ Faltan "+f.length+" respuesta(s) en «"+secs[i].title+"». Complétalas para enviar.");}}
+    if(proxServ&&proxServ<hoy)return showToast("⚠️ La fecha de próximo servicio no puede ser anterior a hoy.");
     if(reqFirma&&!sig)return showToast("⚠️ Falta la firma");
     setBusy(true);
     try{
@@ -683,7 +685,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
       </div>}
       {isLast&&<div>
         {res&&<div className={"score-bar"+(res.nivel?" "+res.nivel:"")}><div className="score-lbl">{res.lbl}</div><div className="score-det">{res.completo?`Puntaje ${res.sum}/${res.max}${res.bad?` · ${res.bad} fuera de servicio`:""}${res.warn?` · ${res.warn} en atención`:""}`:`Faltan ${res.total-res.answered} de ${res.total} puntos`}</div></div>}
-        <div className="card"><div className="ct">Fecha de próximo servicio</div><input type="date" value={proxServ} onChange={e=>setProxServ(e.target.value)}/></div>
+        <div className="card"><div className="ct">Fecha de próximo servicio</div><input type="date" min={hoy} value={proxServ} onChange={e=>setProxServ(e.target.value)}/>{proxServ&&proxServ<hoy&&<div className="eb" style={{marginTop:6}}>La fecha no puede ser anterior a hoy.</div>}</div>
         <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Comentarios (si aplica)"/></div>
         {reqFirma&&<div className="card"><div className="ct">Firma</div>
           <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
