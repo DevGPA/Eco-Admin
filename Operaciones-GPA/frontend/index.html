@@ -503,16 +503,23 @@ const condOK=(item,getA)=>{if(!item.cond)return true;const i=String(item.cond).i
 function CampoForm({item,getA,setA,availVeh}){
   const v=getA(item.id);const t=item.type;
   if(t==="escala"){
-    const nota=getA(item.id+"__nota");const opts=item.opts||[];
+    const nota=getA(item.id+"__nota");const foto=getA(item.id+"__foto");const opts=item.opts||[];
+    const sel=(v!=null&&v!=="")?opts[v]:null;const esBad=!!(sel&&sel.sev==="bad");
     return(<div className="es-item">
       <div className="es-h">{item.label}{item.req&&<span style={{color:C.red}}> *</span>}</div>
-      {opts.map((o,i)=>{const sev=o.sev||"ok";const sel=String(v)===String(i);return(
-        <div key={i} className={"es-opt"+(sel?" sel-"+sev:"")} onClick={()=>setA(item.id,i)}>
+      {opts.map((o,i)=>{const sev=o.sev||"ok";const selo=String(v)===String(i);return(
+        <div key={i} className={"es-opt"+(selo?" sel-"+sev:"")} onClick={()=>setA(item.id,i)}>
           <div className="es-rad"><div className="es-dot"/></div>
           <span className="es-txt">{o.t}</span>
           <span className={"es-bdg eb-"+sev}>{SEV_BADGE[sev]}</span>
         </div>);})}
-      {item.nota&&<div className="es-nota"><input type="text" value={nota||""} placeholder="Nota opcional" onChange={e=>setA(item.id+"__nota",e.target.value)}/></div>}
+      {esBad&&<div className="prb">
+        <div style={{fontSize:11,fontWeight:700,color:C.red,marginBottom:6}}>📷 Evidencia del daño (opcional):</div>
+        <div className="pb">{!foto&&<><div style={{fontSize:18}}>📷</div><div style={{fontSize:11,marginTop:2}}>Foto del daño</div></>}{foto&&<img src={foto} alt="evidencia"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,d=>setA(item.id+"__foto",d))}/></div>
+        {foto&&<button type="button" className="bs" style={{width:"100%",marginTop:4,fontSize:11}} onClick={()=>setA(item.id+"__foto",null)}>Cambiar foto</button>}
+        <input type="text" value={nota||""} placeholder="Describe el daño (opcional)" style={{marginTop:6}} onChange={e=>setA(item.id+"__nota",e.target.value)}/>
+      </div>}
+      {!esBad&&item.nota&&<div className="es-nota"><input type="text" value={nota||""} placeholder="Nota opcional" onChange={e=>setA(item.id+"__nota",e.target.value)}/></div>}
     </div>);
   }
   if(t==="opna"){
@@ -633,7 +640,7 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
       {secs.map(sec=><div key={sec.id||sec.title} className="card"><div className="ct">{sec.title}</div>{(sec.items||[]).map(item=>{
         const v=reg.answers?.[item.id];
         if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
-        if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}</div>;}
+        if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];const efoto=reg.answers?.[item.id+"__foto"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}{efoto&&<img src={efoto} style={{width:"100%",maxWidth:240,borderRadius:6,marginTop:4}} alt="evidencia del daño"/>}</div>;}
         if(item.type==="fotos"){if(!v||!v.length)return null;return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><div className="fg">{v.map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/></div>)}</div></div>;}
         if(v==null||v==="")return null;
         if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
