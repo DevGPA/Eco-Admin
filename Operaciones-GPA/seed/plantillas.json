@@ -14,69 +14,4408 @@
           "id": "a_fisica",
           "title": "A. Condición física",
           "items": [
-            {"id": "estructura", "label": "Estructura / chasis", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Sin daños visibles", "sev": "ok"},
-              {"t": "Golpes menores sin afectar función", "sev": "warn"},
-              {"t": "Daño estructural / doblado", "sev": "bad"}
-            ]},
-            {"id": "horquillas", "label": "Horquillas / brazos", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Rectas, sin deformación", "sev": "ok"},
-              {"t": "Ligera deformación, funciona", "sev": "warn"},
-              {"t": "Dobladas / desniveladas", "sev": "bad"}
-            ]},
-            {"id": "ruedas_carga", "label": "Ruedas de carga (bajo horquillas)", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Completas, giran libremente", "sev": "ok"},
-              {"t": "Desgaste moderado o resistencia", "sev": "warn"},
-              {"t": "Rotas, faltantes o bloqueadas", "sev": "bad"}
-            ]},
-            {"id": "rueda_trasera", "label": "Rueda trasera (dirección)", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Sin desgaste, gira sin juego", "sev": "ok"},
-              {"t": "Desgaste visible pero funcional", "sev": "warn"},
-              {"t": "Rotura, juego excesivo o plana", "sev": "bad"}
-            ]},
-            {"id": "timon", "label": "Timón / mango", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Firme, sin holgura ni grietas", "sev": "ok"},
-              {"t": "Holgura leve o grip desgastado", "sev": "warn"},
-              {"t": "Doblado, quebrado o suelto", "sev": "bad"}
-            ]}
+            {
+              "id": "estructura",
+              "label": "Estructura / chasis",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Sin daños visibles",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Golpes menores sin afectar función",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Daño estructural / doblado",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "horquillas",
+              "label": "Horquillas / brazos",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Rectas, sin deformación",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Ligera deformación, funciona",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Dobladas / desniveladas",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "ruedas_carga",
+              "label": "Ruedas de carga (bajo horquillas)",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Completas, giran libremente",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Desgaste moderado o resistencia",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Rotas, faltantes o bloqueadas",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "rueda_trasera",
+              "label": "Rueda trasera (dirección)",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Sin desgaste, gira sin juego",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Desgaste visible pero funcional",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Rotura, juego excesivo o plana",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "timon",
+              "label": "Timón / mango",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Firme, sin holgura ni grietas",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Holgura leve o grip desgastado",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Doblado, quebrado o suelto",
+                  "sev": "bad"
+                }
+              ]
+            }
           ]
         },
         {
           "id": "b_funcional",
           "title": "B. Condición funcional",
           "items": [
-            {"id": "hidraulico_sube", "label": "Hidráulico — sube carga", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Sube suave y mantiene altura", "sev": "ok"},
-              {"t": "Sube lento o pierde altura", "sev": "warn"},
-              {"t": "No sube o baja sola", "sev": "bad"}
-            ]},
-            {"id": "hidraulico_baja", "label": "Hidráulico — baja carga", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Baja controlada al accionar válvula", "sev": "ok"},
-              {"t": "Baja brusca o con retardo", "sev": "warn"},
-              {"t": "No baja o baja sola", "sev": "bad"}
-            ]},
-            {"id": "fugas", "label": "Fugas de aceite hidráulico", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Sin fugas visibles", "sev": "ok"},
-              {"t": "Ligera humedad / goteo mínimo", "sev": "warn"},
-              {"t": "Fuga activa / charco de aceite", "sev": "bad"}
-            ]},
-            {"id": "desplazamiento", "label": "Desplazamiento — jala parejo", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Avanza recto sin desviarse", "sev": "ok"},
-              {"t": "Desviación leve, corregible", "sev": "warn"},
-              {"t": "Se va de lado o rueda trabada", "sev": "bad"}
-            ]},
-            {"id": "freno", "label": "Freno de seguridad (neutro)", "type": "escala", "req": true, "nota": true, "opts": [
-              {"t": "Frena al soltar el timón", "sev": "ok"},
-              {"t": "Frena con retardo leve", "sev": "warn"},
-              {"t": "No frena / se mueve solo", "sev": "bad"}
-            ]}
+            {
+              "id": "hidraulico_sube",
+              "label": "Hidráulico — sube carga",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Sube suave y mantiene altura",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sube lento o pierde altura",
+                  "sev": "warn"
+                },
+                {
+                  "t": "No sube o baja sola",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "hidraulico_baja",
+              "label": "Hidráulico — baja carga",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Baja controlada al accionar válvula",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Baja brusca o con retardo",
+                  "sev": "warn"
+                },
+                {
+                  "t": "No baja o baja sola",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "fugas",
+              "label": "Fugas de aceite hidráulico",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Sin fugas visibles",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Ligera humedad / goteo mínimo",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Fuga activa / charco de aceite",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "desplazamiento",
+              "label": "Desplazamiento — jala parejo",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Avanza recto sin desviarse",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Desviación leve, corregible",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Se va de lado o rueda trabada",
+                  "sev": "bad"
+                }
+              ]
+            },
+            {
+              "id": "freno",
+              "label": "Freno de seguridad (neutro)",
+              "type": "escala",
+              "req": true,
+              "nota": true,
+              "opts": [
+                {
+                  "t": "Frena al soltar el timón",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Frena con retardo leve",
+                  "sev": "warn"
+                },
+                {
+                  "t": "No frena / se mueve solo",
+                  "sev": "bad"
+                }
+              ]
+            }
           ]
         },
         {
           "id": "evidencia",
           "title": "Evidencia fotográfica",
           "items": [
-            {"id": "fotos", "label": "Fotos del patín (lateral, horquillas, ruedas y daños)", "type": "fotos"}
+            {
+              "id": "fotos",
+              "label": "Fotos del patín (lateral, horquillas, ruedas y daños)",
+              "type": "fotos"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "carritos",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Carritos de Carga",
+      "codigo": "GRL-SH-FO-23",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de carrito",
+              "type": "text"
+            },
+            {
+              "id": "las_ruedas_estan_rotas_o_desgastadas",
+              "label": "¿Las ruedas están rotas o desgastadas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_soldar_soldadura_general",
+              "label": "¿Falta soldar (soldadura general)?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "hay_alguna_parte_filosa_o_peligrosa_que_",
+              "label": "¿Hay alguna parte filosa o peligrosa que dificulte su uso?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_algun_tornillo_o_perno",
+              "label": "¿Falta algún tornillo o perno?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "diablitos",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Diablitos",
+      "codigo": "GRL-SH-FO-26",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de diablito",
+              "type": "text"
+            },
+            {
+              "id": "las_ruedas_estan_rotas_o_desgastadas",
+              "label": "¿Las ruedas están rotas o desgastadas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_soldar_soldadura_general",
+              "label": "¿Falta soldar (soldadura general)?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_algun_tornillo_o_perno",
+              "label": "¿Falta algún tornillo o perno?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "hay_algun_area_filosa_o_peligrosa_que_di",
+              "label": "¿Hay algún área filosa o peligrosa que dificulte su uso?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "transpaletas",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Transpaletas",
+      "codigo": "GRL-SH-FO-25",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de transpaleta",
+              "type": "text"
+            },
+            {
+              "id": "los_pernos_laterales_de_los_rodillos_est",
+              "label": "¿Los pernos laterales de los rodillos están sueltos o desgastados?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_ruedas_estan_rotas_o_desgastadas",
+              "label": "¿Las ruedas están rotas o desgastadas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_soldar_soldadura_general",
+              "label": "¿Falta soldar (soldadura general)?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_piston_derrama_aceite",
+              "label": "¿El pistón derrama aceite?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_ruedas_inferiores_estan_rotas_o_desg",
+              "label": "¿Las ruedas inferiores están rotas o desgastadas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_perno_del_punto_de_apoyo_esta_suelto_",
+              "label": "¿El perno del punto de apoyo está suelto o doblado?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "la_palanca_de_descenso_esta_rota_o_suelt",
+              "label": "¿La palanca de descenso está rota o suelta?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "mini_split",
+      "modulo": "sucursales",
+      "nombre": "Revisión de Mini Split / Aire Acondicionado",
+      "codigo": "GRL-SH-FO-35",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion_del_mini_split",
+          "title": "Verificación del mini split",
+          "items": [
+            {
+              "id": "minisplit",
+              "label": "No. de mini split",
+              "type": "text"
+            },
+            {
+              "id": "enciende_correctamente",
+              "label": "Enciende correctamente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cuenta_con_tapa_frontal_aleta_deflectora",
+              "label": "Cuenta con tapa frontal, aleta deflectora, filtros y control",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "la_aleta_deflectora_esta_en_optimas_cond",
+              "label": "La aleta deflectora está en óptimas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "enfria_correctamente",
+              "label": "Enfría correctamente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "calienta_correctamente",
+              "label": "Calienta correctamente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "no_tira_agua",
+              "label": "No tira agua",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "no_se_congela",
+              "label": "No se congela",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "esta_limpio_por_dentro_y_por_fuera",
+              "label": "Está limpio por dentro y por fuera",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "cisternas",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Cisternas y Aljibes",
+      "codigo": "GRL-SH-FO-29",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "tipo",
+              "label": "Tipo",
+              "type": "select",
+              "opts": [
+                "Tinaco",
+                "Cisterna / Aljibe"
+              ]
+            },
+            {
+              "id": "limpieza",
+              "label": "Limpieza",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "tapa_de_acceso",
+              "label": "Tapa de acceso",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "flotador",
+              "label": "Flotador",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "fisuras",
+              "label": "Fisuras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "muro_de_contencion",
+              "label": "Muro de contención",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "flotador_de_bola",
+              "label": "Flotador de bola",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "valvula_pichancha",
+              "label": "Válvula pichancha",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "bomba_centrifuga",
+              "label": "Bomba centrífuga",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "filtro",
+              "label": "Filtro",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "electro_nivel",
+              "label": "Electro nivel",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "iluminacion",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Iluminación",
+      "codigo": "GRL-SH-FO-28",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion_de_la_iluminacion",
+          "title": "Verificación de la iluminación",
+          "items": [
+            {
+              "id": "las_luminarias_encienden_correctamente_e",
+              "label": "Las luminarias encienden correctamente, están limpias y bien sujetas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "no_hay_lamparas_o_focos_danados",
+              "label": "No hay lámparas o focos dañados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_luminarias_no_obstruyen_la_maniobra_",
+              "label": "Las luminarias no obstruyen la maniobra de operación (evitando ser golpeadas)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "la_iluminacion_del_area_es_adecuada_y_su",
+              "label": "La iluminación del área es adecuada y suficiente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "los_armazones_o_mamparas_estan_en_optima",
+              "label": "Los armazones o mamparas están en óptimas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "se_realizo_limpieza_a_luminarias_mampara",
+              "label": "Se realizó limpieza a luminarias (mamparas, carcasas, tubos, focos, reflectores, etc.)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "jardineria",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Jardinería",
+      "codigo": "GRL-SH-FO-33",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion_de_jardineria",
+          "title": "Verificación de jardinería",
+          "items": [
+            {
+              "id": "podar_y_dar_forma",
+              "label": "Podar y dar forma",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cortar_excedentes",
+              "label": "Cortar excedentes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "remover_de_raiz",
+              "label": "Remover de raíz",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "secar_con_quimico",
+              "label": "Secar con químico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "dana_banqueta",
+              "label": "¿Daña banqueta?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "dana_estructura_de_laminas",
+              "label": "¿Daña estructura de láminas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "pintura",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Pintura en General",
+      "codigo": "GRL-SH-FO-37",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "mantenimiento_preventivo_estetico",
+          "title": "Mantenimiento preventivo estético",
+          "items": [
+            {
+              "id": "pintura_fachada",
+              "label": "Pintura fachada",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "pintura_ventanas",
+              "label": "Pintura ventanas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "pintura_puertas",
+              "label": "Pintura puertas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "pintura_porton",
+              "label": "Pintura portón",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "pintura_interior",
+              "label": "Pintura interior",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "pintura_escalera",
+              "label": "Pintura escalera",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "pintura_de_puntos_de_reunion",
+              "label": "Pintura de puntos de reunión",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "marcajes_amarillos",
+              "label": "Marcajes amarillos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "tablero_extractores",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Tablero de Extractores",
+      "codigo": "GRL-SH-FO-39",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "tablero",
+          "title": "Tablero",
+          "items": [
+            {
+              "id": "limpieza_general",
+              "label": "Limpieza general",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "limpieza_de_componentes_con_dielectrico",
+              "label": "Limpieza de componentes con dieléctrico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "prueba_de_arranque_y_paro",
+              "label": "Prueba de arranque y paro",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "prueba_de_paro_de_emergencia",
+              "label": "Prueba de paro de emergencia",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "arranque_y_paro_de_timmer",
+              "label": "Arranque y paro de timmer",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "botones_en_buenas_condiciones",
+              "label": "Botones en buenas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luz_verde_en_todos_los_botones",
+              "label": "Luz verde en todos los botones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "electrico_interno",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Equipo Eléctrico Interno",
+      "codigo": "GRL-SH-FO-30",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "verificacion_de_cableado_tomacorriente_a",
+              "label": "Verificación de cableado, tomacorriente, apagadores, ductos o canaletas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_voltaje_en_tomacorriente",
+              "label": "Verificar voltaje en tomacorriente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "los_tomacorrientes_cuentan_con_tierra_fi",
+              "label": "Los tomacorrientes cuentan con tierra física",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "funcionamiento_correcto_de_apagador",
+              "label": "Funcionamiento correcto de apagador",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "el_cableado_esta_oculto_en_ductos_o_cana",
+              "label": "El cableado está oculto en ductos o canaletas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "limpieza_a_tapas_de_contacto_apagador_du",
+              "label": "Limpieza a tapas de contacto, apagador, ductos o canaletas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "no_existen_conexiones_provisionales_en_t",
+              "label": "No existen conexiones provisionales en tomacorrientes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "los_tomacorrientes_no_estan_sobrecargado",
+              "label": "Los tomacorrientes no están sobrecargados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "no_hay_falsos_contactos",
+              "label": "No hay falsos contactos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "conexiones_empalmes_y_cableados_aislados",
+              "label": "Conexiones, empalmes y cableados aislados y protegidos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "electrico_tablero",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Equipo Eléctrico a Tablero",
+      "codigo": "GRL-SH-FO-31",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "tablero_electrico",
+          "title": "Tablero eléctrico",
+          "items": [
+            {
+              "id": "el_tablero_cuenta_con_etiqueta_de_voltaj",
+              "label": "El tablero cuenta con etiqueta de voltaje y nombre de circuitos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_pastilla_termomagnetica",
+              "label": "Verificar pastilla termomagnética",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_cableado_interno_al_tablero",
+              "label": "Verificar cableado interno al tablero",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_bornes_de_conexion_puntos_cali",
+              "label": "Verificar bornes de conexión (puntos calientes)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "limpieza_interna_y_externa_al_tablero_ai",
+              "label": "Limpieza interna y externa al tablero (aire comprimido y limpiador dieléctrico)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "una_vez_limpio_y_armado_el_tablero_queda",
+              "label": "Una vez limpio y armado, el tablero queda en óptimas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "cargas_y_alimentacion_de_voltaje",
+          "title": "Cargas y alimentación de voltaje",
+          "items": [
+            {
+              "id": "lectura_volts",
+              "label": "Lectura de voltaje (V~) por la línea de llegada CFE",
+              "type": "text"
+            },
+            {
+              "id": "lectura_amp",
+              "label": "Lectura de corriente (A) por línea",
+              "type": "text"
+            },
+            {
+              "id": "verificar_tabulacion_de_cargas_por_fase",
+              "label": "Verificar tabulación de cargas por fase",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_tablero_electrico_cuenta_con_tierra_f",
+              "label": "El tablero eléctrico cuenta con tierra física",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "extractores",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Extractores",
+      "codigo": "GRL-SH-FO-32",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "datos_del_extractor",
+          "title": "Datos del extractor",
+          "items": [
+            {
+              "id": "extractor",
+              "label": "No. de extractor",
+              "type": "text"
+            },
+            {
+              "id": "tipo",
+              "label": "Tipo",
+              "type": "select",
+              "opts": [
+                "Axial",
+                "Eólico"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "lista_de_verificacion",
+          "title": "Lista de verificación",
+          "items": [
+            {
+              "id": "tornilleria_completa",
+              "label": "Tornillería completa",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "aspa_sin_dano",
+              "label": "Aspa sin daño",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "guarda",
+              "label": "Guarda",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "polea_aspa",
+              "label": "Polea aspa",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "polea_motor",
+              "label": "Polea motor",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "chumaceras",
+              "label": "Chumaceras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "banda",
+              "label": "Banda",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "balero",
+              "label": "Balero",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "flecha_balanceada",
+              "label": "Flecha balanceada",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "pintura",
+              "label": "Pintura",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "voltaje",
+              "label": "Voltaje",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "fallas_generales",
+          "title": "Fallas generales",
+          "items": [
+            {
+              "id": "equipo_con_ruido",
+              "label": "¿Equipo con ruido?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "perdida_de_fuerza",
+              "label": "¿Pérdida de fuerza?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "equipo_desoldado",
+              "label": "¿Equipo desoldado?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "equipo_sucio",
+              "label": "¿Equipo sucio?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "equipo_no_arranca",
+              "label": "¿Equipo no arranca?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "aspas_danadas",
+              "label": "¿Aspas dañadas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "dano_en_control_de_arranque",
+              "label": "¿Daño en control de arranque?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "banda_suelta",
+              "label": "¿Banda suelta?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_filtro_de_carbon",
+              "label": "¿Falta filtro de carbón?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "faltan_conos_para_lluvia",
+              "label": "¿Faltan conos para lluvia?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "fontaneria",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Fontanería",
+      "codigo": "GRL-SH-FO-27",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "fugas_en_cisternas_y_tinacos",
+          "title": "Fugas en cisternas y tinacos",
+          "items": [
+            {
+              "id": "verificar_valvula_de_llenado_bronce_o_pl",
+              "label": "Verificar válvula de llenado (bronce o plástico)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_varilla_o_bola_de_flotador",
+              "label": "Verificar varilla o bola de flotador",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_valvula_esfera_o_compuerta_de_",
+              "label": "Verificar válvula esfera o compuerta de cierre general",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_jarros_de_aire",
+              "label": "Verificar jarros de aire",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_tapa_de_cisterna_o_tinaco",
+              "label": "Verificar tapa de cisterna o tinaco",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_limpieza_interna_de_cisterna_o",
+              "label": "Verificar limpieza interna de cisterna o tinaco",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_valvula_liberadora_de_presion_",
+              "label": "Verificar válvula liberadora de presión (si cuenta con hidroneumático)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "lavabo",
+          "title": "Lavabo",
+          "items": [
+            {
+              "id": "verificar_que_el_lavabo_no_este_estrella",
+              "label": "Verificar que el lavabo no esté estrellado o quebrado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_mezcladora",
+              "label": "Verificar mezcladora",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_mangueras_de_1_2",
+              "label": "Verificar mangueras de 1/2\"",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_llave_angular",
+              "label": "Verificar llave angular",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_cespool_bote_o_corrugado",
+              "label": "Verificar cespool, bote o corrugado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_que_cuente_con_chupon_de_cauch",
+              "label": "Verificar que cuente con chupón de caucho",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "soporte_o_pedestal",
+              "label": "Soporte o pedestal",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "wc",
+          "title": "WC",
+          "items": [
+            {
+              "id": "verificar_que_el_tanque_y_wc_no_esten_es",
+              "label": "Verificar que el tanque y WC no estén estrellados o quebrados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_valvula_de_llenado",
+              "label": "Verificar válvula de llenado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_valvula_de_descarga",
+              "label": "Verificar válvula de descarga",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_tornillos_de_sujecion_wc",
+              "label": "Verificar tornillos de sujeción WC",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_manguera_wc",
+              "label": "Verificar manguera WC",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_llave_angular_2",
+              "label": "Verificar llave angular",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_asiento_de_wc",
+              "label": "Verificar asiento de WC",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "estacion_de_lavado_o_cocineta",
+          "title": "Estación de lavado o cocineta",
+          "items": [
+            {
+              "id": "verificar_mezcladora_2",
+              "label": "Verificar mezcladora",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_contra_canasta",
+              "label": "Verificar contra canasta",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_mangueras_de_1_2_2",
+              "label": "Verificar mangueras de 1/2\"",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_cespool_bote_o_corrugado_2",
+              "label": "Verificar cespool, bote o corrugado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_que_cuente_con_chupon_de_cauch_2",
+              "label": "Verificar que cuente con chupón de caucho",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "equipo_hidroneumatico",
+          "title": "Equipo hidroneumático",
+          "items": [
+            {
+              "id": "verificar_presion_en_manometro",
+              "label": "Verificar presión en manómetro",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "funcionamiento_del_switch_de_presion",
+              "label": "Funcionamiento del switch de presión",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_presion_de_aire_en_tanque_pres",
+              "label": "Verificar presión de aire en tanque presurizado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_equipo_de_bombeo",
+              "label": "Verificar equipo de bombeo",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_voltaje_a_motobomba",
+              "label": "Verificar voltaje a motobomba",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_amperaje_a_motobomba",
+              "label": "Verificar amperaje a motobomba",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "verificar_fuga_de_agua",
+              "label": "Verificar fuga de agua",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "laminas",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Láminas, Azoteas y Bajantes",
+      "codigo": "GRL-SH-FO-34",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "datos",
+          "title": "Datos",
+          "items": [
+            {
+              "id": "tipo",
+              "label": "Tipo",
+              "type": "select",
+              "opts": [
+                "Lámina",
+                "Azotea"
+              ]
+            },
+            {
+              "id": "mantenimiento",
+              "label": "Mantenimiento",
+              "type": "select",
+              "opts": [
+                "Preventivo",
+                "Correctivo"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "azotea",
+          "title": "Azotea",
+          "items": [
+            {
+              "id": "grietas",
+              "label": "Grietas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "piso_de_azotea",
+              "label": "Piso de azotea",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "recubrimiento",
+              "label": "Recubrimiento",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "impermeabilizado",
+              "label": "Impermeabilizado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "lechereado",
+              "label": "Lechereado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "membranas",
+              "label": "Membranas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "laminas",
+          "title": "Láminas",
+          "items": [
+            {
+              "id": "goteras",
+              "label": "Goteras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "oxidacion",
+              "label": "Oxidación",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "traslapes_o_uniones",
+              "label": "Traslapes o uniones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "tornilleria",
+              "label": "Tornillería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "recubrimientos",
+              "label": "Recubrimientos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "impermeabilizado_2",
+              "label": "Impermeabilizado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "canaletas",
+          "title": "Canaletas",
+          "items": [
+            {
+              "id": "oxidacion_2",
+              "label": "Oxidación",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "tornilleria_2",
+              "label": "Tornillería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "recubrimientos_2",
+              "label": "Recubrimientos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "impermeabilizado_3",
+              "label": "Impermeabilizado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "soporteria",
+              "label": "Soportería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "goteras_2",
+              "label": "Goteras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "limpieza_interna",
+              "label": "Limpieza interna",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "bajantes",
+          "title": "Bajantes",
+          "items": [
+            {
+              "id": "soporteria_2",
+              "label": "Soportería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "dano_a_tuberia",
+              "label": "Daño a tubería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "fugas_de_tuberia",
+              "label": "Fugas de tubería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "mobiliario",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Mobiliario",
+      "codigo": "GRL-SH-FO-38",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "mobiliario",
+          "title": "Mobiliario",
+          "items": [
+            {
+              "id": "archivero_de_madera",
+              "label": "Archivero de madera",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "archivero_metalico",
+              "label": "Archivero metálico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "escritorio",
+              "label": "Escritorio",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "cajoneras",
+              "label": "Cajoneras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "librero",
+              "label": "Librero",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "mesa",
+              "label": "Mesa",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "recepcion",
+              "label": "Recepción",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "gabinete",
+              "label": "Gabinete",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "cocineta",
+              "label": "Cocineta",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "sillas",
+              "label": "Sillas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "persianas_en_general",
+              "label": "Persianas en general",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "periqueras",
+              "label": "Periqueras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "mantenimiento_a_puertas_y_ventanas",
+          "title": "Mantenimiento a puertas y ventanas",
+          "items": [
+            {
+              "id": "puertas_metalicas_aluminio_y_madera",
+              "label": "Puertas metálicas, aluminio y madera",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "lubricacion_a_bisagra_chapa_y_corredera",
+              "label": "Lubricación a bisagra, chapa y corredera",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "ajuste_de_brazo_hidraulico_de_puertas",
+              "label": "Ajuste de brazo hidráulico de puertas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "ajuste_de_tornilleria_a_sillas",
+              "label": "Ajuste de tornillería a sillas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "vidrios_en_general",
+              "label": "Vidrios en general",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "osmosis",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Ósmosis",
+      "codigo": "GRL-SH-FO-36",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "pruebas_anotar_resultado_en_la_nota",
+          "title": "Pruebas (anotar resultado en la nota)",
+          "items": [
+            {
+              "id": "prueba_de_cloro_en_agua_cruda_1_53_0_ppm",
+              "label": "Prueba de cloro en agua cruda (1.5–3.0 PPM)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "prueba_de_cloro_en_llenado_de_agua_purif",
+              "label": "Prueba de cloro en llenado de agua purificada (0.0 PPM)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "prueba_de_ph_en_llenado_de_agua_purifica",
+              "label": "Prueba de PH en llenado de agua purificada (6.0–7.8)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "prueba_de_tds_en_llenado_de_agua_purific",
+              "label": "Prueba de TDS en llenado de agua purificada (30–60 PPM)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "prueba_de_dureza_en_agua_cruda",
+              "label": "Prueba de dureza en agua cruda",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "prueba_de_dureza_en_agua_purificada_1_gr",
+              "label": "Prueba de dureza en agua purificada (1 grano)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "manual_de_operacion",
+          "title": "Manual de operación",
+          "items": [
+            {
+              "id": "limpieza_del_equipo",
+              "label": "Limpieza del equipo",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "remplazo_de_consumibles",
+          "title": "Remplazo de consumibles",
+          "items": [
+            {
+              "id": "remplazo_de_cartucho_de_sedimentos",
+              "label": "Remplazo de cartucho de sedimentos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "remplazo_de_carbon_cascara_de_coco",
+              "label": "Remplazo de carbón cáscara de coco",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "remplazo_de_cartucho_de_carbon_activado",
+              "label": "Remplazo de cartucho de carbón activado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "remplazo_de_membranas_de_alto_flujo",
+              "label": "Remplazo de membranas de alto flujo",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "examen_de_coliformes_totales",
+              "label": "Examen de coliformes totales",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "control_vehicular",
+      "modulo": "sucursales",
+      "nombre": "Formato de Control Vehicular",
+      "codigo": "GRL-AL-FO-13",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "datos_del_vehiculo",
+          "title": "Datos del vehículo",
+          "items": [
+            {
+              "id": "vehiculo",
+              "label": "Vehículo",
+              "type": "vehiculo"
+            },
+            {
+              "id": "km",
+              "label": "Lectura de KM",
+              "type": "number"
+            }
+          ]
+        },
+        {
+          "id": "exteriores",
+          "title": "Exteriores",
+          "items": [
+            {
+              "id": "espejo_lateral_derecho_funcionando_y_en_",
+              "label": "Espejo lateral derecho funcionando y en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "espejo_lateral_izquierdo_funcionando_y_e",
+              "label": "Espejo lateral izquierdo funcionando y en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cristales_en_buenas_condiciones",
+              "label": "Cristales en buenas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "llantas_en_buen_estado",
+              "label": "Llantas en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "molduras_completas_en_buen_estado_y_fija",
+              "label": "Molduras completas, en buen estado y fijas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "tapon_de_gasolina",
+              "label": "Tapón de gasolina",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "carroceria_sin_golpes",
+              "label": "Carrocería sin golpes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "bocina_de_claxon_funcionando",
+              "label": "Bocina de claxon funcionando",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "limpiaparabrisas",
+              "label": "Limpiaparabrisas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "llanta_de_refaccion",
+              "label": "Llanta de refacción",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "alarma_de_reversa",
+              "label": "Alarma de reversa",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luces_delanteras",
+              "label": "Luces delanteras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luces_de_stop",
+              "label": "Luces de stop",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luces_direccionales",
+              "label": "Luces direccionales",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luces_intermitentes",
+              "label": "Luces intermitentes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luces_de_reversa",
+              "label": "Luces de reversa",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "calaveras",
+              "label": "Calaveras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "interiores",
+          "title": "Interiores",
+          "items": [
+            {
+              "id": "tacometro_en_buenas_condiciones",
+              "label": "Tacómetro en buenas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "espejo_retrovisor_vehiculos_de_carga_n_a",
+              "label": "Espejo retrovisor (vehículos de carga n/a)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cinturones_de_seguridad",
+              "label": "Cinturones de seguridad",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luces_de_interior_funcionando",
+              "label": "Luces de interior funcionando",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "elevador_de_vidrios",
+              "label": "Elevador de vidrios",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "asientos_en_buen_estado",
+              "label": "Asientos en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "tapetes_en_buen_estado",
+              "label": "Tapetes en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "estereo",
+              "label": "Estéreo",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "limpieza",
+              "label": "Limpieza",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "herramientas",
+          "title": "Herramientas",
+          "items": [
+            {
+              "id": "gato_con_maneral_adecuado_para_el_vehicu",
+              "label": "Gato con maneral adecuado para el vehículo",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "llave_de_cruz",
+              "label": "Llave de cruz",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "triangulos_de_seguridad",
+              "label": "Triángulos de seguridad",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "extintor",
+              "label": "Extintor",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cables_pasa_corriente",
+              "label": "Cables pasa corriente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "extractor_de_tarimas",
+              "label": "Extractor de tarimas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "documentacion_en_vehiculo",
+          "title": "Documentación en vehículo",
+          "items": [
+            {
+              "id": "tarjeta_de_circulacion",
+              "label": "Tarjeta de circulación",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "poliza_de_seguro",
+              "label": "Póliza de seguro",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "holograma_de_verificacion",
+              "label": "Holograma de verificación",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "licencia_de_chofer_vigente",
+              "label": "Licencia de chofer vigente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "nivel_de_combustible",
+          "title": "Nivel de combustible",
+          "items": [
+            {
+              "id": "combustible",
+              "label": "Nivel de combustible",
+              "type": "select",
+              "opts": [
+                "1/4",
+                "1/2",
+                "3/4",
+                "Full"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "revision_a_cofre_abierto",
+          "title": "Revisión a cofre abierto",
+          "items": [
+            {
+              "id": "nivel_de_liquido_de_radiador",
+              "label": "Nivel de líquido de radiador",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Óptimo",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Bajo",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "nivel_de_liquido_de_bomba_limpiaparabris",
+              "label": "Nivel de líquido de bomba limpiaparabrisas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Óptimo",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Bajo",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "nivel_de_aceite_de_direccion",
+              "label": "Nivel de aceite de dirección",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Óptimo",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Bajo",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "nivel_de_aceite_de_motor",
+              "label": "Nivel de aceite de motor",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Óptimo",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Bajo",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "nivel_de_liquido_de_freno",
+              "label": "Nivel de líquido de freno",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Óptimo",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Bajo",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "evidencia_de_danos",
+          "title": "Evidencia de daños",
+          "items": [
+            {
+              "id": "golpes",
+              "label": "Fotos de golpes o raspaduras",
+              "type": "fotos"
+            }
           ]
         }
       ]
