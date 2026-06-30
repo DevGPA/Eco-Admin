@@ -1406,360 +1406,6 @@
       ]
     },
     {
-      "clave": "electrico_interno",
-      "modulo": "sucursales",
-      "nombre": "Verificación de Equipo Eléctrico Interno",
-      "codigo": "GRL-SH-FO-30",
-      "activo": true,
-      "requiereFirma": true,
-      "requiereAutorizacion": false,
-      "secciones": [
-        {
-          "id": "verificacion",
-          "title": "Verificación",
-          "items": [
-            {
-              "id": "verificacion_de_cableado_tomacorriente_a",
-              "label": "Verificación de cableado, tomacorriente, apagadores, ductos o canaletas",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "verificar_voltaje_en_tomacorriente",
-              "label": "Verificar voltaje en tomacorriente",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "los_tomacorrientes_cuentan_con_tierra_fi",
-              "label": "Los tomacorrientes cuentan con tierra física",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "funcionamiento_correcto_de_apagador",
-              "label": "Funcionamiento correcto de apagador",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "el_cableado_esta_oculto_en_ductos_o_cana",
-              "label": "El cableado está oculto en ductos o canaletas",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "limpieza_a_tapas_de_contacto_apagador_du",
-              "label": "Limpieza a tapas de contacto, apagador, ductos o canaletas",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "no_existen_conexiones_provisionales_en_t",
-              "label": "No existen conexiones provisionales en tomacorrientes",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "los_tomacorrientes_no_estan_sobrecargado",
-              "label": "Los tomacorrientes no están sobrecargados",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "no_hay_falsos_contactos",
-              "label": "No hay falsos contactos",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "conexiones_empalmes_y_cableados_aislados",
-              "label": "Conexiones, empalmes y cableados aislados y protegidos",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "clave": "electrico_tablero",
-      "modulo": "sucursales",
-      "nombre": "Verificación de Equipo Eléctrico a Tablero",
-      "codigo": "GRL-SH-FO-31",
-      "activo": true,
-      "requiereFirma": true,
-      "requiereAutorizacion": false,
-      "secciones": [
-        {
-          "id": "tablero_electrico",
-          "title": "Tablero eléctrico",
-          "items": [
-            {
-              "id": "el_tablero_cuenta_con_etiqueta_de_voltaj",
-              "label": "El tablero cuenta con etiqueta de voltaje y nombre de circuitos",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "verificar_pastilla_termomagnetica",
-              "label": "Verificar pastilla termomagnética",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "verificar_cableado_interno_al_tablero",
-              "label": "Verificar cableado interno al tablero",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "verificar_bornes_de_conexion_puntos_cali",
-              "label": "Verificar bornes de conexión (puntos calientes)",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "limpieza_interna_y_externa_al_tablero_ai",
-              "label": "Limpieza interna y externa al tablero (aire comprimido y limpiador dieléctrico)",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            },
-            {
-              "id": "una_vez_limpio_y_armado_el_tablero_queda",
-              "label": "Una vez limpio y armado, el tablero queda en óptimas condiciones",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true,
-              "nota": true
-            }
-          ]
-        },
-        {
-          "id": "cargas_y_alimentacion_de_voltaje",
-          "title": "Cargas y alimentación de voltaje",
-          "items": [
-            {
-              "id": "lectura_volts",
-              "label": "Lectura de voltaje (V~) por la línea de llegada CFE",
-              "type": "text"
-            },
-            {
-              "id": "lectura_amp",
-              "label": "Lectura de corriente (A) por línea",
-              "type": "text"
-            },
-            {
-              "id": "verificar_tabulacion_de_cargas_por_fase",
-              "label": "Verificar tabulación de cargas por fase",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true
-            },
-            {
-              "id": "el_tablero_electrico_cuenta_con_tierra_f",
-              "label": "El tablero eléctrico cuenta con tierra física",
-              "type": "escala",
-              "opts": [
-                {
-                  "t": "Cumple",
-                  "sev": "ok"
-                },
-                {
-                  "t": "No cumple",
-                  "sev": "bad"
-                }
-              ],
-              "req": true
-            }
-          ]
-        }
-      ]
-    },
-    {
       "clave": "extractores",
       "modulo": "sucursales",
       "nombre": "Verificación de Extractores",
@@ -3670,6 +3316,1936 @@
                 },
                 {
                   "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "extractores_tarimas",
+      "modulo": "seguridad",
+      "nombre": "Verificación de Extractores de Tarimas",
+      "codigo": "GRL-SH-FO-24",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de extractor",
+              "type": "text"
+            },
+            {
+              "id": "la_cadena_esta_deforme_o_con_cortes",
+              "label": "¿La cadena está deforme o con cortes?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_soldar_soldadura_general",
+              "label": "¿Falta soldar (soldadura general)?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "hay_algun_area_filosa_o_peligrosa_que_di",
+              "label": "¿Hay algún área filosa o peligrosa que dificulte su uso?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "falta_algun_tornillo_o_perno",
+              "label": "¿Falta algún tornillo o perno?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_gancho_para_el_montacargas_esta_defor",
+              "label": "¿El gancho para el montacargas está deformado u oxidado?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "la_correa_esta_rota_cortada_o_mojada_por",
+              "label": "¿La correa está rota, cortada o mojada por alguna sustancia química?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_gancho_para_extraer_esta_deformado_u_",
+              "label": "¿El gancho para extraer está deformado u oxidado?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "eslingas",
+      "modulo": "seguridad",
+      "nombre": "Verificación de Eslingas",
+      "codigo": "GRL-SH-FO-40",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de eslinga",
+              "type": "text"
+            },
+            {
+              "id": "correas_se_encuentran_con_cortes_o_deshi",
+              "label": "Correas: ¿se encuentran con cortes o deshilachadas?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "correas_estan_corroidas_por_exposicion_a",
+              "label": "Correas: ¿están corroídas por exposición a ácidos o productos químicos?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "ganchos_tienen_deformaciones_o_corrosion",
+              "label": "Ganchos: ¿tienen deformaciones o corrosión?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "matraca_esta_corroida_por_exposicion_a_a",
+              "label": "Matraca: ¿está corroída por exposición a ácidos o productos químicos?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "correas_tienen_hilos_faltantes_o_quemadu",
+              "label": "Correas: ¿tienen hilos faltantes o quemaduras?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "detectores_humo",
+      "modulo": "seguridad",
+      "nombre": "Revisión Mensual de Detectores de Humo",
+      "codigo": "GRL-SH-FO-006",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion_del_detector",
+          "title": "Verificación del detector",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. / Ubicación del detector",
+              "type": "text"
+            },
+            {
+              "id": "fecha_baterias",
+              "label": "Fecha de último cambio de baterías",
+              "type": "date"
+            },
+            {
+              "id": "esta_visible_no_obstruido",
+              "label": "Está visible (no obstruido)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "se_encuentra_limpio",
+              "label": "Se encuentra limpio",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "fijado_al_techo_o_la_pared",
+              "label": "Fijado al techo o la pared",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "luz_led_intermitente_funcionando",
+              "label": "Luz LED intermitente funcionando",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "baterias_funcionando",
+              "label": "Baterías funcionando",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "baterias_libres_de_corrosion",
+              "label": "Baterías libres de corrosión",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "la_alarma_funciona_correctamente",
+              "label": "La alarma funciona correctamente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "lamparas_emergencia",
+      "modulo": "seguridad",
+      "nombre": "Revisión de Lámparas de Emergencia",
+      "codigo": "GRL-SH-FO-22",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion_de_la_lampara",
+          "title": "Verificación de la lámpara",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de lámpara",
+              "type": "text"
+            },
+            {
+              "id": "fecha_inst",
+              "label": "Fecha de instalación",
+              "type": "date"
+            },
+            {
+              "id": "tipo_bombilla",
+              "label": "Tipo de bombilla",
+              "type": "text"
+            },
+            {
+              "id": "fecha_desc",
+              "label": "Fecha de última descarga",
+              "type": "date"
+            },
+            {
+              "id": "fecha_recarga",
+              "label": "Fecha de última recarga",
+              "type": "date"
+            },
+            {
+              "id": "la_luminaria_esta_a_una_altura_no_mayor_",
+              "label": "La luminaria está a una altura no mayor a 2.50 m",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "funciona_el_modo_automatico",
+              "label": "Funciona el modo automático",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "funciona_el_modo_manual",
+              "label": "Funciona el modo manual",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "esta_en_buen_estado_fisico",
+              "label": "Está en buen estado físico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "esta_conectada_al_voltaje",
+              "label": "Está conectada al voltaje",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "esta_libre_y_no_obstruida",
+              "label": "Está libre y no obstruida",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "extintores",
+      "modulo": "seguridad",
+      "nombre": "Bitácora de Revisión de Extintores",
+      "codigo": "GRL-SH-FO-5",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion_del_extintor",
+          "title": "Verificación del extintor",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "Ubicación del extintor",
+              "type": "text"
+            },
+            {
+              "id": "capacidad",
+              "label": "Capacidad nominal (kg)",
+              "type": "number"
+            },
+            {
+              "id": "agente",
+              "label": "Agente extinguidor",
+              "type": "select",
+              "opts": [
+                "PQS",
+                "CO2",
+                "Otro"
+              ]
+            },
+            {
+              "id": "fecha_recarga",
+              "label": "Fecha de última recarga y mantenimiento",
+              "type": "date"
+            },
+            {
+              "id": "ubicado_en_plano",
+              "label": "Ubicado en plano",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "libre_de_obstruccion",
+              "label": "Libre de obstrucción",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "esta_senalizado",
+              "label": "Está señalizado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "sello_sin_violar",
+              "label": "Sello sin violar",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "presion_operable_manometro_en_verde",
+              "label": "Presión operable (manómetro en verde)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cuenta_con_collarin_y_holograma_pqs",
+              "label": "Cuenta con collarín y holograma (PQS)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "etiqueta_legible",
+              "label": "Etiqueta legible",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "ruedas_en_buen_estado_si_aplica",
+              "label": "Ruedas en buen estado (si aplica)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "escaleras",
+      "modulo": "seguridad",
+      "nombre": "Revisión de Escaleras Portátiles",
+      "codigo": "GRL-SH-FO-41",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "inspeccion_de_la_escalera",
+          "title": "Inspección de la escalera",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de equipo",
+              "type": "text"
+            },
+            {
+              "id": "tipo",
+              "label": "Tipo",
+              "type": "text"
+            },
+            {
+              "id": "marca",
+              "label": "Marca",
+              "type": "text"
+            },
+            {
+              "id": "capacidad",
+              "label": "Capacidad de carga (kg)",
+              "type": "number"
+            },
+            {
+              "id": "zapatas_antideslizantes_de_seguridad",
+              "label": "Zapatas antideslizantes de seguridad",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "rieles_deslizantes_largueros",
+              "label": "Rieles deslizantes (largueros)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "ensamble_de_peldanos",
+              "label": "Ensamble de peldaños",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "extensores",
+              "label": "Extensores",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "pernos_y_remaches",
+              "label": "Pernos y remaches",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cuerda_en_buen_estado",
+              "label": "Cuerda en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "etiquetas",
+              "label": "Etiquetas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "limpieza",
+              "label": "Limpieza",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "en_condiciones_de_uso",
+              "label": "En condiciones de uso",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Bien",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Necesita reparación",
+                  "sev": "warn"
+                },
+                {
+                  "t": "Mal",
+                  "sev": "bad"
+                },
+                {
+                  "t": "No aplica",
+                  "sev": "ok"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "arnes_linea_vida",
+      "modulo": "seguridad",
+      "nombre": "Revisión de Arnés y Línea de Vida",
+      "codigo": "GRL-SH-FO-21",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "datos_del_arnes",
+          "title": "Datos del arnés",
+          "items": [
+            {
+              "id": "serie",
+              "label": "No. de serie",
+              "type": "text"
+            },
+            {
+              "id": "marca",
+              "label": "Marca",
+              "type": "text"
+            },
+            {
+              "id": "fecha_fab",
+              "label": "Fecha de fabricación del arnés",
+              "type": "date"
+            },
+            {
+              "id": "fecha_cuerda",
+              "label": "Fecha de la cuerda de salvamento",
+              "type": "date"
+            }
+          ]
+        },
+        {
+          "id": "faja_arnes",
+          "title": "Faja / Arnés",
+          "items": [
+            {
+              "id": "tejido_de_resistencia_sin_rasgones_corte",
+              "label": "Tejido de resistencia: sin rasgones, cortes ni quemaduras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "hebillas_y_remaches_sin_deformidades_raj",
+              "label": "Hebillas y remaches: sin deformidades, rajaduras ni quemaduras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "anillos_en_d_sin_rajaduras_desgaste_ni_c",
+              "label": "Anillos en D: sin rajaduras, desgaste ni corrosión",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_arnes_no_excede_los_5_anos_desde_su_f",
+              "label": "El arnés no excede los 5 años desde su fecha de fabricación",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "cuerdas_de_salvamento",
+          "title": "Cuerdas de salvamento",
+          "items": [
+            {
+              "id": "ojales_sin_desgaste_excesivo_ni_deformid",
+              "label": "Ojales: sin desgaste excesivo ni deformidad",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "ganchos_mosquetones_fuerza_de_detencion_",
+              "label": "Ganchos/Mosquetones: fuerza de detención correcta",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cuerdas_o_correas_sin_cortes_deterioro_n",
+              "label": "Cuerdas o correas: sin cortes, deterioro ni desgaste",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_cuerdas_de_salvamento_no_exceden_los",
+              "label": "Las cuerdas de salvamento no exceden los 5 años",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "componentes_metalicos",
+          "title": "Componentes metálicos",
+          "items": [
+            {
+              "id": "ganchos_mosquetones_barra_separadora_fun",
+              "label": "Ganchos/Mosquetones/Barra separadora: funcionan correctamente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "escalada_segura_abren_y_cierran_adecuada",
+              "label": "Escalada segura: abren y cierran adecuadamente, sin daños",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "racks_estructuras",
+      "modulo": "seguridad",
+      "nombre": "Revisión de Elementos Estructurales de Almacenamiento",
+      "codigo": "GRL-SH-FO-19",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "condiciones_inseguras_o_danos",
+          "title": "Condiciones inseguras o daños",
+          "items": [
+            {
+              "id": "pasillos_obstruidos",
+              "label": "Pasillos obstruidos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "la_estructura_del_rack_es_inestable",
+              "label": "La estructura del rack es inestable",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "la_estructura_del_rack_se_encuentra_modi",
+              "label": "La estructura del rack se encuentra modificada o improvisada",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "bastidores",
+          "title": "Bastidores",
+          "items": [
+            {
+              "id": "abolladuras_o_golpes_en_puntal",
+              "label": "Abolladuras o golpes en puntal",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "abolladuras_o_golpes_en_anclajes",
+              "label": "Abolladuras o golpes en anclajes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "abolladuras_o_golpes_en_protectores_de_g",
+              "label": "Abolladuras o golpes en protectores de golpes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "vigas",
+          "title": "Vigas",
+          "items": [
+            {
+              "id": "soldadura_de_grapa_agrietada",
+              "label": "Soldadura de grapa agrietada",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "clavijas_y_gatillo_de_seguridad_faltan_o",
+              "label": "Clavijas y gatillo de seguridad: ¿faltan o están dañados?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "carga_maxima_no_disponible_visible_a_sim",
+              "label": "Carga máxima NO disponible/visible a simple vista",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "ventilacion",
+      "modulo": "seguridad",
+      "nombre": "Mantenimiento del Sistema de Ventilación",
+      "codigo": "GRL-SH-FO-3",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "motores",
+          "title": "Motores",
+          "items": [
+            {
+              "id": "funcionando_bien_y_sin_dano_aparente",
+              "label": "Funcionando bien y sin daño aparente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "no_se_escuchan_ruidos_interiores_de_part",
+              "label": "No se escuchan ruidos interiores de partes y rodamientos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "bandas_ajustadas_y_en_buen_estado",
+              "label": "Bandas ajustadas y en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "helices_otras",
+          "title": "Hélices / Otras",
+          "items": [
+            {
+              "id": "estan_completas_y_en_buen_estado",
+              "label": "Están completas y en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "se_mantienen_adecuadamente_pegadas_al_mo",
+              "label": "Se mantienen adecuadamente pegadas al motor",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "se_encuentran_aisladas_acusticamente",
+              "label": "Se encuentran aisladas acústicamente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "existe_una_limitante_que_evita_la_propag",
+              "label": "Existe una limitante que evita la propagación del ruido",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "no_existe_humedad_acumulada_ni_goteras",
+              "label": "No existe humedad acumulada ni goteras",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "alimentacion_electrica",
+          "title": "Alimentación eléctrica",
+          "items": [
+            {
+              "id": "los_cables_estan_aislados_y_en_buen_esta",
+              "label": "Los cables están aislados y en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_conexiones_estan_puestas_a_tierra_y_",
+              "label": "Las conexiones están puestas a tierra y lejos de objetos cortantes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "demuestran_ser_para_el_uso_que_se_les_es",
+              "label": "Demuestran ser para el uso que se les está dando",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "sistemas_fisicos_de_ventilacion",
+          "title": "Sistemas físicos de ventilación",
+          "items": [
+            {
+              "id": "se_encuentran_libres_y_sin_obstruccion",
+              "label": "Se encuentran libres y sin obstrucción",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "permiten_el_libre_paso_del_aire",
+              "label": "Permiten el libre paso del aire",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "estan_limpios_y_en_buen_estado",
+              "label": "Están limpios y en buen estado",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "ausencia_de_dano_grave_en_su_composicion",
+              "label": "Ausencia de daño grave en su composición",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "electrico_seguridad",
+      "modulo": "seguridad",
+      "nombre": "Revisión de Instalaciones Eléctricas",
+      "codigo": "GRL-SH-FO-20",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "datos",
+          "title": "Datos",
+          "items": [
+            {
+              "id": "identificador",
+              "label": "No. de tablero / área revisada",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "id": "instalaciones",
+          "title": "Instalaciones",
+          "items": [
+            {
+              "id": "los_tomacorrientes_estan_en_buen_estado_",
+              "label": "Los tomacorrientes están en buen estado físico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "los_tomacorrientes_no_estan_sobrecargado",
+              "label": "Los tomacorrientes no están sobrecargados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "centros_de_carga_funcionales_termomagnet",
+              "label": "Centros de carga funcionales (termomagnéticos, cuchillas)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "no_hay_improvisaciones_en_los_tomacorrie",
+              "label": "No hay improvisaciones en los tomacorrientes (extensiones)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_luminarias_estan_limpias_y_en_buen_e",
+              "label": "Las luminarias están limpias y en buen estado físico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_luminarias_cuentan_con_tornilleria_p",
+              "label": "Las luminarias cuentan con tornillería, pantallas y soportería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_cajas_de_conexion_cuentan_con_tapa_y",
+              "label": "Las cajas de conexión cuentan con tapa y tornillería",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "las_instalaciones_estan_puestas_a_tierra",
+              "label": "Las instalaciones están puestas a tierra física",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "los_empalmes_y_conexiones_estan_encintad",
+              "label": "Los empalmes y conexiones están encintados o aislados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "hay_puntos_calientes_en_bornes_de_conexi",
+              "label": "¿Hay puntos calientes en bornes de conexión?",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "No",
+                  "sev": "ok"
+                },
+                {
+                  "t": "Sí",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "tableros_electricos",
+          "title": "Tableros eléctricos",
+          "items": [
+            {
+              "id": "el_tablero_esta_en_buen_estado_fisico",
+              "label": "El tablero está en buen estado físico",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "cuenta_con_toda_su_tornilleria_de_sujeci",
+              "label": "Cuenta con toda su tornillería de sujeción",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "todos_los_circuitos_estan_identificados",
+              "label": "Todos los circuitos están identificados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_mecanismo_de_la_puerta_chapa_y_bisagr",
+              "label": "El mecanismo de la puerta (chapa y bisagras) funciona",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_tablero_cuenta_con_tierra_fisica",
+              "label": "El tablero cuenta con tierra física",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_tablero_esta_despejado_y_libre_de_obs",
+              "label": "El tablero está despejado y libre de obstáculos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "se_cuenta_con_diagrama_de_ubicacion_de_l",
+              "label": "Se cuenta con diagrama de ubicación de los tableros",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_tablero_cuenta_con_pictograma_de_peli",
+              "label": "El tablero cuenta con pictograma de peligro",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Sí",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No",
                   "sev": "bad"
                 }
               ],
