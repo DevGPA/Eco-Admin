@@ -612,7 +612,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   const availVeh=cat.vehicles.filter(v=>v.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const sucOpts=(sucursalesUser&&!["admin","analista"].includes(rol))?sucursalesUser:cat.sucursales;
   const[suc,setSuc]=useState(sucOpts[0]||session.sucursal||"");
-  const[ans,setAns]=useState({});const[obs,setObs]=useState("");const[sig,setSig]=useState(null);
+  const[ans,setAns]=useState({});const[obs,setObs]=useState("");const[proxServ,setProxServ]=useState("");const[sig,setSig]=useState(null);
   const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const reqFirma=plantilla.requiereFirma!==false;
@@ -636,7 +636,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
     if(reqFirma&&!sig)return showToast("⚠️ Falta la firma");
     setBusy(true);
     try{
-      const datos={sucursal:suc,responsable:yo?.nombre||session.nombre,answers:ans,obs};
+      const datos={sucursal:suc,responsable:yo?.nombre||session.nombre,answers:ans,obs,proximoServicio:proxServ};
       if(reqFirma)datos.firma=sig;
       if(res){datos.resultado=res.lbl;datos.resultadoNivel=res.nivel;datos.puntaje=res.sum;datos.puntajeMax=res.max;}
       const subido=await api.subirEvidencias("formulario",datos);
@@ -664,6 +664,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
       </div>}
       {isLast&&<div>
         {res&&<div className={"score-bar"+(res.nivel?" "+res.nivel:"")}><div className="score-lbl">{res.lbl}</div><div className="score-det">{res.completo?`Puntaje ${res.sum}/${res.max}${res.bad?` · ${res.bad} fuera de servicio`:""}${res.warn?` · ${res.warn} en atención`:""}`:`Faltan ${res.total-res.answered} de ${res.total} puntos`}</div></div>}
+        <div className="card"><div className="ct">Fecha de próximo servicio</div><input type="date" value={proxServ} onChange={e=>setProxServ(e.target.value)}/></div>
         <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Comentarios (si aplica)"/></div>
         {reqFirma&&<div className="card"><div className="ct">Firma</div>
           <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
@@ -703,6 +704,7 @@ function csvRegistroForm(plantilla,reg){
   ((plantilla&&plantilla.secciones)||[]).forEach(sec=>(sec.items||[]).forEach(item=>{
     filas.push([sec.title||"",item.label||item.id,respuestaTexto(item,reg)]);
   }));
+  if(reg.proximoServicio)filas.push(["Datos","Fecha de próximo servicio",reg.proximoServicio]);
   if(reg.obs)filas.push(["","Observaciones",reg.obs]);
   const fname=(plantilla&&plantilla.clave||"form")+"_"+(reg.id||"reg")+"_"+ymd(reg.fecha);
   csvDownload(fname,["Sección","Campo","Respuesta"],filas);
@@ -751,6 +753,7 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
         if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;
         return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{String(v)}</span></div>;
       })}</div>)}
+      {reg.proximoServicio&&<div className="card"><div className="ct">Próximo servicio</div><div className="dr"><span>Fecha de próximo servicio</span><span>{reg.proximoServicio}</span></div></div>}
       {reg.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{reg.obs}</div></div>}
       {reg.firma&&<div className="card"><div className="ct">Firma</div><img src={reg.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{reg.responsable||reg.solicitante}</b></div></div>}
       {reqAut&&canAuth&&st==="Pendiente"&&<div className="no-print" style={{display:"flex",gap:8}}><button className="bp" style={{flex:1,marginTop:0,background:C.green}} disabled={busy} onClick={()=>onEstado("Aprobado")}>✓ Aprobar</button><button className="bd" style={{flex:1}} disabled={busy} onClick={()=>onEstado("Rechazado")}>✗ Rechazar</button></div>}
@@ -762,7 +765,7 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
 function FormHistory({plantilla,items,loading,onSelect}){
   const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[zip,setZip]=useState(null);
   const list=(items||[]).filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("form_"+plantilla.clave,["Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje"],list.map(r=>[fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:""]));
+  const csv=()=>csvDownload("form_"+plantilla.clave,["Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje","Próximo servicio"],list.map(r=>[fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:"",r.proximoServicio||""]));
   const descargarZip=async()=>{
     if(!list.length||zip)return;
     setZip({i:0,total:list.length});
