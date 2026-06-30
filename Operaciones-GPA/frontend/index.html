@@ -629,6 +629,12 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   const reqFirma=plantilla.requiereFirma!==false;
   const total=secs.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?secs[step-1]:null;
   const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
+  // Validación de completitud: toda pregunta visible debe responderse (fotos/notas opcionales)
+  const[marcar,setMarcar]=useState(false);
+  const REQ=["select","si_no","escala","opna","number","date","taco","vehiculo","text"];
+  const vacio=it=>{const v=ans[it.id];return v==null||v==="";};
+  const faltaItem=it=>condOK(it,getA)&&REQ.includes(it.type)&&vacio(it);
+  const faltanSec=its=>(its||[]).filter(faltaItem);
   // Resultado tipo semáforo a partir de los campos «escala» (réplica del checklist)
   const escalaItems=secs.flatMap(s=>(s.items||[]).filter(it=>it.type==="escala"));
   const calcResultado=()=>{
@@ -643,7 +649,8 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   const res=calcResultado();
   const submit=async()=>{
     if(busy)return;
-    if(!suc)return showToast("⚠️ Falta la sucursal");
+    if(!suc){setStep(0);return showToast("⚠️ Falta la sucursal");}
+    for(let i=0;i<secs.length;i++){const f=faltanSec(secs[i].items);if(f.length){setStep(i+1);setMarcar(true);return showToast("⚠️ Faltan "+f.length+" respuesta(s) en «"+secs[i].title+"». Complétalas para enviar.");}}
     if(reqFirma&&!sig)return showToast("⚠️ Falta la firma");
     setBusy(true);
     try{
@@ -668,10 +675,11 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
         <button className="bp" disabled={!suc} onClick={()=>setStep(1)}>Siguiente →</button>
       </div>}
       {curSec&&<div>
+        {marcar&&faltanSec(curSec.items).length>0&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {faltanSec(curSec.items).length} pregunta(s) por responder (marcadas en rojo).</div>}
         <div className="card"><div className="ct">{curSec.title}</div>
-          {(curSec.items||[]).map(item=>condOK(item,getA)?<CampoForm key={item.id} item={item} getA={getA} setA={setA} availVeh={availVeh}/>:null)}
+          {(curSec.items||[]).map(item=>condOK(item,getA)?<div key={item.id} style={marcar&&faltaItem(item)?{outline:"2px solid "+C.red,outlineOffset:2,borderRadius:8}:null}><CampoForm item={item} getA={getA} setA={setA} availVeh={availVeh}/></div>:null)}
         </div>
-        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>{setMarcar(false);setStep(s=>s-1);}}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0}} onClick={()=>{const f=faltanSec(curSec.items);if(f.length){setMarcar(true);return showToast("⚠️ Faltan "+f.length+" pregunta(s) por responder en esta sección");}setMarcar(false);setStep(s=>s+1);}}>Siguiente →</button></div>
       </div>}
       {isLast&&<div>
         {res&&<div className={"score-bar"+(res.nivel?" "+res.nivel:"")}><div className="score-lbl">{res.lbl}</div><div className="score-det">{res.completo?`Puntaje ${res.sum}/${res.max}${res.bad?` · ${res.bad} fuera de servicio`:""}${res.warn?` · ${res.warn} en atención`:""}`:`Faltan ${res.total-res.answered} de ${res.total} puntos`}</div></div>}
@@ -1124,8 +1132,15 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   const total=sections.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?sections[step-1]:null;
   const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
   const visible=item=>{if(!item.cond)return true;const[cid,cv]=item.cond.split(":");return String(getA(cid))===cv;};
+  const[marcar,setMarcar]=useState(false);
+  // Obligatorio responder las preguntas de revisión (select/taco); fotos y datos de texto opcionales
+  const faltaCL=item=>visible(item)&&["select","taco"].includes(item.type)&&((getA(item.id)??"")==="");
+  const faltanCLSec=its=>(its||[]).filter(faltaCL);
   const submit=async()=>{
-    if(!vehicle||!user||!km||!fotoKm||!sig||busy)return;
+    if(busy)return;
+    if(!vehicle||!user||!km||!fotoKm){setStep(0);return showToast("⚠️ Faltan datos generales (vehículo, responsable, km y foto).");}
+    for(let i=0;i<sections.length;i++){const f=faltanCLSec(sections[i].items);if(f.length){setStep(i+1);setMarcar(true);return showToast("⚠️ Faltan "+f.length+" respuesta(s) en «"+sections[i].title+"». Complétalas para enviar.");}}
+    if(!sig)return showToast("⚠️ Falta la firma");
     setBusy(true);
     try{
       const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig,status:"Aprobado"};
@@ -1151,11 +1166,12 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
         <button className="bp" disabled={!veh||!usr||!km||!fotoKm} onClick={()=>setStep(1)} style={{background:tipo==="semanal"?C.blue:C.green}}>Siguiente →</button>
       </div>}
       {curSec&&<div>
+        {marcar&&faltanCLSec(curSec.items).length>0&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {faltanCLSec(curSec.items).length} respuesta(s) por completar (marcadas en rojo).</div>}
         <div className="card"><div className="ct">{curSec.title}</div>
           {curSec.items.map(item=>{
             if(!visible(item))return null;const v=getA(item.id);
             return(
-              <div key={item.id} style={{marginBottom:10}}>
+              <div key={item.id} style={{marginBottom:10,...(marcar&&faltaCL(item)?{outline:"2px solid "+C.red,outlineOffset:2,borderRadius:8,padding:6}:{})}}>
                 <label>{item.label}</label>
                 {item.type==="select"&&<select value={v||""} onChange={e=>setA(item.id,e.target.value)}><option value="">— Selecciona —</option>{item.opts.map(o=><option key={o}>{o}</option>)}</select>}
                 {item.type==="text"&&<input type="text" value={v||""} onChange={e=>setA(item.id,e.target.value)}/>}
@@ -1168,7 +1184,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
             );
           })}
         </div>
-        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:tipo==="semanal"?C.blue:C.green}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>{setMarcar(false);setStep(s=>s-1);}}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:tipo==="semanal"?C.blue:C.green}} onClick={()=>{const f=faltanCLSec(curSec.items);if(f.length){setMarcar(true);return showToast("⚠️ Faltan "+f.length+" respuesta(s) por completar en esta sección");}setMarcar(false);setStep(s=>s+1);}}>Siguiente →</button></div>
       </div>}
       {isLast&&<div>
         <div className="card"><div className="ct">Observaciones</div><textarea rows={3} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Reportes o comentarios (solo si aplica)"/></div>
@@ -1265,7 +1281,7 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
   const isoSemana=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+3-((d.getDay()+6)%7));const w1=new Date(d.getFullYear(),0,4);return 1+Math.round(((d-w1)/86400000-3+((w1.getDay()+6)%7))/7);};
   const semana=isoSemana(dia);
   const[resps,setResps]=useState({});const[fotos,setFotos]=useState({});const[coments,setComents]=useState({});
-  const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);const[marcar,setMarcar]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(eq));
   // Horas de trabajo: no menor al último ni más de 100 h por encima del último registro
@@ -1276,9 +1292,16 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
   const total=chunks.length+2;const isLast=step===total-1;const curChunk=step>0&&step<total-1?chunks[step-1]:null;const off=(step-1)*CHUNK;
   const setR=(i,v)=>setResps(r=>({...r,[i]:v}));const setF=(i,v)=>setFotos(f=>({...f,[i]:v}));const setC=(i,v)=>setComents(c=>({...c,[i]:v}));
   const probs=Object.entries(resps).filter(([,v])=>v==="P");
-  const canSubmit=!!(eq&&sig&&(estatus!=="Activo"||probs.every(([i])=>fotos[i]&&coments[i])));
+  const todosResp=items.every((_,i)=>resps[i]);  // todas las preguntas O/P/N/A respondidas
+  const canSubmit=!!(eq&&sig&&(estatus!=="Activo"||(todosResp&&probs.every(([i])=>fotos[i]&&coments[i]))));
   const submit=async()=>{
-    if(!canSubmit||busy)return;setBusy(true);
+    if(busy)return;
+    if(estatus==="Activo"&&!todosResp){
+      const i=items.findIndex((_,k)=>!resps[k]);setMarcar(true);setStep(Math.floor(i/CHUNK)+1);
+      return showToast("⚠️ Faltan puntos por responder en el chequeo. Complétalos para enviar.");
+    }
+    if(!canSubmit)return showToast("⚠️ Faltan datos (revisa equipo, firma y fotos de los problemas).");
+    setBusy(true);
     try{
       const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático"};
       const subido=await api.subirEvidencias("montacargas",datos);
@@ -1307,9 +1330,10 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
         <button className="bp" disabled={!eq||!dia||!!horasErr} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
       </div>}
       {curChunk&&estatus==="Activo"&&<div>
+        {marcar&&curChunk.some((_,idx)=>!resps[off+idx])&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {curChunk.filter((_,idx)=>!resps[off+idx]).length} punto(s) por responder (marcados en rojo).</div>}
         <div className="card"><div className="ct">Chequeo Visual — #{off+1} al #{off+curChunk.length}</div>
           {curChunk.map((item,idx)=>{const i=off+idx;const r=resps[i];return(
-            <div key={i} className="ic">
+            <div key={i} className="ic" style={marcar&&!r?{outline:"2px solid "+C.red,outlineOffset:1}:null}>
               <div style={{fontSize:11,fontWeight:700,color,marginBottom:4}}>#{i+1}</div>
               <div style={{fontSize:12,color:"#333",marginBottom:8,lineHeight:1.4}}>{item}</div>
               <div className="rr">{["O","P","N/A"].map(opt=><button key={opt} className={`rb${r===opt?" "+(opt==="O"?"O":opt==="P"?"P":"NA"):""}`} onClick={()=>setR(i,opt)}>{opt}</button>)}</div>
@@ -1323,7 +1347,7 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
             </div>
           );})}
         </div>
-        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:color}} onClick={()=>setStep(s=>s+1)}>Siguiente →</button></div>
+        <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>{setMarcar(false);setStep(s=>s-1);}}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:color}} onClick={()=>{const f=curChunk.filter((_,idx)=>!resps[off+idx]).length;if(f){setMarcar(true);return showToast("⚠️ Faltan "+f+" punto(s) por responder en esta sección");}setMarcar(false);setStep(s=>s+1);}}>Siguiente →</button></div>
       </div>}
       {curChunk&&estatus!=="Activo"&&<div><div style={{textAlign:"center",padding:"20px 0",color:"#888",fontSize:13}}>Equipo inactivo — chequeo omitido.</div><div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(s=>s-1)}>← Atrás</button><button className="bp" style={{flex:1,marginTop:0,background:color}} onClick={()=>setStep(total-1)}>Ir a firma →</button></div></div>}
       {isLast&&<div>
