@@ -244,10 +244,21 @@ async function pdfDeArea(area){
     const ct=card.querySelector(".ct");heading(ct?ct.textContent:"Chequeo visual completo");
     const rows=[...card.children].filter(c=>c.tagName==="DIV"&&!(c.classList&&c.classList.contains("ct")));
     const items=rows.map(r=>{const sp=r.querySelectorAll("span");return {txt:(sp[0]?sp[0].textContent:"").trim(),res:(sp.length?sp[sp.length-1].textContent:"").trim()};});
-    const half=Math.ceil(items.length/2),colW=CW/2-1,lineH=4.3;
+    const half=Math.ceil(items.length/2),colW=CW/2-1,lh=3.3;
     const colColor=res=>res==="O"?[46,107,17]:res==="P"?[163,45,45]:[120,120,120];
-    const cell=(it,x)=>{if(!it)return;doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,colColor(it.res));doc.text((it.res||"").substring(0,3),x,y);doc.setFont("helvetica","normal");doc.setTextColor(70);const t=doc.splitTextToSize(it.txt,colW-9)[0]||"";doc.text(t,x+8,y);};
-    for(let i=0;i<half;i++){ensure(lineH);cell(items[i],M);cell(items[i+half],M+CW/2+1);y+=lineH;}
+    // Líneas envueltas del texto de un ítem (pregunta completa, sin recortar)
+    const lineas=it=>it?doc.splitTextToSize(it.txt,colW-9):[];
+    // Dibuja una celda (resultado + pregunta multilínea) a partir de y0; no mueve y
+    const cell=(it,x,y0)=>{if(!it)return;doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor.apply(doc,colColor(it.res));doc.text((it.res||"").substring(0,3),x,y0);doc.setFont("helvetica","normal");doc.setTextColor(70);doc.text(lineas(it),x+8,y0);};
+    doc.setFontSize(7.5);
+    for(let i=0;i<half;i++){
+      const L=items[i],R=items[i+half];
+      const filas=Math.max(lineas(L).length,lineas(R).length,1);
+      const alto=filas*lh+1.8;
+      ensure(alto);
+      cell(L,M,y);cell(R,M+CW/2+1,y);
+      y+=alto;
+    }
     y+=2;
   };
   // Recorrido del detalle
@@ -1353,7 +1364,7 @@ function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
-      <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"80%",lineHeight:1.4}}>#{i+1} {item.substring(0,50)}{item.length>50?"...":""}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
+      <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"82%",lineHeight:1.4}}>#{i+1} {item}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
       {rec.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{rec.obs}</div></div>}
       {rec.firma&&<div className="card"><div className="ct">Firma</div><img src={rec.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
       <div style={{background:C.greenLt,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.green,marginTop:8,textAlign:"center",fontWeight:600}}>✓ Aprobado (no requiere autorización)</div>
