@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="config.js"></script>
 <script src="gpa-api.js"></script>
 <style>
@@ -201,22 +202,25 @@ async function _aDataURL(url){
   try{const r=await fetch(url);const b=await r.blob();return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}
   catch(e){return null;}
 }
-// Genera el PDF con jsPDF DIRECTAMENTE (texto vectorial + imágenes), recorriendo el
-// contenido del detalle (.pdf-area). NO usa html2canvas → funciona en iPhone/Android/PC
-// (html2canvas rasterizaba en blanco en iOS Safari).
-async function descargarPDFCorp(){
-  const area=document.querySelector(".pdf-area");
-  if(!area)return;
+// Logo cacheado (para no re-descargarlo en exportaciones masivas)
+let _logoCache;
+async function _logoData(){ if(_logoCache===undefined)_logoCache=await _aDataURL("logo.png"); return _logoCache; }
+
+// Construye el PDF corporativo a partir de un elemento .pdf-area y DEVUELVE el doc
+// jsPDF (sin guardarlo). Reutilizable para descarga individual y masiva (ZIP).
+// NO usa html2canvas → funciona en iPhone/Android/PC.
+async function pdfDeArea(area){
+  if(!area)return null;
   const JS=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
-  if(!JS){window.print();return;} // respaldo si no cargó la librería
+  if(!JS)return null;
   const titulo=area.dataset.pdftitle||"Formato GPA";
   const suc=area.dataset.pdfsucursal||"";
   const domicilio=DOMICILIOS[suc]||"";
   const clone=area.cloneNode(true);
   clone.querySelectorAll(".no-print").forEach(n=>n.remove());
   // Imágenes → dataURL (las que no se puedan, se omiten)
-  for(const img of [...clone.querySelectorAll("img")]){const d=await _aDataURL(img.getAttribute("src"));if(d)img.setAttribute("src",d);else img.remove();}
-  const logoData=await _aDataURL("logo.png");
+  for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");const d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);if(d)img.setAttribute("src",d);else img.remove();}
+  const logoData=await _logoData();
 
   const doc=new JS({unit:"mm",format:"a4"});
   const PW=210,PH=297,M=12,CW=PW-2*M;let y=M;
@@ -263,9 +267,57 @@ async function descargarPDFCorp(){
     }
   };
   walk(clone);
+  return doc;
+}
 
+// Descarga individual: genera el PDF del detalle en pantalla y lo guarda.
+async function descargarPDFCorp(){
+  const area=document.querySelector(".pdf-area");
+  if(!area)return;
+  const doc=await pdfDeArea(area);
+  if(!doc){window.print();return;}
+  const titulo=area.dataset.pdftitle||"Formato GPA";
   const fname=titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10)+".pdf";
   try{doc.save(fname);}catch(e){try{window.open(doc.output("bloburl"),"_blank");}catch(e2){alert("No se pudo generar el PDF: "+e.message);}}
+}
+
+// Renderiza un componente de detalle fuera de pantalla, espera a que carguen las
+// imágenes y devuelve su elemento .pdf-area (para generar el PDF en lote).
+async function _areaDeDetalle(render){
+  const host=document.createElement("div");
+  host.style.cssText="position:fixed;left:-99999px;top:0;width:430px;background:#fff;z-index:-1";
+  document.body.appendChild(host);
+  const root=ReactDOM.createRoot(host);
+  await new Promise(res=>{root.render(render());setTimeout(res,60);});
+  const imgs=[...host.querySelectorAll("img")];
+  await Promise.all(imgs.map(im=>im.complete?Promise.resolve():new Promise(r=>{im.onload=im.onerror=r;setTimeout(r,4000);})));
+  const area=host.querySelector(".pdf-area");
+  return {area,cleanup:()=>{try{root.unmount();}catch(e){}host.remove();}};
+}
+
+// Exporta TODOS los registros (de una plantilla dinámica) como un ZIP de PDFs,
+// uno por registro. onProg(i,total) para mostrar avance.
+async function zipPdfsFormularios(plantilla,registros,onProg){
+  const JSZip=window.JSZip;
+  if(!JSZip){alert("No cargó la librería de ZIP. Reintenta en unos segundos.");return;}
+  const zip=new JSZip();const usados={};let ok=0;
+  for(let i=0;i<registros.length;i++){
+    const reg=registros[i];onProg&&onProg(i+1,registros.length);
+    try{
+      const {area,cleanup}=await _areaDeDetalle(()=>React.createElement(FormDinamicoDetail,{reg,plantilla,onBack:()=>{},onEstado:()=>{}}));
+      const doc=await pdfDeArea(area);cleanup();
+      if(!doc)continue;
+      let base=((plantilla&&plantilla.clave)||"reg")+"_"+ymd(reg.fecha)+"_"+(reg.sucursal||"").replace(/[^a-zA-Z0-9]+/g,"")+"_"+(reg.id||i);
+      base=base.replace(/[^a-zA-Z0-9_\-]+/g,"_");
+      if(usados[base])base+="_"+(++usados[base]);else usados[base]=1;
+      zip.file(base+".pdf",doc.output("arraybuffer"));ok++;
+    }catch(e){/* salta el registro problemático */}
+  }
+  if(!ok){alert("No se pudo generar ningún PDF.");return;}
+  const blob=await zip.generateAsync({type:"blob"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");
+  a.href=url;a.download="PDFs_"+((plantilla&&plantilla.clave)||"formularios")+"_"+new Date().toISOString().slice(0,10)+".zip";
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 }
 
 // Fecha local YYYY-MM-DD (para filtros por día) y descarga de CSV genérica
@@ -624,12 +676,63 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   );
 }
 
+// Respuesta de un ítem como texto legible (para CSV por registro)
+function respuestaTexto(item,reg){
+  const a=reg.answers||{};const v=a[item.id];const t=item.type;
+  if(t==="escala"){if(v==null||v==="")return "";const o=(item.opts||[])[v]||{};const nota=a[item.id+"__nota"];const foto=a[item.id+"__foto"];return (o.t||"")+(nota?" — "+nota:"")+(foto?" (con foto de evidencia)":"");}
+  if(t==="opna"){if(v==null||v==="")return "";const com=a[item.id+"__com"];return v+(com?" — "+com:"");}
+  if(t==="fotos")return (v&&v.length)?v.length+" foto(s)":"";
+  if(t==="damage_list")return (v&&v.length)?v.length+" daño(s): "+v.map(d=>d.desc||"sin descripción").join("; "):"";
+  if(t==="photo")return v?"foto adjunta":"";
+  if(t==="taco")return (v!=null&&v!=="")?"Nivel "+v:"";
+  return v==null?"":String(v);
+}
+// Descarga UN registro dinámico como CSV (metadatos + cada campo con su respuesta)
+function csvRegistroForm(plantilla,reg){
+  const nombre=reg.plantillaNombre||(plantilla&&plantilla.nombre)||reg.plantillaClave||"formulario";
+  const filas=[
+    ["Datos","Formulario",nombre],
+    ["Datos","Código",(plantilla&&plantilla.codigo)||""],
+    ["Datos","Fecha",fdt(reg.fecha)],
+    ["Datos","Sucursal",reg.sucursal||""],
+    ["Datos","Responsable",reg.responsable||reg.solicitante||""],
+    ["Datos","Estado",reg.status||""],
+  ];
+  if(reg.resultado)filas.push(["Datos","Resultado",reg.resultado+(reg.puntaje!=null?" ("+reg.puntaje+"/"+reg.puntajeMax+")":"")]);
+  if(reg.autorizadoPor)filas.push(["Datos","Autorizó",reg.autorizadoPor]);
+  ((plantilla&&plantilla.secciones)||[]).forEach(sec=>(sec.items||[]).forEach(item=>{
+    filas.push([sec.title||"",item.label||item.id,respuestaTexto(item,reg)]);
+  }));
+  if(reg.obs)filas.push(["","Observaciones",reg.obs]);
+  const fname=(plantilla&&plantilla.clave||"form")+"_"+(reg.id||"reg")+"_"+ymd(reg.fecha);
+  csvDownload(fname,["Sección","Campo","Respuesta"],filas);
+}
+
+// CSV de UN registro recorriendo el detalle en pantalla (.pdf-area). Sirve para
+// todos los módulos (combustible, reparto, montacargas y formularios dinámicos).
+function csvDetalle(){
+  const area=document.querySelector(".pdf-area");if(!area)return;
+  const titulo=area.dataset.pdftitle||"registro";const suc=area.dataset.pdfsucursal||"";
+  const INL=["SPAN","B","A","STRONG","EM","SMALL","I"];let sccn="";const filas=[];
+  const walk=node=>{for(const el of node.children){
+    if(el.classList&&el.classList.contains("no-print"))continue;
+    if(el.classList&&el.classList.contains("ct")){sccn=(el.textContent||"").trim();continue;}
+    if(el.classList&&el.classList.contains("dr")){const sp=el.querySelectorAll("span");if(sp.length>=2)filas.push([sccn,(sp[0].textContent||"").trim(),(sp[sp.length-1].textContent||"").trim()]);continue;}
+    const kids=[...el.children];
+    if(kids.length>=2&&kids.every(c=>INL.includes(c.tagName))){filas.push([sccn,(kids[0].textContent||"").trim(),kids.slice(1).map(s=>(s.textContent||"").trim()).join(" ")]);continue;}
+    if(kids.length)walk(el);
+  }};
+  walk(area);
+  filas.unshift(["Datos","Formato",titulo]);if(suc)filas.splice(1,0,["Datos","Sucursal",suc]);
+  csvDownload(titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10),["Sección","Campo","Valor"],filas);
+}
+
 // Detalle de un registro dinámico (con PDF corporativo y, si aplica, autorización)
 function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy}){
   const secs=(plantilla&&plantilla.secciones)||[];const st=reg.status||"Aprobado";
   return(
     <div className="pdf-area" data-pdftitle={reg.plantillaNombre||(plantilla&&plantilla.nombre)||"Formulario"} data-pdfsucursal={reg.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{reg.plantillaNombre||(plantilla&&plantilla.nombre)}</div><span className={"bdg "+bcMC(st)}>{st}</span></div>
         <div className="dr"><span>Fecha</span><span>{fdt(reg.fecha)}</span></div>
         <div className="dr"><span>Sucursal</span><span>{reg.sucursal}</span></div>
@@ -657,15 +760,23 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
 
 // Historial de registros de una plantilla (filtro de fecha + CSV)
 function FormHistory({plantilla,items,loading,onSelect}){
-  const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
+  const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[zip,setZip]=useState(null);
   const list=(items||[]).filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const csv=()=>csvDownload("form_"+plantilla.clave,["Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje"],list.map(r=>[fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:""]));
+  const descargarZip=async()=>{
+    if(!list.length||zip)return;
+    setZip({i:0,total:list.length});
+    try{await zipPdfsFormularios(plantilla,list,(i,total)=>setZip({i,total}));}
+    catch(e){alert("No se pudo generar el ZIP: "+e.message);}
+    setZip(null);
+  };
   if(loading)return<div className="spin"/>;
   return(
     <div>
       <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
+      {list.length>0&&<button className="bs" style={{width:"100%",marginBottom:10}} disabled={!!zip} onClick={descargarZip}>{zip?`Generando PDFs… ${zip.i}/${zip.total}`:`⬇ Todos en PDF (ZIP) · ${list.length}`}</button>}
       {list.length===0&&<div className="empty">No hay registros</div>}
-      <div className="card">{list.map(r=><div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.sucursal||"—"}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.responsable||r.solicitante||"—"}{r.resultado?<span className={"bdg eb-"+(r.resultadoNivel==="fuera"?"bad":r.resultadoNivel==="atencion"?"warn":"ok")} style={{marginLeft:6}}>{r.resultado}</span>:null}</div><div className="lis">{fdt(r.fecha)}</div></div>)}</div>
+      <div className="card">{list.map(r=><div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.sucursal||"—"}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.responsable||r.solicitante||"—"}{r.resultado?<span className={"bdg eb-"+(r.resultadoNivel==="fuera"?"bad":r.resultadoNivel==="atencion"?"warn":"ok")} style={{marginLeft:6}}>{r.resultado}</span>:null}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span className="lis">{fdt(r.fecha)}</span><button className="bs" style={{fontSize:11,padding:"3px 9px"}} onClick={e=>{e.stopPropagation();csvRegistroForm(plantilla,r);}}>⬇ CSV</button></div></div>)}</div>
     </div>
   );
 }
@@ -931,7 +1042,7 @@ function SolDetail({sol,rol,refrescar,showToast,onBack}){
   const mapImg=u?`https://staticmap.openstreetmap.de/staticmap.php?center=${u.lat},${u.lng}&zoom=15&size=260x120&markers=${u.lat},${u.lng},red-pushpin`:null;
   return(
     <div className="pdf-area" data-pdftitle={esRep?"Reporte de carga de combustible":"Solicitud de combustible"} data-pdfsucursal={sol.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       {esRep?<>
         <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Generales del Vehículo</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span># Económico</span><span>{sol.economico}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sub-marca</span><span>{sol.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Tanque</span><span>{sol.tanque} L</span></div><div className="dr"><span>Responsable (área)</span><span>{sol.areaResponsable}</span></div><div className="dr"><span>Combustible</span><span>{sol.combustible}</span></div><div className="dr"><span>Precio catálogo</span><span>${sol.precio?.toFixed(2)}</span></div><div className="dr"><span>Producto</span><span>{sol.producto}</span></div></div>
         <div className="card"><div className="ct">Datos de la carga</div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>¿Se llenó el tanque?</span><span>{sol.lleno}</span></div>{sol.fotoAntes&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto km y medidor antes de cargar</div><img src={sol.fotoAntes} style={{width:"100%",borderRadius:8}} alt="antes"/></div>}{sol.fotoDespues&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del medidor al finalizar</div><img src={sol.fotoDespues} style={{width:"100%",borderRadius:8}} alt="despues"/></div>}</div>
@@ -1095,7 +1206,7 @@ function CLDetail({cl,onBack}){
   const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
   return(
     <div className="pdf-area" data-pdftitle="Checklist de reparto" data-pdfsucursal={cl.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><div style={{display:"flex",gap:4}}><span className="bdg dok">✓ Aprobado</span><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
       {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
@@ -1236,7 +1347,7 @@ function MCDetail({rec,canAuth,refrescar,showToast,onBack}){
   const auth=async ok=>{setBusy(true);try{await api.cambiarEstado("montacargas",rec.id,ok?"Aprobado":"Rechazado");showToast(ok?"✓ Checklist aprobado":"✗ Checklist rechazado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
     <div className="pdf-area" data-pdftitle="Checklist de montacargas" data-pdfsucursal={rec.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ Descargar PDF</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"80%",lineHeight:1.4}}>#{i+1} {item.substring(0,50)}{item.length>50?"...":""}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
