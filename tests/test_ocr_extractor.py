@@ -643,3 +643,71 @@ def test_pagina_texto_fv():
     assert p["tipoDoc"] == "FV" and p["rfcEmisor"] == "GPA8402219Y1"
     assert clasificar_pagina(p) == "FV"
     assert p["subtotal"] == 811.66 and p["moneda"] == "USD" and p["tipoCambio"] == 17.45
+
+
+# ── Cross-proveedor: clasificación robusta y layouts variados ─────
+from s3.ocr_extractor import _origen_destino, _texto_util
+
+OSORIO = "TOS0407087T2"   # fletera autorizada
+
+
+def test_clasifica_cp_por_receptor_gpa():
+    # GPA en el bloque RECEPTOR → carta porte (aunque GPA aparezca antes como
+    # remitente de la mercancía y el comprobante diga "Ingreso").
+    lineas = [
+        {"text": "TRANSPORTADORA OSORIO", "top": 0.02, "left": 0.1},
+        {"text": "R.F.C. " + OSORIO, "top": 0.04, "left": 0.1},
+        {"text": "Tipo de Comprobante: Ingreso", "top": 0.06, "left": 0.6},
+        {"text": "RECEPTOR", "top": 0.20, "left": 0.05},
+        {"text": "R.F.C.: GPA8402219Y1", "top": 0.22, "left": 0.05},
+        {"text": "SUBTOTAL", "top": 0.50, "left": 0.80}, {"text": "1,100.00", "top": 0.50, "left": 0.90},
+    ]
+    p = _pagina_desde_texto(lineas)
+    assert clasificar_pagina(p) == "CP"
+    assert p["fletaRFC"] == OSORIO
+    assert p["subtotal"] == 1100.0     # prefiere la etiqueta SUBTOTAL
+
+
+def test_clasifica_fv_por_receptor_cliente():
+    # Receptor = cliente (no GPA) → factura de venta de GPA.
+    lineas = [
+        {"text": "General de Productos para el Agua", "top": 0.02, "left": 0.1},
+        {"text": "Factura - Ingreso", "top": 0.04, "left": 0.6},
+        {"text": "Emisor R.F.C. GPA8402219Y1", "top": 0.06, "left": 0.05},
+        {"text": "RECEPTOR", "top": 0.20, "left": 0.05},
+        {"text": "R.F.C. PEA230227FL6", "top": 0.22, "left": 0.05},
+        {"text": "Subtotal", "top": 0.70, "left": 0.80}, {"text": "609.36", "top": 0.70, "left": 0.90},
+    ]
+    p = _pagina_desde_texto(lineas)
+    assert clasificar_pagina(p) == "FV"
+    assert p["rfcEmisor"] == "GPA8402219Y1"
+    assert p["subtotal"] == 609.36
+
+
+def test_origen_destino_inline():
+    lineas = [{"text": "ORIGEN: CANCUN QROO - DESTINO: MERIDA YUCATAN", "top": 0.4, "left": 0.05},
+              {"text": "ROLANDO CERVERA MALDONADO", "top": 0.42, "left": 0.05}]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert oe == "Quintana Roo" and de == "Yucatan"
+    assert "Maldonado" not in (de or "")     # no arrastra el nombre de la línea siguiente
+
+
+def test_complemento_sin_flete_no_crea_caso_fantasma():
+    # CP con flete + página de complemento (CP sin importe) + FV → UN caso, no
+    # SIN_FV_VINCULADA por contar el complemento como 2ª carta porte.
+    cp_cobro = pag(emisor=OSORIO, receptor=RFC_GPA, subtotal=1100.0, moneda="MXN", folio="A-68947")
+    complemento = pag(emisor=OSORIO, receptor=RFC_GPA, subtotal=None, folio=None)  # UBICACIONES, sin importe
+    factura = fv(subtotal=725.45, folio="FC20109420", tc=17.39)
+    res = emparejar_casos([cp_cobro, complemento, factura], folio_archivo="A68947")
+    assert len(res["casos"]) == 1
+    assert res["casos"][0]["status"] == "OK"
+    assert res["casos"][0]["montoVentaFV"] == 725.45
+
+
+def test_texto_util_detecta_revuelto():
+    legible = ("CARTA PORTE  RECEPTOR R.F.C. GPA8402219Y1  General de Productos "
+               "para el Agua  Subtotal 811.66  IVA 129.87  Total 941.53  "
+               "Moneda USD  Origen Cancun  Destino Merida")
+    assert _texto_util(legible) is True              # tiene RFC y montos
+    assert _texto_util("!#$%&/()=?¡" * 40) is False  # factura con fuente rara (sin RFC ni montos)
+    assert _texto_util("corto") is False             # casi vacío

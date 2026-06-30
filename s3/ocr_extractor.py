@@ -313,11 +313,13 @@ def _parse_textract(resp: dict) -> dict:
         folio = None
     folio = folio or _folio_no_fiscal(lineas)
 
-    # Subtotal: preferir el monto junto a la etiqueta Sub-Total (la Query suele tomar
-    # una línea suelta); caer a la Query solo si no se halló la etiqueta.
-    subtotal = _monto_cerca_de(["SUB-TOTAL", "SUBTOTAL", "SUB TOTAL"], lineas)
-    if subtotal is None:
-        subtotal = _num(campos.get("subtotal"))
+    # Subtotal: por geometría (etiqueta → valor en la misma fila, aunque estén en
+    # líneas separadas, que es lo común en la factura GPA), luego misma-línea, y
+    # por último la Query (poco fiable). Sin esto el OCR de la factura tomaba un
+    # monto suelto y daba R-101 falsos.
+    subtotal = (_valor_etiqueta(["SUB-TOTAL", "SUBTOTAL", "SUB TOTAL", "SUMA"], lineas)
+                or _monto_cerca_de(["SUB-TOTAL", "SUBTOTAL", "SUB TOTAL"], lineas)
+                or _num(campos.get("subtotal")))
 
     return {
         "rfcEmisor":     emisor,
@@ -601,6 +603,15 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         clase = clasificar_pagina(p)
         (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
 
+    # Una carta porte de COBRO trae su flete (Sub-Total). Las páginas del
+    # complemento Carta Porte 3.1 (UBICACIONES, FIGURA TRANSPORTE…) también
+    # clasifican como CP pero NO tienen importe: son continuación, no un 2º caso.
+    # Anclar los casos solo en las CP con flete; si NINGUNA lo trae (no se pudo
+    # leer), usar todas (mejor que perder el caso). Esto evita que un complemento
+    # fantasma rompa el emparejado 1-CP→factura (daba SIN_FV_VINCULADA).
+    cps_con_flete = [p for p in cps if _num(p.get("subtotal")) > 0]
+    cps = cps_con_flete or cps
+
     # Consolidar páginas FV en facturas (una factura multipágina = UNA FV, sin sumar
     # su Sub-Total repetido). Si hay una sola carta porte, todas las páginas FV del
     # PDF son su factura.
@@ -692,8 +703,9 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
 # layout del CP de cada fletera; si no se leen, el caso degrada a EN_REVISION
 # (no a rechazo falso). Probado con CP de Tresguerras; afinar con más proveedores.
 
-# Claves SAT de servicios de transporte (flete, entrega, combustible, ferry…).
-_RE_CLAVE_FLETE = re.compile(r"^\s*7810\d{4}\b")
+# Claves SAT de servicios de transporte (78101xxx flete/entrega/combustible/ferry,
+# 78141xxx servicios de mensajería/entrega a domicilio). Estándar en todo CFDI.
+_RE_CLAVE_FLETE = re.compile(r"\b78(10|14)\d{4}\b")
 
 # Abreviaturas de estado → nombre del catálogo (origen/destino en cartas porte).
 _EDO_ABBR = {
@@ -786,23 +798,71 @@ def _ciudad_estado(txt):
     return (ciudad, estado) if estado else None
 
 
+def _estado_de_token(tok: Optional[str]) -> Optional[str]:
+    """Abreviatura ('YUC','Q.R.','ROO') o nombre ('JALISCO','Quintana Roo') → nombre
+    de estado; el motor (normalizar_destino) lo canoniza al catálogo. None si no aplica."""
+    if not tok:
+        return None
+    t = re.sub(r"[.\s]", "", tok).upper()
+    if t in _EDO_ABBR:
+        return _EDO_ABBR[t]
+    limpio = " ".join(tok.split()).strip(" .-,")
+    return limpio.title() if len(t) >= 4 else None
+
+
+def _part_ciudad_estado(s: str):
+    """'CANCUN QROO' / 'GUADALAJARA, Jalisco' → (ciudad, estado_token)."""
+    s = re.sub(r"^\s*\d+\s+", "", s.strip()).strip(" -,")   # quita prefijos tipo '03 '
+    if "," in s:
+        ciudad, est = s.rsplit(",", 1)
+        return ciudad.strip(), est.strip()
+    parts = s.split()
+    if len(parts) >= 2:
+        return " ".join(parts[:-1]), parts[-1]
+    return s, ""
+
+
 def _origen_destino(lineas):
-    """Origen (izquierda) y destino (derecha) del CP: líneas 'Ciudad, ESTADO' en
-    el tercio superior; en la fila superior, la de menor X es origen, la mayor destino."""
+    """Origen y destino del CP. El layout varía mucho por fletera, así que se
+    intentan varias estrategias; si ninguna funciona, el caso degrada a
+    EN_REVISION (no a rechazo). Devuelve (ciudadO, estadoO, ciudadD, estadoD)."""
+    full = " ".join(ln["text"] for ln in lineas)
+
+    # A) una LÍNEA con "ORIGEN: <ciudad> <ESTADO> ... DESTINO: <ciudad> <ESTADO>"
+    # (se parsea por línea para no arrastrar el nombre del destinatario de la
+    # línea siguiente). Ej. Osorio: "ORIGEN: CANCUN QROO - DESTINO: MERIDA YUCATAN".
+    for ln in lineas:
+        u = ln["text"]
+        if re.search(r"ORIGEN", u, re.I) and re.search(r"DESTINO", u, re.I):
+            m = re.search(r"ORIGEN[:\s]+(.+?)\s*-?\s*DESTINO[:\s]+(.+)", u, re.I)
+            if m:
+                oc, ot = _part_ciudad_estado(m.group(1))
+                dc, dt = _part_ciudad_estado(m.group(2))
+                eo, ed = _estado_de_token(ot), _estado_de_token(dt)
+                if eo and ed:
+                    return (oc.title() or None, eo, dc.title() or None, ed)
+
+    # B) complemento SAT CCP 3.1: "Entidad: XX - Nombre" (1º origen, 2º destino)
+    ents = re.findall(r"Entidad:\s*([A-ZÑ]{2,4})\b", full)
+    if len(ents) >= 2:
+        eo, ed = _estado_de_token(ents[0]), _estado_de_token(ents[1])
+        if eo and ed:
+            return (None, eo, None, ed)
+
+    # C) geométrico: líneas "Ciudad, ESTADO" en el tercio superior (izq=origen)
     cands = []
     for ln in lineas:
         if ln["top"] < 0.30:
             ce = _ciudad_estado(ln["text"])
             if ce:
                 cands.append((ln["top"], ln["left"], ce))
-    if not cands:
-        return (None, None, None, None)
-    cands.sort()
-    fila0 = cands[0][0]
-    fila = sorted((c for c in cands if abs(c[0] - fila0) < 0.02), key=lambda c: c[1]) or cands
-    o = fila[0][2]
-    d = fila[-1][2]
-    return (o[0], o[1], d[0], d[1])   # origenCiudad, origenEstado, destinoCiudad, destinoEstado
+    if cands:
+        cands.sort()
+        fila0 = cands[0][0]
+        fila = sorted((c for c in cands if abs(c[0] - fila0) < 0.02), key=lambda c: c[1])
+        return (fila[0][2][0], fila[0][2][1], fila[-1][2][0], fila[-1][2][1])
+
+    return (None, None, None, None)
 
 
 def _pagina_desde_texto(lineas: list[dict]) -> dict:
@@ -812,23 +872,39 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
     rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
     tipo_doc = _tipo_documento(lineas)
     g = (RFC_GPA or "").strip().upper()
-    gpa_presente = bool(g and g in rfcs_detectados)
+    gpa_en = bool(g and g in rfcs_detectados)
+    fletera = next((r for r in rfcs_detectados if r in FLETERAS_AUTORIZADAS), None)
+    rec_lbl = _rfc_cerca_de(["RECEPTOR"], rfcs_pos, lineas)
 
-    if gpa_presente and tipo_doc == "CP":
-        # CP: GPA es receptor; el emisor es la FLETERA. Usar su RFC solo si una
-        # fletera AUTORIZADA aparece en el texto; si su RFC va en la imagen del
-        # membrete (no extraíble), dejarlo vacío → C4c a revisión. NUNCA tomar el
-        # RFC del cliente/destinatario como fletera (daba R-402 falso).
-        clase, receptor = "CP", g
-        emisor = next((r for r in rfcs_detectados if r in FLETERAS_AUTORIZADAS), "")
-    elif gpa_presente and tipo_doc == "FV":
-        clase, emisor = "FV", g
-        receptor = next((r for r in rfcs_detectados if r != g), None)
+    # Clasificación CP vs FV, en orden de fiabilidad. El señal robusto es QUIÉN
+    # está en el bloque RECEPTOR del CFDI: en una carta porte GPA es el receptor
+    # (la fletera le cobra); en una factura GPA, el receptor es el cliente. NO usar
+    # el orden de aparición (en una CP, GPA sale primero como remitente de la
+    # mercancía → se confundía con emisor), ni solo el tipo (un CFDI de fletera
+    # también es "Ingreso").
+    if rec_lbl and g and rec_lbl == g:
+        clase = "CP"                       # GPA es el RECEPTOR → carta porte
+    elif rec_lbl and rec_lbl != g:
+        clase = "FV"                       # receptor = cliente → factura de GPA
+    elif fletera:
+        clase = "CP"                       # una fletera AUTORIZADA emite → CP
+    elif gpa_en and tipo_doc in ("CP", "FV"):
+        clase = tipo_doc                   # señal textual (CARTA PORTE / Factura)
+    else:
+        e0, r0 = _emisor_receptor(None, None, rfcs_pos, lineas)
+        clase = clasificar_por_rfc(e0, r0)
+
+    if clase == "CP":
+        receptor = g or rec_lbl
+        # Fletera = una AUTORIZADA presente en el texto; si su RFC va en la imagen
+        # del membrete (no extraíble), vacío → C4c revisión. NUNCA tomar el RFC del
+        # cliente/destinatario como fletera (daba R-402 falso).
+        emisor = fletera or ""
+    elif clase == "FV":
+        emisor = g or None
+        receptor = rec_lbl or next((r for r in rfcs_detectados if r != g), None)
     else:
         emisor, receptor = _emisor_receptor(None, None, rfcs_pos, lineas)
-        clase = clasificar_por_rfc(emisor, receptor)
-        if clase not in ("CP", "FV") and tipo_doc in ("CP", "FV"):
-            clase = tipo_doc
 
     tc, moneda = _tc_moneda(lineas)
     full = " ".join(ln["text"] for ln in lineas)
@@ -837,12 +913,17 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
     if mcom:
         coment = mcom.group(0)
 
-    # Subtotal según el rol: CP → flete (suma claves SAT); FV → Sub-Total/Suma.
+    # Subtotal del documento:
+    #  - CP → flete sin IVA: el "Sub-Total" del CP cuando aparece (confiable), o
+    #    la suma de importes por clave SAT de transporte (Tresguerras lo trae en
+    #    la imagen, sin etiqueta de texto).
+    #  - FV → "Sub-Total"/"Suma" de la factura GPA.
     if clase == "CP":
-        subtotal = _flete_sat(lineas)
+        subtotal = (_valor_etiqueta(["SUB-TOTAL", "SUBTOTAL", "SUB TOTAL"], lineas)
+                    or _flete_sat(lineas))
         oC, oE, dC, dE = _origen_destino(lineas)
     else:
-        subtotal = _valor_etiqueta(["SUBTOTAL", "SUB-TOTAL", "SUB TOTAL", "SUMA"], lineas)
+        subtotal = _valor_etiqueta(["SUB-TOTAL", "SUBTOTAL", "SUB TOTAL", "SUMA"], lineas)
         oC = oE = dC = dE = None
 
     return {
@@ -865,10 +946,26 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
     }
 
 
+def _texto_util(texto: str) -> bool:
+    """¿La capa de texto de la página es LEGIBLE? Algunas facturas de GPA traen
+    el texto 'revuelto' (fuente con codificación propia → 0 RFCs, 0 montos, miles
+    de glifos basura) aunque la imagen se vea bien. En ese caso conviene OCR, no
+    leer el texto. Heurística: hay ≥1 RFC o ≥2 montos con decimales reconocibles."""
+    if not texto or len(texto.strip()) < 80:
+        return False
+    t = re.sub(r"[-.\s]", "", texto.upper())
+    tiene_rfc = bool(_RFC_RE.search(t))
+    montos = len(re.findall(r"\d+\.\d{2}", texto))
+    return tiene_rfc or montos >= 2
+
+
 # ── Orquestación end-to-end (S3 → texto/OCR → casos) ──────────────
 def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict:
-    """Por cada página: si tiene CAPA DE TEXTO la lee directo (CFDI digital);
-    si no (escaneo real), rasteriza y usa OCR. Luego arma los casos (1 por CP)."""
+    """Por cada página, lo mejor de ambos mundos:
+      - capa de texto LEGIBLE (CFDI digital) → leer directo (exacto);
+      - texto revuelto o ausente (escaneo, o factura con fuente rara) → OCR.
+    Luego arma los casos (1 por CP). Un PDF puede mezclar ambos (CP en texto +
+    factura GPA que necesita OCR)."""
     import fitz
     paginas = []
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -876,9 +973,9 @@ def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict
         for i, page in enumerate(doc):
             try:
                 texto = page.get_text() or ""
-                if len(texto.strip()) >= 100:   # hay capa de texto → leer directo
+                if _texto_util(texto):           # capa de texto legible → directo
                     paginas.append(_pagina_desde_texto(_lineas_pdf_pagina(page)))
-                else:                            # escaneo → rasterizar + OCR
+                else:                            # revuelto/escaneo → rasterizar + OCR
                     png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
                     paginas.append(ocr_pagina(png, client=client))
             except Exception as exc:   # una página ilegible no tumba el lote
