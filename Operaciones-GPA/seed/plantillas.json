@@ -4935,7 +4935,7 @@
     },
     {
       "clave": "electrico_seguridad",
-      "modulo": "seguridad",
+      "modulo": "sucursales",
       "nombre": "Revisión de Instalaciones Eléctricas",
       "codigo": "GRL-SH-FO-20",
       "activo": true,
@@ -5246,6 +5246,360 @@
                 },
                 {
                   "t": "No",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "electrico_interno",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Equipo Eléctrico Interno",
+      "codigo": "GRL-SH-FO-30",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "verificacion",
+          "title": "Verificación",
+          "items": [
+            {
+              "id": "verificacion_de_cableado_tomacorriente_a",
+              "label": "Verificación de cableado, tomacorriente, apagadores, ductos o canaletas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_voltaje_en_tomacorriente",
+              "label": "Verificar voltaje en tomacorriente",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "los_tomacorrientes_cuentan_con_tierra_fi",
+              "label": "Los tomacorrientes cuentan con tierra física",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "funcionamiento_correcto_de_apagador",
+              "label": "Funcionamiento correcto de apagador",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "el_cableado_esta_oculto_en_ductos_o_cana",
+              "label": "El cableado está oculto en ductos o canaletas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "limpieza_a_tapas_de_contacto_apagador_du",
+              "label": "Limpieza a tapas de contacto, apagador, ductos o canaletas",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "no_existen_conexiones_provisionales_en_t",
+              "label": "No existen conexiones provisionales en tomacorrientes",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "los_tomacorrientes_no_estan_sobrecargado",
+              "label": "Los tomacorrientes no están sobrecargados",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "no_hay_falsos_contactos",
+              "label": "No hay falsos contactos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "conexiones_empalmes_y_cableados_aislados",
+              "label": "Conexiones, empalmes y cableados aislados y protegidos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "electrico_tablero",
+      "modulo": "sucursales",
+      "nombre": "Verificación de Equipo Eléctrico a Tablero",
+      "codigo": "GRL-SH-FO-31",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "tablero_electrico",
+          "title": "Tablero eléctrico",
+          "items": [
+            {
+              "id": "el_tablero_cuenta_con_etiqueta_de_voltaj",
+              "label": "El tablero cuenta con etiqueta de voltaje y nombre de circuitos",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_pastilla_termomagnetica",
+              "label": "Verificar pastilla termomagnética",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_cableado_interno_al_tablero",
+              "label": "Verificar cableado interno al tablero",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "verificar_bornes_de_conexion_puntos_cali",
+              "label": "Verificar bornes de conexión (puntos calientes)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "limpieza_interna_y_externa_al_tablero_ai",
+              "label": "Limpieza interna y externa al tablero (aire comprimido y limpiador dieléctrico)",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            },
+            {
+              "id": "una_vez_limpio_y_armado_el_tablero_queda",
+              "label": "Una vez limpio y armado, el tablero queda en óptimas condiciones",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true,
+              "nota": true
+            }
+          ]
+        },
+        {
+          "id": "cargas_y_alimentacion_de_voltaje",
+          "title": "Cargas y alimentación de voltaje",
+          "items": [
+            {
+              "id": "lectura_volts",
+              "label": "Lectura de voltaje (V~) por la línea de llegada CFE",
+              "type": "text"
+            },
+            {
+              "id": "lectura_amp",
+              "label": "Lectura de corriente (A) por línea",
+              "type": "text"
+            },
+            {
+              "id": "verificar_tabulacion_de_cargas_por_fase",
+              "label": "Verificar tabulación de cargas por fase",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
+                  "sev": "bad"
+                }
+              ],
+              "req": true
+            },
+            {
+              "id": "el_tablero_electrico_cuenta_con_tierra_f",
+              "label": "El tablero eléctrico cuenta con tierra física",
+              "type": "escala",
+              "opts": [
+                {
+                  "t": "Cumple",
+                  "sev": "ok"
+                },
+                {
+                  "t": "No cumple",
                   "sev": "bad"
                 }
               ],
