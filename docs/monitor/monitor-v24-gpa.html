@@ -988,7 +988,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
   <div class="df-presets">
     <button class="df-preset" onclick="setPreset('mesActual',this)">Este mes</button>
     <button class="df-preset" onclick="setPreset('mes',this)">Último mes</button>
-    <button class="df-preset" onclick="setPreset('q1',this)">Q1 2026</button>
+    <button class="df-preset" onclick="setPreset('q1',this)">Q1</button>
     <button class="df-preset active" onclick="setPreset('todo',this)">Todo</button>
   </div>
   <span class="df-status" id="dfStatus"></span>
@@ -1322,20 +1322,7 @@ function rnd(steps,code,rc,crits,meter,msg){
 addL();updT();
 
 // ── DATE RANGE FILTER ──────────────────────────────────────────
-// Cada tarjeta tiene data-fecha con la fecha del documento
-// La asignamos como atributo en las tarjetas del kanban
-
-// Mapa de folios → fechas (del batch de abril)
-const FOLIO_FECHAS = {
-  '116873635': '2026-04-22',
-  'JD322218':  '2026-04-27',
-  '116929225': '2026-04-23',
-  '116468131': '2026-04-14',
-  '116861950': '2026-04-22',
-  'JC748687':  '2026-04-20',
-  'FC20107952':'2026-04-18',
-  'FA10314864':'2026-04-14',
-};
+// Las tarjetas reales traen data-fecha desde el API (renderCard del SDK).
 
 // Rango amplio por defecto (año pasado → fin del próximo año) para que el
 // tablero cargue TODOS los casos reales sin depender de fechas hardcodeadas.
