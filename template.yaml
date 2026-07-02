@@ -35,7 +35,7 @@ Description: >
 # ═══════════════════════════════════════════════════════════════════
 Globals:
   Function:
-    Runtime:      python3.12
+    Runtime:      python3.13
     # x86_64 (no arm64): pymupdf es binario en C y debe compilarse en la MISMA
     # arquitectura del host de build. CloudShell es x86 y no tiene Docker, así que
     # `sam build --use-container` (arm64) no es opción ahí. x86_64 garantiza que el
@@ -376,7 +376,7 @@ Resources:
         Env:      !Ref Env
 
     Metadata:
-      BuildMethod: python3.12      # SAM build empaqueta dependencias
+      BuildMethod: python3.13      # SAM build empaqueta dependencias
 
 
   # ═══════════════════════════════════════════════════════════════
@@ -389,13 +389,13 @@ Resources:
       Description:        boto3 aws-lambda-powertools — Motor GPA v2.4
       ContentUri:         ./layer/
       CompatibleRuntimes:
-        - python3.12
+        - python3.13
       CompatibleArchitectures:
         - x86_64
       RetentionPolicy: Retain
 
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
 
 
   # ═══════════════════════════════════════════════════════════════
