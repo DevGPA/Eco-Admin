@@ -43,13 +43,28 @@ UMBRAL_CARGO_ENVIO     = float(os.environ.get("UMBRAL_CARGO_ENVIO", "0.01"))
 # ── Tipo de cambio de respaldo (solo fallback; la fuente real es la FV/CP) ──
 TIPO_CAMBIO_DEFAULT = float(os.environ.get("TIPO_CAMBIO_DEFAULT", "17.35"))
 
-# ── Back Order ───────────────────────────────────────────────────
-BACKORDER_ENABLED = os.environ.get("BACKORDER_ENABLED", "true").lower() == "true"
+# ── Ruteo por código SAP — clasificación OFICIAL del negocio ─────
+# Fuente: "CLASIFICACION GS.xlsx" (2026-07). Solo DOS evaluaciones:
+#   DISPERSION INTERNA → GS0231 (semanal) y GS0232 (express a sucursales)
+#   VENTA (C1–C5)      → TODO lo demás: GS0229 (BO pagado), GS0230, GS0241-47,
+#                        GS0248 (cargo a cliente), GS0245 (express a cliente),
+#                        GS0750 (mensajería) …
+# Las capas especiales de "back order" (R-050, solo destino) y "cargo por envío"
+# (R-060/061, FV vs CP ±1%) que el motor rutea por GS0229/GS0248 CONTRADICEN la
+# tabla oficial → quedan APAGADAS por defecto, conmutables por entorno si el
+# negocio las reactiva (BACKORDER_ENABLED / CARGO_ENVIO_POR_SAP = "true").
+SAPS_DISPERSION = {
+    s.strip().upper()
+    for s in os.environ.get("SAPS_DISPERSION", "GS0231,GS0232").split(",")
+    if s.strip()
+}
+SAP_DISPERSION   = os.environ.get("SAP_DISPERSION", "GS0231")    # compat (capa 1a)
+SAP_CARGO_ENVIO  = os.environ.get("SAP_CARGO_ENVIO", "GS0248")   # Capa 1b (legacy)
+SAP_BACKORDER    = os.environ.get("SAP_BACKORDER", "GS0229")     # Capa 2  (legacy)
 
-# ── Códigos SAP que dirigen las capas del motor ──────────────────
-SAP_DISPERSION   = os.environ.get("SAP_DISPERSION", "GS0231")    # Capa 1a
-SAP_CARGO_ENVIO  = os.environ.get("SAP_CARGO_ENVIO", "GS0248")   # Capa 1b
-SAP_BACKORDER    = os.environ.get("SAP_BACKORDER", "GS0229")     # Capa 2
+# Capas legacy desactivadas por defecto (la tabla oficial las clasifica VENTA).
+BACKORDER_ENABLED   = os.environ.get("BACKORDER_ENABLED", "false").lower() == "true"
+CARGO_ENVIO_POR_SAP = os.environ.get("CARGO_ENVIO_POR_SAP", "false").lower() == "true"
 
 # ── Detección de "Cargo por envío" (Capa 1b / GS0248) ────────────
 SKU_CARGO_ENVIO  = os.environ.get("SKU_CARGO_ENVIO", "00400000000000")

@@ -1,5 +1,8 @@
-# Tests de ruteo de capas del motor: dispersión (1a), cargo envío (1b),
-# back order (2) y detección de tipo de operación.
+# Tests de ruteo de capas del motor según la clasificación OFICIAL
+# ("CLASIFICACION GS.xlsx"): dispersión = GS0231/GS0232; TODO lo demás = VENTA.
+# Las capas legacy (cargo envío por GS0248, back order por GS0229) quedan off
+# por defecto y solo corren con su flag (CARGO_ENVIO_POR_SAP / BACKORDER_ENABLED).
+import motor.evaluador as ev
 
 
 # ── Happy path → R-000 (venta cliente, todo en orden) ─────────────
@@ -41,8 +44,36 @@ def test_dispersion_fuera_de_gdl_r401d(run_eval, make_cp):
     assert res.codigo_motor == "R-401-D"
 
 
-# ── Capa 1b — Cargo por envío (GS0248) ────────────────────────────
-def test_cargo_envio_dentro_tolerancia_r060(run_eval, make_fv, make_cp):
+# ── GS0232 — Dispersión EXPRESS también es dispersión ─────────────
+def test_dispersion_express_gs0232(run_eval, make_cp):
+    cp = make_cp(codigo_sap="GS0232", destino_estado="CDMX",
+                 tipo_vehiculo="PALLET", numero_pallets=1, flete_mxn=1800.0)
+    res = run_eval(cp=cp)
+    assert res.tipo_operacion == "DISPERSION_INTERNA"
+    assert res.codigo_motor == "R-800"
+
+
+# ── Ruteo OFICIAL: GS0248 y GS0229 se evalúan como VENTA (C1–C5) ──
+def test_gs0248_por_defecto_es_venta(run_eval, make_fv, make_cp):
+    # Con la capa legacy apagada, GS0248 pasa por C1–C5 como cualquier venta.
+    fv = make_fv(partidas=[], subtotal=10000.0, currency="MXN",
+                 sku_id="00400000000000", descripcion="CARGO POR ENVIO")
+    cp = make_cp(codigo_sap="GS0248", flete_mxn=10000.0)
+    res = run_eval(fv=fv, cp=cp)
+    assert res.tipo_operacion == "VENTA_CLIENTE"
+    assert res.codigo_motor not in ("R-060", "R-061")
+
+
+def test_gs0229_por_defecto_es_venta(run_eval, make_cp):
+    cp = make_cp(codigo_sap="GS0229", destino_estado="Jalisco")
+    res = run_eval(cp=cp)
+    assert res.tipo_operacion == "VENTA_CLIENTE"
+    assert res.codigo_motor != "R-050"
+
+
+# ── Capas LEGACY conmutables (solo con su flag activo) ────────────
+def test_cargo_envio_legacy_r060_con_flag(run_eval, make_fv, make_cp, monkeypatch):
+    monkeypatch.setattr(ev, "CARGO_ENVIO_POR_SAP", True)
     fv = make_fv(partidas=[], subtotal=10000.0, currency="MXN",
                  sku_id="00400000000000", descripcion="CARGO POR ENVIO")
     cp = make_cp(codigo_sap="GS0248", flete_mxn=10000.0)
@@ -51,7 +82,8 @@ def test_cargo_envio_dentro_tolerancia_r060(run_eval, make_fv, make_cp):
     assert res.tipo_operacion == "CARGO_POR_ENVIO"
 
 
-def test_cargo_envio_fuera_tolerancia_r061(run_eval, make_fv, make_cp):
+def test_cargo_envio_legacy_r061_con_flag(run_eval, make_fv, make_cp, monkeypatch):
+    monkeypatch.setattr(ev, "CARGO_ENVIO_POR_SAP", True)
     fv = make_fv(partidas=[], subtotal=10000.0, currency="MXN",
                  sku_id="00400000000000", descripcion="CARGO POR ENVIO")
     cp = make_cp(codigo_sap="GS0248", flete_mxn=10500.0)  # delta 500 > 1% (100)
@@ -59,21 +91,23 @@ def test_cargo_envio_fuera_tolerancia_r061(run_eval, make_fv, make_cp):
     assert res.codigo_motor == "R-061"
 
 
-# ── Capa 2 — Back order (GS0229) ──────────────────────────────────
-def test_backorder_destino_ok_r050(run_eval, make_cp):
+def test_backorder_legacy_r050_con_flag(run_eval, make_cp, monkeypatch):
+    monkeypatch.setattr(ev, "BACKORDER_ENABLED", True)
     cp = make_cp(codigo_sap="GS0229", destino_estado="Jalisco")
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-050"
     assert res.tipo_operacion == "BACK_ORDER"
 
 
-def test_backorder_destino_no_cubierto_r301(run_eval, make_cp):
+def test_backorder_legacy_r301_con_flag(run_eval, make_cp, monkeypatch):
+    monkeypatch.setattr(ev, "BACKORDER_ENABLED", True)
     cp = make_cp(codigo_sap="GS0229", destino_estado="Oaxaca")
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-301"
 
 
-def test_backorder_destino_borderline_r302(run_eval, make_cp):
+def test_backorder_legacy_r302_con_flag(run_eval, make_cp, monkeypatch):
+    monkeypatch.setattr(ev, "BACKORDER_ENABLED", True)
     cp = make_cp(codigo_sap="GS0229", destino_estado="Chiapas",
                  destino_ciudad="San Cristóbal")
     res = run_eval(cp=cp)

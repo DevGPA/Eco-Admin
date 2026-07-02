@@ -47,7 +47,7 @@ parameter_overrides = [
   "UmbralFleteCrit=0.30",
   "UmbralTarifaDisp=0.10",
   "UmbralCargoEnvio=0.01",
-  "BackorderEnabled=true",
+  "BackorderEnabled=false",
 ]
 
 tags = "Proyecto=GPA-Admin Env=dev Motor=v2.4"
@@ -77,7 +77,7 @@ parameter_overrides = [
   "UmbralFleteCrit=0.30",
   "UmbralTarifaDisp=0.10",
   "UmbralCargoEnvio=0.01",
-  "BackorderEnabled=true",
+  "BackorderEnabled=false",
 ]
 
 tags = "Proyecto=GPA-Admin Env=staging Motor=v2.4"
@@ -109,7 +109,7 @@ parameter_overrides = [
   "UmbralFleteCrit=0.30",
   "UmbralTarifaDisp=0.10",
   "UmbralCargoEnvio=0.01",
-  "BackorderEnabled=true",
+  "BackorderEnabled=false",
 ]
 
 tags = "Proyecto=GPA-Admin Env=prod Motor=v2.4"

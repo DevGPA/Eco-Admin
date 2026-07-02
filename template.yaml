@@ -157,9 +157,9 @@ Parameters:
 
   BackorderEnabled:
     Type:          String
-    Default:       'true'
+    Default:       'false'
     AllowedValues: ['true', 'false']
-    Description:   Habilitar procesamiento de Back Orders GS0229
+    Description:   Capa legacy Back Order GS0229 (la clasificación oficial lo evalúa como VENTA)
 
   OcrBackend:
     Type:          String

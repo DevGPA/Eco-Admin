@@ -11,8 +11,8 @@ from .catalogos import (
     MONTO_MIN_ACCESORIOS, PROP_MIN_ELEGIBLE,
     UMBRAL_FLETE_WARN, UMBRAL_FLETE_CRIT, UMBRAL_FLETE_BORDERLINE,
     UMBRAL_CARGO_ENVIO, UMBRAL_TARIFA_DISP, BACKORDER_ENABLED,
-    TIPO_CAMBIO_DEFAULT,
-    SAP_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER,
+    CARGO_ENVIO_POR_SAP, TIPO_CAMBIO_DEFAULT,
+    SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER,
     SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
     evaluar_destino, categoria_partida, es_cargo_envio,
@@ -183,8 +183,8 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             fecha_emision  = sol.fecha_emision,
         )
 
-    # ── CAPA 1a — GS0231 DISPERSIÓN INTERNA ──────────────────────
-    if cp.codigo_sap == SAP_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
+    # ── CAPA 1a — DISPERSIÓN INTERNA (GS0231 semanal / GS0232 express) ──
+    if cp.codigo_sap in SAPS_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
         criterios.append(CriterioDetalle(
             "Capa 1a · GS0231", "INFO", cp.codigo_sap,
             "DISPERSION_INTERNA detectada"
@@ -198,8 +198,11 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             return _res("R-401-D")
         return _evaluar_dispersion(cp, tipo_cambio_ref, criterios, _res)
 
-    # ── CAPA 1b — GS0248 CARGO POR ENVÍO ─────────────────────────
-    if (cp.codigo_sap == SAP_CARGO_ENVIO
+    # ── CAPA 1b — GS0248 CARGO POR ENVÍO (legacy, off por defecto) ──
+    # La clasificación oficial evalúa GS0248 como VENTA; esta capa solo corre
+    # si el negocio la reactiva con CARGO_ENVIO_POR_SAP=true.
+    if (CARGO_ENVIO_POR_SAP
+            and cp.codigo_sap == SAP_CARGO_ENVIO
             and fvs
             and es_cargo_envio(fvs[0].sku_id, fvs[0].descripcion)):
         criterios.append(CriterioDetalle(
@@ -549,11 +552,13 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _detectar_tipo(cp: CartaPorte, fvs: list[FacturaVenta]) -> str:
-    if cp.codigo_sap == SAP_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
+    # Tabla oficial: solo GS0231/GS0232 son dispersión; el resto es VENTA.
+    # Los tipos legacy (cargo envío / back order) solo si su capa está activa.
+    if cp.codigo_sap in SAPS_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
         return "DISPERSION_INTERNA"
-    if cp.codigo_sap == SAP_CARGO_ENVIO:
+    if CARGO_ENVIO_POR_SAP and cp.codigo_sap == SAP_CARGO_ENVIO:
         return "CARGO_POR_ENVIO"
-    if cp.codigo_sap == SAP_BACKORDER:
+    if BACKORDER_ENABLED and cp.codigo_sap == SAP_BACKORDER:
         return "BACK_ORDER"
     return "VENTA_CLIENTE"
 

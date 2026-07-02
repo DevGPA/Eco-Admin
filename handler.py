@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.6"   # Tiny Pack autorizada; catálogo de fleteras configurable por entorno (FLETERAS_EXTRA)
+VERSION = "2.4.7"   # Ruteo SAP oficial: dispersión={GS0231,GS0232}; GS0229/GS0248→VENTA (capas legacy off, conmutables)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
