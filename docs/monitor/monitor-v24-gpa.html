@@ -2168,9 +2168,9 @@ async function startEvaluation() {
 // Escape HTML mínimo: todo texto variable (nombres de archivo, mensajes) que
 // se inserte con innerHTML debe pasar por aquí (anti-XSS).
 function _esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  s = String(s == null ? '' : s);
+  return s.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;')
+          .split('"').join('&quot;').split("'").join('&#39;');
 }
 
 // Extrae el código de error que S3 devuelve en el cuerpo XML de un PUT
