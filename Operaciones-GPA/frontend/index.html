@@ -131,6 +131,9 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 .fg .ft{position:relative;width:88px;height:70px}
 .fg .ft img{width:88px;height:70px;object-fit:cover;border-radius:4px;border:1px solid #ccc;display:block}
 .fg .fx{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:${C.red};color:#fff;font-size:13px;line-height:1;cursor:pointer}
+.aviso{background:#f7f9fc;border:1px solid #e2e8f0;border-left:4px solid ${C.blue};border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.aviso-t{font-size:12px;font-weight:700;color:${C.blue};text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.aviso-b{font-size:12.5px;color:#444;line-height:1.5;white-space:pre-wrap}
 .lw{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#f5f6fa}
 .spin{width:34px;height:34px;border:3px solid #ddd;border-top-color:${C.blue};border-radius:50%;animation:sp 1s linear infinite;margin:40px auto}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -556,7 +559,7 @@ function ModMtto({cat,data,rol,sucursalesUser,session,refrescar,showToast}){
 // tipos de campo de CLForm/MCForm, FotoCampo, useSig, FiltroFechas y el PDF.
 const ICON_DOC="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
 const SINO_OPTS=["Sí","No"];
-const TIPOS_CAMPO=["select","si_no","text","textarea","number","date","taco","vehiculo","photo","fotos","damage_list","opna","escala"];
+const TIPOS_CAMPO=["select","si_no","text","textarea","number","date","taco","vehiculo","photo","fotos","damage_list","opna","escala","aviso"];
 const SEV_BADGE={ok:"OK",warn:"Atención",bad:"Fuera de servicio"};
 const SEV_VAL={ok:2,warn:1,bad:0};
 // Evalúa la condición "campo:valor" de un ítem contra las respuestas actuales
@@ -565,6 +568,9 @@ const condOK=(item,getA)=>{if(!item.cond)return true;const i=String(item.cond).i
 // Un campo del formulario dinámico (mismo vocabulario de tipos que los checklists)
 function CampoForm({item,getA,setA,availVeh}){
   const v=getA(item.id);const t=item.type;
+  if(t==="aviso"){
+    return(<div className="aviso">{item.label&&<div className="aviso-t">{item.label}</div>}<div className="aviso-b">{item.texto||item.opts?.join("\n")||""}</div></div>);
+  }
   if(t==="escala"){
     const nota=getA(item.id+"__nota");const foto=getA(item.id+"__foto");const opts=item.opts||[];
     const sel=(v!=null&&v!=="")?opts[v]:null;const esBad=!!(sel&&sel.sev==="bad");
@@ -633,7 +639,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   const[marcar,setMarcar]=useState(false);
   const REQ=["select","si_no","escala","opna","number","date","taco","vehiculo","text"];
   const vacio=it=>{const v=ans[it.id];return v==null||v==="";};
-  const faltaItem=it=>condOK(it,getA)&&REQ.includes(it.type)&&vacio(it);
+  const faltaItem=it=>condOK(it,getA)&&REQ.includes(it.type)&&!it.opcional&&vacio(it);
   const faltanSec=its=>(its||[]).filter(faltaItem);
   // Resultado tipo semáforo a partir de los campos «escala» (réplica del checklist)
   const escalaItems=secs.flatMap(s=>(s.items||[]).filter(it=>it.type==="escala"));
@@ -764,6 +770,7 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
       </div>
       {reg.resultado&&<div className={"score-bar"+(reg.resultadoNivel?" "+reg.resultadoNivel:"")}><div className="score-lbl">{reg.resultado}</div>{reg.puntaje!=null&&<div className="score-det">Puntaje {reg.puntaje}/{reg.puntajeMax}</div>}</div>}
       {secs.map(sec=><div key={sec.id||sec.title} className="card"><div className="ct">{sec.title}</div>{(sec.items||[]).map(item=>{
+        if(item.type==="aviso")return<div key={item.id} className="aviso">{item.label&&<div className="aviso-t">{item.label}</div>}<div className="aviso-b">{item.texto||(item.opts||[]).join("\n")}</div></div>;
         const v=reg.answers?.[item.id];
         if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
         if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];const efoto=reg.answers?.[item.id+"__foto"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}{efoto&&<img src={efoto} style={{width:"100%",maxWidth:240,borderRadius:6,marginTop:4}} alt="evidencia del daño"/>}</div>;}

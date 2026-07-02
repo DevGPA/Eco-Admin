@@ -1,5 +1,12 @@
 {
-  "modulos": [],
+  "modulos": [
+    {
+      "clave": "responsivas",
+      "nombre": "Responsivas",
+      "orden": 200,
+      "activo": true
+    }
+  ],
   "plantillas": [
     {
       "clave": "insp_patines",
@@ -5604,6 +5611,162 @@
                 }
               ],
               "req": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "clave": "carta_responsiva",
+      "modulo": "responsivas",
+      "nombre": "Carta Responsiva de Equipo",
+      "codigo": "Rev. 03",
+      "activo": true,
+      "requiereFirma": true,
+      "requiereAutorizacion": false,
+      "secciones": [
+        {
+          "id": "datos_receptor",
+          "title": "Datos del receptor",
+          "items": [
+            {
+              "id": "nombre",
+              "label": "Nombre de quien recibe",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "correo",
+              "label": "Correo",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "activo_sap",
+              "label": "Activo SAP",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "fecha_entrega",
+              "label": "Fecha de entrega",
+              "type": "date",
+              "req": true
+            }
+          ]
+        },
+        {
+          "id": "equipo",
+          "title": "Equipo entregado",
+          "items": [
+            {
+              "id": "tipo_equipo",
+              "label": "Tipo de equipo",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "condicion",
+              "label": "Condición física",
+              "type": "select",
+              "req": true,
+              "opts": [
+                "Nuevo",
+                "Usado"
+              ]
+            },
+            {
+              "id": "marca",
+              "label": "Marca",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "modelo",
+              "label": "Modelo",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "serie",
+              "label": "No. de serie",
+              "type": "text",
+              "req": true
+            },
+            {
+              "id": "ram",
+              "label": "RAM",
+              "type": "text",
+              "req": false,
+              "opcional": true
+            },
+            {
+              "id": "cpu",
+              "label": "CPU",
+              "type": "text",
+              "req": false,
+              "opcional": true
+            },
+            {
+              "id": "so",
+              "label": "Sistema operativo",
+              "type": "text",
+              "req": false,
+              "opcional": true
+            },
+            {
+              "id": "hdd",
+              "label": "Disco duro (HDD)",
+              "type": "text",
+              "req": false,
+              "opcional": true
+            },
+            {
+              "id": "ssd",
+              "label": "SSD",
+              "type": "text",
+              "req": false,
+              "opcional": true
+            }
+          ]
+        },
+        {
+          "id": "complementos",
+          "title": "Complementos",
+          "items": [
+            {
+              "id": "complementos",
+              "label": "Complementos entregados (cargador, mouse, mochila, etc.) y su estado",
+              "type": "textarea"
+            }
+          ]
+        },
+        {
+          "id": "detalles",
+          "title": "Detalles físicos (si el equipo es usado)",
+          "items": [
+            {
+              "id": "fotos_detalles",
+              "label": "Fotos de los detalles físicos del equipo",
+              "type": "fotos"
+            }
+          ]
+        },
+        {
+          "id": "compromiso",
+          "title": "Compromiso y responsabilidades",
+          "items": [
+            {
+              "id": "av_constancia",
+              "type": "aviso",
+              "label": "Constancia de entrega",
+              "texto": "Por medio de la presente hago constar que se me hace entrega del equipo descrito por parte de General de Productos para el Agua, S.A. de C.V., el cual me comprometo a cuidar, mantener en buen estado y utilizar única y exclusivamente para asuntos relacionados con mi actividad laboral. En caso de su extravío, daño o uso inadecuado, me responsabilizo a pagar el costo de reparación o la reposición del equipo."
+            },
+            {
+              "id": "av_responsabilidades",
+              "type": "aviso",
+              "label": "Responsabilidades a cumplir",
+              "texto": "a) No debo utilizar el equipo de cómputo que recibo para uso y trabajos personales, familiares o de terceros; o para desarrollar proyectos ajenos a esta empresa.\n\nb) La información contenida en el equipo será exclusivamente de naturaleza laboral de acuerdo con el puesto asignado, y propiedad exclusiva de la empresa General de Productos para el Agua, S.A. de C.V.\n\nc) No debo realizar cambios a los sistemas instalados, ni eliminar o instalar software no autorizado por Sistemas.\n\nd) Únicamente el responsable del área de Sistemas o proveedores previamente autorizados por la Dirección podrán instalar y configurar software y hardware.\n\ne) En todo momento el responsable de la integridad física y lógica del equipo será única y exclusivamente la persona a quien fue asignado.\n\nf) Tomar las medidas de protección y seguridad para evitar la sustracción del equipo, en su resguardo y traslado: no dejarlo fuera del área de trabajo, en áreas públicas, visible al interior del vehículo, etc.\n\ng) Reportar inmediatamente cualquier falla o desperfecto del equipo al Responsable de Sistemas.\n\nh) El equipo estará a disposición para revisión cuando el Responsable de Sistemas lo requiera (estado, funcionamiento, buen uso y auditorías de software).\n\nj) Permitir el respaldo de la información a través del Responsable de Sistemas. Solo la carpeta DOCUMENTOS será respaldada; Sistemas no se responsabiliza de información fuera de esa carpeta.\n\nk) Los daños por uso rudo, mal trato, golpes o caídas, intervención sin autorización, derrame de líquidos, negligencia o accidentes no se consideran fallas propias del equipo; su costo se cobrará al usuario responsable.\n\nEsta responsiva es una actualización y excluye cualquier otra firmada con anterioridad."
             }
           ]
         }
