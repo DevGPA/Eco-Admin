@@ -1802,7 +1802,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (t === 'fv') fvN++;
       else cpN++;
       var base = f.name.replace(/\.(pdf|xml)$/i, '');
-      html += '<div class="euz-file"><span class="ef-type ' + t + '">' + typeLabel(t) + '</span>' + base + '</div>';
+      // _esc: el nombre del archivo lo elige el usuario → nunca insertarlo como HTML
+      html += '<div class="euz-file"><span class="ef-type ' + t + '">' + typeLabel(t) + '</span>' + _esc(base) + '</div>';
     }
     filesEl.innerHTML = html;
     wrapEl.style.display = 'flex';
@@ -1878,9 +1879,9 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (r.codigoMotor==='SIN_CP'||r.codigoMotor==='ERROR'||r.codigoMotor==='CONN_ERR') cc='stop';
       else if (r.codigoMotor.match && r.codigoMotor.match(/^R-(1|2|3)/)) cc='stop';
       else if (r.codigoMotor.match && r.codigoMotor.match(/^R-(5|8)/)) cc='warn';
-      h += '<div class="er-item"><span class="er-folio">' + r.folioCP +
-           '</span><span class="er-code ' + cc + '">' + r.codigoMotor +
-           '</span><span class="er-concept">' + r.concepto + '</span></div>';
+      h += '<div class="er-item"><span class="er-folio">' + _esc(r.folioCP) +
+           '</span><span class="er-code ' + cc + '">' + _esc(r.codigoMotor) +
+           '</span><span class="er-concept">' + _esc(r.concepto) + '</span></div>';
     }
     grid.innerHTML = h;
 
@@ -2162,6 +2163,14 @@ async function startEvaluation() {
     setTimeout(() => us.style.display = 'none', 350);
     refrescarTableroVariasVeces();
   }, 1200);
+}
+
+// Escape HTML mínimo: todo texto variable (nombres de archivo, mensajes) que
+// se inserte con innerHTML debe pasar por aquí (anti-XSS).
+function _esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Extrae el código de error que S3 devuelve en el cuerpo XML de un PUT
