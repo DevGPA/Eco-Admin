@@ -667,6 +667,10 @@ class GpaMonitorBridge {
       cardClass = 'navy';
     else if (codigoRaw === 'R-060')
       cardClass = 'gold';
+    else if (estado === 'EN_REVISION' || estado === 'ESCALADA')
+      // Códigos no-R (SIN_TIPO_CAMBIO, SIN_FV_VINCULADA, OCR_FALLIDO…) y casos a
+      // revisión (R-402 ilegible, etc.): ámbar, no verde — verde engaña al aprobador.
+      cardClass = 'warn';
 
     // Clase del badge
     let cuClass = 'a'; // aprobada por default
