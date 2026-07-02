@@ -330,7 +330,12 @@ def _parse_textract(resp: dict) -> dict:
         "moneda":        (campos.get("moneda") or "").upper() or None,
         "tipoCambio":    _num(campos.get("tipoCambio")) or None,
         "folio":         folio,
-        "fecha":         _fecha_iso(campos.get("fecha")),
+        # Fecha: la Query es poco fiable → reforzar con el texto crudo (primero
+        # las líneas con la etiqueta FECHA, luego cualquier fecha del documento).
+        "fecha":         (_fecha_iso(campos.get("fecha"))
+                          or _fecha_iso(" ".join(ln["text"] for ln in lineas
+                                                 if "FECHA" in ln["text"].upper()))
+                          or _fecha_iso(" ".join(ln["text"] for ln in lineas))),
         "comentarios":   campos.get("comentarios"),
         "origenEstado":  campos.get("origenEstado"),
         "origenCiudad":  campos.get("origenCiudad"),

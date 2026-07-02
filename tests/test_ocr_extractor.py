@@ -711,3 +711,13 @@ def test_texto_util_detecta_revuelto():
     assert _texto_util(legible) is True              # tiene RFC y montos
     assert _texto_util("!#$%&/()=?¡" * 40) is False  # factura con fuente rara (sin RFC ni montos)
     assert _texto_util("corto") is False             # casi vacío
+
+
+def test_parse_textract_fecha_desde_texto_crudo():
+    # La Query de fecha falla → se recupera del texto ("FECHA DE EMISION dd/mm/yyyy").
+    resp = _resp(lines=[
+        _line("CARTA PORTE DE INGRESOS", top=0.02),
+        _line("FECHA DE EMISION 03/06/2026", top=0.08),
+        _line("RFC: GPA8402219Y1", top=0.20),
+    ])
+    assert _parse_textract(resp)["fecha"] == "2026-06-03"
