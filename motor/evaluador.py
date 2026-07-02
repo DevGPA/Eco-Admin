@@ -356,6 +356,21 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     flete_usd  = cp.subtotal_sin_impuestos / tc_ref
     pct_flete  = flete_usd / monto_usd if monto_usd else 0
 
+    # ── Salvaguarda: flete MAYOR que el pedido ────────────────────
+    # Un flete que supera el monto de la venta es atípico: o la extracción
+    # leyó mal, o es un caso especial real (cargo al cliente, garantía,
+    # complemento — p. ej. FV de $0.07 con flete de $8). Auto-rechazarlo por
+    # R-101 esconde el caso; debe decidirlo un humano.
+    if monto_usd > 0 and flete_usd > monto_usd and monto_usd < MONTO_MIN_GENERAL:
+        criterios.append(CriterioDetalle(
+            "C1 Monto", "WARN",
+            f"${monto_usd:.2f} < flete ${flete_usd:.2f}",
+            "Flete mayor que el pedido: caso atípico → revisión manual"
+        ))
+        res = _res("R-101")
+        res.estado = "EN_REVISION"
+        return res
+
     # ── C1 Monto ─────────────────────────────────────────────────
     if tiene_costal:
         if monto_usd < MONTO_MIN_COSTAL:

@@ -793,8 +793,10 @@ def _tc_moneda(lineas):
 
 
 def _ciudad_estado(txt):
-    """'VALLADOLID, YUC.' → ('Valladolid','Yucatán'); None si no es ciudad,estado."""
-    m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]+?),\s*([A-ZÑ][A-ZÑ. ]{1,5}?)\.?$", txt.strip())
+    """'VALLADOLID, YUC.' → ('Valladolid','Yucatán'); tolera sufijo ', MEX' de las
+    filas de domicilio ('GUADALAJARA, JAL., MEX'). None si no es ciudad,estado."""
+    t = re.sub(r",?\s*(MEX|MEXICO|MÉXICO)\.?$", "", txt.strip(), flags=re.I).strip().rstrip(",")
+    m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]+?),\s*([A-ZÑ][A-ZÑ. ]{1,5}?)\.?$", t)
     if not m:
         return None
     ciudad = " ".join(m.group(1).split()).title()
@@ -854,7 +856,12 @@ def _origen_destino(lineas):
         if eo and ed:
             return (None, eo, None, ed)
 
-    # C) geométrico: líneas "Ciudad, ESTADO" en el tercio superior (izq=origen)
+    # C) geométrico: líneas "Ciudad, ESTADO" en el tercio superior. Origen a la
+    # IZQUIERDA, destino a la DERECHA. La fila superior puede traer la TERMINAL
+    # de la fletera ("GONZALEZ GALLO, JAL."), no la ciudad; por eso, para el
+    # origen se prefiere el candidato izquierdo cuya ciudad mapea a una plaza
+    # GPA (sucursal_de_origen), p. ej. la fila del domicilio del remitente
+    # ("GUADALAJARA, JAL., MEX").
     cands = []
     for ln in lineas:
         if ln["top"] < 0.30:
@@ -863,6 +870,13 @@ def _origen_destino(lineas):
                 cands.append((ln["top"], ln["left"], ce))
     if cands:
         cands.sort()
+        izq = [c for c in cands if c[1] < 0.45]
+        der = [c for c in cands if c[1] >= 0.45]
+        ori = next((c for c in izq if sucursal_de_origen(c[2][0], c[2][1])), None) \
+              or (izq[0] if izq else None)
+        dst = der[0] if der else None
+        if ori and dst:
+            return (ori[2][0], ori[2][1], dst[2][0], dst[2][1])
         fila0 = cands[0][0]
         fila = sorted((c for c in cands if abs(c[0] - fila0) < 0.02), key=lambda c: c[1])
         return (fila[0][2][0], fila[0][2][1], fila[-1][2][0], fila[-1][2][1])

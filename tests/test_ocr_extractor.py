@@ -721,3 +721,23 @@ def test_parse_textract_fecha_desde_texto_crudo():
         _line("RFC: GPA8402219Y1", top=0.20),
     ])
     assert _parse_textract(resp)["fecha"] == "2026-06-03"
+
+
+def test_ciudad_estado_tolera_sufijo_mex():
+    from s3.ocr_extractor import _ciudad_estado
+    assert _ciudad_estado("GUADALAJARA, JAL., MEX") == ("Guadalajara", "Jalisco")
+    assert _ciudad_estado("ACAPULCO, GRO., MEX") == ("Acapulco", "Guerrero")
+
+
+def test_origen_prefiere_ciudad_que_mapea_a_sucursal():
+    # Fila superior = TERMINAL de la fletera ("GONZALEZ GALLO, JAL."), no la
+    # ciudad; el domicilio del remitente trae la real (GUADALAJARA → GDL).
+    lineas = [
+        {"text": "GONZALEZ GALLO, JAL.", "top": 0.14, "left": 0.12},
+        {"text": "ACAPULCO, GRO.", "top": 0.14, "left": 0.58},
+        {"text": "GUADALAJARA, JAL., MEX", "top": 0.22, "left": 0.06},
+        {"text": "ACAPULCO, GRO., MEX", "top": 0.22, "left": 0.51},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert oc == "Guadalajara" and oe == "Jalisco"     # no "Gonzalez Gallo"
+    assert de == "Guerrero"

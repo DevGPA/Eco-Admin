@@ -148,3 +148,23 @@ def test_borderline_flete_alto_r601(run_eval, make_cp, flete_para_pct):
                  flete_mxn=flete_para_pct(0.20))   # > 15%
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-601"
+
+
+def test_flete_mayor_que_pedido_va_a_revision(run_eval, make_fv, make_cp):
+    # Caso real (lote 29-06): FV de $0.07 USD con flete de $143 MXN. Flete >
+    # pedido = atípico (cargo al cliente/garantía o extracción dudosa) →
+    # revisión humana, no auto-rechazo R-101.
+    fv = make_fv(subtotal=0.07, partidas=[])
+    cp = make_cp(flete_mxn=143.0)
+    res = run_eval(fv=fv, cp=cp)
+    assert res.codigo_motor == "R-101"
+    assert res.estado == "EN_REVISION"
+
+
+def test_monto_chico_con_flete_menor_si_rechaza(run_eval, make_fv, make_cp):
+    # Pedido chico ($186) con flete menor ($53 USD) → R-101 legítimo.
+    fv = make_fv(subtotal=186.82, partidas=[])
+    cp = make_cp(flete_mxn=930.0)   # ~53 USD
+    res = run_eval(fv=fv, cp=cp)
+    assert res.codigo_motor == "R-101"
+    assert res.estado == "AUTO_RECHAZADA"
