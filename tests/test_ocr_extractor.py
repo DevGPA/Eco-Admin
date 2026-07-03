@@ -772,3 +772,25 @@ def test_fletera_nombre_ambiguo_no_asigna():
     assert fletera_por_nombre("factura de TRES GUERRAS con TINY PACK") == ""
     assert fletera_por_nombre("embarcar por TRES GUERRAS") == "ACT68080665A"
     assert fletera_por_nombre("calle alvaro obregon 123") == ""   # calle ≠ fletera
+
+
+def test_origen_destino_formato_estrella_sin_coma():
+    # Estrella: "MONTERREY NUEVO LEON" (sin coma, estado completo), repetida →
+    # plaza única inequívoca (entrega local) → origen=destino=Monterrey/NL.
+    lineas = [
+        {"text": "MONTERREY NUEVO LEON", "top": 0.10, "left": 0.34},
+        {"text": "MONTERREY NUEVO LEON", "top": 0.13, "left": 0.35},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert (oc, oe) == ("Monterrey", "Nuevo Leon")
+    assert (dc, de) == ("Monterrey", "Nuevo Leon")
+
+
+def test_origen_destino_estrella_ambiguo_no_adivina():
+    # Dos plazas DISTINTAS sin etiquetas → no se adivina cuál es cuál.
+    lineas = [
+        {"text": "MONTERREY NUEVO LEON", "top": 0.10, "left": 0.34},
+        {"text": "GUADALAJARA JALISCO", "top": 0.13, "left": 0.35},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert oe is None and de is None

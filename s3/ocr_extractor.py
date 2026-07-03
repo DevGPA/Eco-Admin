@@ -888,6 +888,27 @@ def _origen_destino(lineas):
         if eo and ed:
             return (None, eo, None, ed)
 
+    # B2) formato Estrella: "CIUDAD ESTADO_COMPLETO" sin coma ("MONTERREY NUEVO
+    # LEON"). Solo se usa si es INEQUÍVOCO (todas las coincidencias son la misma
+    # plaza — típico de entrega local); con plazas distintas no se adivina cuál
+    # es origen y cuál destino → queda para revisión humana.
+    plazas = set()
+    for ln in lineas:
+        if ln["top"] < 0.35:
+            m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]{2,25}?)\s+"
+                         r"(NUEVO LEON|NUEVO LEÓN|QUINTANA ROO|BAJA CALIFORNIA SUR|"
+                         r"BAJA CALIFORNIA|SAN LUIS POTOSI|SAN LUIS POTOSÍ|JALISCO|"
+                         r"YUCATAN|YUCATÁN|GUERRERO|VERACRUZ|PUEBLA|GUANAJUATO|"
+                         r"QUERETARO|QUERÉTARO|MICHOACAN|MICHOACÁN|NAYARIT|SINALOA|"
+                         r"SONORA|MORELOS|AGUASCALIENTES|CHIHUAHUA|DURANGO|ZACATECAS|"
+                         r"HIDALGO|CAMPECHE|TABASCO|COLIMA|COAHUILA|TAMAULIPAS|"
+                         r"CHIAPAS|OAXACA)\s*$", ln["text"].strip().upper())
+            if m:
+                plazas.add((m.group(1).title().strip(), m.group(2).title()))
+    if len(plazas) == 1:
+        (ciu, edo), = plazas
+        return (ciu, edo, ciu, edo)
+
     # C) geométrico: líneas "Ciudad, ESTADO" en el tercio superior. Origen a la
     # IZQUIERDA, destino a la DERECHA. La fila superior puede traer la TERMINAL
     # de la fletera ("GONZALEZ GALLO, JAL."), no la ciudad; por eso, para el
