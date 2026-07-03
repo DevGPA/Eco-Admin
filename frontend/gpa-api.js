@@ -737,6 +737,10 @@ class GpaMonitorBridge {
     set('kpi-revision',  kpis.en_revision || 0);
     set('kpi-pct',       (kpis.pct_aprobacion || 0) + '%');
     set('kpi-flete-pct', (kpis.pct_flete_global || 0) + '%');
+    // Tarjetas que antes quedaban vacías (el backend ya las calcula)
+    set('kpi-dispersiones', kpis.dispersiones || 0);
+    set('kpi-fleteras',     kpis.fleteras_activas || 0);
+    set('kpi-tc',           kpis.tc_referencia ? Number(kpis.tc_referencia).toFixed(2) : '—');
   }
 
   updateCounts(data) {

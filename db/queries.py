@@ -91,6 +91,9 @@ def get_kpis_mes(anio: int, mes: int) -> dict:
     totales: dict = {}
     monto_total_usd = 0.0
     flete_total_usd = 0.0
+    dispersiones = 0
+    fleteras = set()
+    tc_ultimo = (None, 0.0)   # (fechaEvaluacion, tipoCambioRef) más reciente
 
     for estado in ESTADOS_KANBAN:
         items = get_por_rango_fecha(estado, desde, hasta)
@@ -98,6 +101,15 @@ def get_kpis_mes(anio: int, mes: int) -> dict:
         for item in items:
             monto_total_usd += float(item.get("montoBaseUSD", 0) or 0)
             flete_total_usd += float(item.get("fleteBaseUSD", 0) or 0)
+            # Dispersiones internas (R-800/R-801/R-802) del mes
+            if str(item.get("codigoMotor", "")).startswith("R-8"):
+                dispersiones += 1
+            if item.get("fletaRFC"):
+                fleteras.add(item["fletaRFC"])
+            tc = float(item.get("tipoCambioRef", 0) or 0)
+            fev = str(item.get("fechaEvaluacion", ""))
+            if tc > 0 and fev > (tc_ultimo[0] or ""):
+                tc_ultimo = (fev, tc)
 
     total = sum(totales.values())
     aprobadas = totales.get("AUTO_APROBADA", 0) + totales.get("APROBADA_MANUAL", 0)
@@ -117,6 +129,10 @@ def get_kpis_mes(anio: int, mes: int) -> dict:
         "pct_flete_global":round(
             flete_total_usd / monto_total_usd * 100, 2
         ) if monto_total_usd else 0,
+        # KPIs del encabezado del monitor (tarjetas que antes quedaban en 0/—)
+        "dispersiones":     dispersiones,
+        "fleteras_activas": len(fleteras),
+        "tc_referencia":    tc_ultimo[1] or None,   # el TC de la evaluación más reciente
     }
 
 

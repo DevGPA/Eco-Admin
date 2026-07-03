@@ -70,3 +70,29 @@ def test_paginacion_acumula(monkeypatch):
     monkeypatch.setattr(queries, "_table", lambda: p)
     items = queries.get_cola_revision()
     assert len(items) == 2
+
+
+def test_kpis_dispersiones_fleteras_tc(monkeypatch):
+    # Las 3 tarjetas KPI que quedaban en 0/—: dispersiones (R-8xx), fleteras
+    # activas (RFC únicos) y T/C de referencia (el de la evaluación más reciente).
+    items_por_estado = {
+        "AUTO_APROBADA": [
+            {"SK": "#META", "codigoMotor": "R-000", "fletaRFC": "ACT68080665A",
+             "montoBaseUSD": "100", "fleteBaseUSD": "10",
+             "tipoCambioRef": "17.20", "fechaEvaluacion": "2026-07-01T10:00:00"},
+            {"SK": "#META", "codigoMotor": "R-800", "fletaRFC": "TOS0407087T2",
+             "montoBaseUSD": "0", "fleteBaseUSD": "50",
+             "tipoCambioRef": "17.45", "fechaEvaluacion": "2026-07-02T09:00:00"},
+        ],
+        "EN_REVISION": [
+            {"SK": "#META", "codigoMotor": "R-801", "fletaRFC": "ACT68080665A",
+             "montoBaseUSD": "0", "fleteBaseUSD": "20",
+             "tipoCambioRef": "17.30", "fechaEvaluacion": "2026-07-01T15:00:00"},
+        ],
+    }
+    monkeypatch.setattr(queries, "get_por_rango_fecha",
+                        lambda estado, d, h: items_por_estado.get(estado, []))
+    k = queries.get_kpis_mes(2026, 7)
+    assert k["dispersiones"] == 2                 # R-800 + R-801
+    assert k["fleteras_activas"] == 2             # ACT y TOS (únicos)
+    assert k["tc_referencia"] == 17.45            # el de la evaluación más reciente
