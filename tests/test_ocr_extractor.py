@@ -741,3 +741,34 @@ def test_origen_prefiere_ciudad_que_mapea_a_sucursal():
     oc, oe, dc, de = _origen_destino(lineas)
     assert oc == "Guadalajara" and oe == "Jalisco"     # no "Gonzalez Gallo"
     assert de == "Guerrero"
+
+
+def test_fletera_por_nombre_en_texto_de_la_factura():
+    # El CP trae el RFC de la fletera en el LOGO (no en texto), pero la factura
+    # de GPA dice "Embarcar por TRES GUERRAS" → la fletera se resuelve a nivel caso.
+    cp_pag = dict(pag(receptor=RFC_GPA, subtotal=1000, moneda="MXN", folio="C1"),
+                  fletaRFC="", fleteraTexto="")
+    fv_pag = dict(fv(subtotal=500, folio="F-9999"), fleteraTexto="ACT68080665A")
+    res = emparejar_casos([cp_pag, fv_pag], "X")
+    assert res["casos"][0]["fletaRFC"] == "ACT68080665A"
+
+
+def test_cp_multipagina_mismo_subtotal_es_una_sola():
+    # CP impresa en 2 páginas que repiten el mismo Sub-Total → UN caso (lote 29-06).
+    p1 = dict(pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=3946.89, moneda="MXN"))
+    p2 = dict(pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=3946.89, moneda="MXN"))
+    f1 = fv(subtotal=24648.83, folio="F-5551")
+    f2 = fv(subtotal=509.46, folio="F-5552")
+    res = emparejar_casos([p1, p2, f1, f2], "RANGO")
+    assert len(res["casos"]) == 1
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["fleteSinIvaMXN"] == 3946.89          # no duplicada
+    assert caso["montoVentaFV"] == 24648.83 + 509.46  # facturas sumadas
+
+
+def test_fletera_nombre_ambiguo_no_asigna():
+    from motor.catalogos import fletera_por_nombre
+    assert fletera_por_nombre("factura de TRES GUERRAS con TINY PACK") == ""
+    assert fletera_por_nombre("embarcar por TRES GUERRAS") == "ACT68080665A"
+    assert fletera_por_nombre("calle alvaro obregon 123") == ""   # calle ≠ fletera

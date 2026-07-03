@@ -235,6 +235,34 @@ FLETERAS_CATALOGO.update(_cargar_fleteras_extra())
 # El motor compara contra el conjunto de RFCs autorizados.
 FLETERAS_AUTORIZADAS = set(FLETERAS_CATALOGO)
 
+# Alias de NOMBRE → RFC para reconocer la fletera cuando su RFC va en el
+# membrete-imagen pero su razón social sí aparece en el texto (verificado en
+# lote real: "TRES GUERRAS" está en el texto de todos los CP de Tresguerras).
+# SOLO alias específicos/multi-palabra: un token genérico ("OBREGON",
+# "ESTRELLA") da falsos positivos con calles o colonias. Si dos fleteras
+# distintas coinciden en el mismo documento → ambiguo → no se asigna.
+FLETERAS_ALIAS = {
+    "TRESGUERRAS":                "ACT68080665A",
+    "TRES GUERRAS":               "ACT68080665A",
+    "TRANSPORTADORA OSORIO":      "TOS0407087T2",
+    "TINY PACK":                  "TPL2402014E9",
+    "CARGA HORMIK":               "TCH170824TH2",
+    "FLETES DE ORIENTE":          "FOR630225561",
+    "ESTAFETA MEXICANA":          "EME880309SK5",
+    "ENVIOS ESTRELLA":            "TEE070612ITA",
+    "JULIAN DE OBREGON":          "TJO680807GU2",
+    "CARGA PTX":                  "ACA170911HY7",
+}
+
+
+def fletera_por_nombre(texto: str) -> str:
+    """RFC de la fletera si su razón social aparece (sin ambigüedad) en el texto
+    del documento; '' si no se reconoce o si coinciden dos fleteras distintas."""
+    t = _normalizar(texto or "")
+    rfcs = {rfc for alias, rfc in FLETERAS_ALIAS.items() if _normalizar(alias) in t}
+    rfcs = {r for r in rfcs if r in FLETERAS_AUTORIZADAS}
+    return rfcs.pop() if len(rfcs) == 1 else ""
+
 # ── Categorías de producto ────────────────────────────────────────
 # Productos RESTRINGIDOS (no elegibles) por TIPO — palabras clave que aparecen
 # en la descripción. Lista del negocio (configurable con env PALABRAS_RESTRINGIDAS):

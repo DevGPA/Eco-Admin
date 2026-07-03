@@ -25,7 +25,8 @@ from typing import Optional
 
 import boto3
 
-from motor.catalogos import RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS
+from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
+                             fletera_por_nombre)
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +302,11 @@ def _parse_textract(resp: dict) -> dict:
         if tipo_doc == "CP":
             receptor = g
             if not emisor or emisor == g:
-                emisor = otros[0] if otros else emisor
+                # Preferir un RFC AUTORIZADO; luego la razón social en el texto
+                # (membrete-imagen); nunca un RFC arbitrario del documento.
+                emisor = (next((r for r in otros if r in FLETERAS_AUTORIZADAS), None)
+                          or fletera_por_nombre(" ".join(ln["text"] for ln in lineas))
+                          or (otros[0] if otros else emisor))
         elif tipo_doc == "FV":
             emisor = g
             if not receptor or receptor == g:
@@ -342,6 +347,7 @@ def _parse_textract(resp: dict) -> dict:
         "destinoEstado": campos.get("destinoEstado"),
         "destinoCiudad": campos.get("destinoCiudad"),
         "fletaRFC":      emisor,   # en un CP, la fletera es el emisor
+        "fleteraTexto":  fletera_por_nombre(" ".join(ln["text"] for ln in lineas)),
         "partidas":      _partidas_de_tablas(blocks, by_id, _texto),
     }
 
@@ -539,6 +545,7 @@ def _fv_consolidada(pages: list[dict]) -> dict:
         "tipoCambio":  next((p.get("tipoCambio") for p in pages if p.get("tipoCambio")), None),
         "folio":       next((p.get("folio") for p in pages if p.get("folio")), None),
         "comentarios": base.get("comentarios"),
+        "fleteraTexto": next((p.get("fleteraTexto") for p in pages if p.get("fleteraTexto")), ""),
         "rfcEmisor":   base.get("rfcEmisor"),
         "partidas":    [pt for p in pages for pt in (p.get("partidas") or [])],
     }
@@ -582,7 +589,11 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
         "status": "OK",
         "folioCP": str(cp.get("folio") or folio_archivo),
         "foliosFV": [str(fv.get("folio") or "") for fv in fvs],
-        "fletaRFC": cp.get("fletaRFC") or cp.get("rfcEmisor"),
+        # Fletera a nivel CASO: RFC del CP; si va en el logo, la razón social
+        # detectada en el texto del CP o de la FV ("Embarcar por: TRES GUERRAS").
+        "fletaRFC": (cp.get("fletaRFC") or cp.get("rfcEmisor")
+                     or cp.get("fleteraTexto")
+                     or next((fv.get("fleteraTexto") for fv in fvs if fv.get("fleteraTexto")), "")),
         "fleteSinIvaMXN": _num(cp.get("subtotal")),
         "montoVentaFV": sum(_num(fv.get("subtotal")) for fv in fvs),
         "monedaFV": moneda,
@@ -616,6 +627,27 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
     # fantasma rompa el emparejado 1-CP→factura (daba SIN_FV_VINCULADA).
     cps_con_flete = [p for p in cps if _num(p.get("subtotal")) > 0]
     cps = cps_con_flete or cps
+
+    # CP MULTIPÁGINA (lote real 29-06): una carta porte impresa en 2+ páginas
+    # REPITE su Sub-Total en cada una (igual que las facturas). Dos páginas CP
+    # consecutivas con el MISMO subtotal y folios no contradictorios son UNA
+    # carta porte, no dos casos — contarlas doble rompía el emparejado
+    # (SIN_FV_VINCULADA) o duplicaría el caso. Subtotales distintos = CPs
+    # distintas (se respetan).
+    consolidadas = []
+    for p in cps:
+        prev = consolidadas[-1] if consolidadas else None
+        mismo_sub = prev is not None and round(_num(p.get("subtotal")), 2) == round(_num(prev.get("subtotal")), 2)
+        dp, dq = _digitos(p.get("folio")), _digitos(prev.get("folio")) if prev else ""
+        mismo_folio = (not dp) or (not dq) or dp == dq
+        if prev is not None and mismo_sub and mismo_folio:
+            # continuación: completar campos que la primera página no trajo
+            for k, v in p.items():
+                if prev.get(k) in (None, "", []) and v not in (None, "", []):
+                    prev[k] = v
+        else:
+            consolidadas.append(dict(p))
+    cps = consolidadas
 
     # Consolidar páginas FV en facturas (una factura multipágina = UNA FV, sin sumar
     # su Sub-Total repetido). Si hay una sola carta porte, todas las páginas FV del
@@ -915,10 +947,11 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
 
     if clase == "CP":
         receptor = g or rec_lbl
-        # Fletera = una AUTORIZADA presente en el texto; si su RFC va en la imagen
-        # del membrete (no extraíble), vacío → C4c revisión. NUNCA tomar el RFC del
-        # cliente/destinatario como fletera (daba R-402 falso).
-        emisor = fletera or ""
+        # Fletera: RFC autorizado presente en el texto; si su RFC va en la imagen
+        # del membrete, intentar por RAZÓN SOCIAL en el texto (p. ej. "TRES
+        # GUERRAS" sí aparece aunque el RFC esté en el logo). Si tampoco, vacío →
+        # C4c revisión. NUNCA el RFC del cliente/destinatario (daba R-402 falso).
+        emisor = fletera or fletera_por_nombre(" ".join(ln["text"] for ln in lineas)) or ""
     elif clase == "FV":
         emisor = g or None
         receptor = rec_lbl or next((r for r in rfcs_detectados if r != g), None)
@@ -961,6 +994,10 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
         "destinoEstado":  dE,
         "destinoCiudad":  dC,
         "fletaRFC":       emisor,
+        # Razón social de fletera detectada en el texto de ESTA página (la FV de
+        # GPA trae "Embarcar por: TRES GUERRAS" aunque el CP tenga el RFC en el
+        # logo) — se usa a nivel caso si el CP no trajo RFC.
+        "fleteraTexto":   fletera_por_nombre(full),
         "partidas":       [],   # del texto aún no se extraen renglones (ver follow-up)
     }
 
