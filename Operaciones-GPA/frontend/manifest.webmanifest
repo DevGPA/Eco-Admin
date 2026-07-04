@@ -1,7 +1,7 @@
 {
-  "name": "GPA Control de Unidades",
-  "short_name": "GPA Unidades",
-  "description": "Combustible, checklist de reparto y montacargas — GPA",
+  "name": "Sistema de Gestión",
+  "short_name": "Gestión",
+  "description": "Sistema de Gestión — GPA",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
