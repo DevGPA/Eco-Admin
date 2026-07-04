@@ -45,3 +45,19 @@ def test_gsi_keys_presentes_si_tienen_valor(monkeypatch):
     assert item["origenSucursal"]["S"] == "GDL"
     assert item["destinoEstado"]["S"] == "Jalisco"
     assert item["fechaEmision"]["S"] == "2026-05-07"
+
+
+def test_no_escribe_item_fv_con_folio_vacio(monkeypatch):
+    fake = FakeDynamo()
+    monkeypatch.setattr(escritura, "_dynamo_client", lambda: fake)
+    res = ResultadoMotor(
+        codigo_motor="R-000", concepto_motor="Apoyo completo",
+        estado="AUTO_APROBADA", tipo_operacion="VENTA_CLIENTE",
+        folio_cp="119523877", folios_fv=["", "FC20109420"],
+        fleta_rfc="TOS0407087T2", origen_sucursal="GDL",
+        destino_estado="Guerrero", fecha_emision="2026-06-09",
+    )
+    escritura.guardar_solicitud(res)
+    pks = [it["Put"]["Item"]["PK"]["S"] for it in fake.transact]
+    assert "FV#" not in pks                 # el folio vacío NO crea item
+    assert "FV#FC20109420" in pks           # el folio real sí

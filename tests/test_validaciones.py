@@ -74,3 +74,11 @@ def test_fv_en_rechazada_no_bloquea(monkeypatch):
     _con_tabla(monkeypatch, {"FV#FV1": [{"SK": "SOL#rj", "estado": "AUTO_RECHAZADA"}]})
     res = validaciones.verificar_unicidad("CPNUEVA", ["FV1"])
     assert res["valido"] is True
+
+
+def test_folio_fv_vacio_no_participa_en_unicidad(monkeypatch):
+    # Caso prod: una solicitud APROBADA guardada con folio de FV vacío
+    # bloqueaba (R-091) TODAS las facturas futuras sin folio.
+    _con_tabla(monkeypatch, {"FV#": [{"SK": "SOL#aprobada", "estado": "AUTO_APROBADA"}]})
+    res = validaciones.verificar_unicidad("CPNUEVA", ["", "   "])
+    assert res["valido"] is True

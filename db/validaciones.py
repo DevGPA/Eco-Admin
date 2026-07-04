@@ -70,6 +70,12 @@ def verificar_unicidad(folio_cp: str, folios_fv: list[str]) -> dict:
 
     # ── R-091: FV en solicitud aprobada ─────────────────────────
     for folio_fv in folios_fv:
+        # Un folio VACÍO significa "no identificado por el extractor", no una
+        # identidad: no puede participar en unicidad. Sin este guard, una sola
+        # solicitud aprobada guardada con folio vacío bloqueaba (R-091) TODAS
+        # las facturas futuras sin folio (visto en prod: 91 bloqueadas).
+        if not str(folio_fv or "").strip():
+            continue
         resp_fv = _table().query(
             KeyConditionExpression=Key("PK").eq(f"FV#{folio_fv}"),
             ProjectionExpression="SK, estado",

@@ -257,6 +257,13 @@ def _folio_no_fiscal(lineas) -> Optional[str]:
             m = re.search(r"FOLIO\W*([A-Z]{0,3}[-\s]?\d{3,})", u)
             if m:
                 return m.group(1).replace(" ", "")
+    # Serie-folio de las facturas GPA sin la palabra "Folio" en la línea:
+    # el encabezado dice "Factura  FC 20109707" (o FA/FM/FLC + dígitos). Sin
+    # esto el folio de la FV quedaba vacío y rompía la unicidad (R-091).
+    for ln in lineas:
+        m = re.search(r"\b(F[ACMV]|FLC)\s?-?(\d{6,})\b", ln["text"].upper())
+        if m:
+            return m.group(1) + m.group(2)
     return None
 
 

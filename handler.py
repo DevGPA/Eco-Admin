@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.11"  # KPIs dispersiones/fleteras activas/TC referencia (tarjetas que quedaban en 0)
+VERSION = "2.4.12"  # folio FV vacio no envenena unicidad (R-091); folio serie FC/FA/FM extraido
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

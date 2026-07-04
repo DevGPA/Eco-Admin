@@ -142,6 +142,10 @@ def guardar_solicitud(resultado) -> dict:
 
     # ── Items por cada FV ────────────────────────────────────────
     for folio_fv in resultado.folios_fv:
+        # Folio vacío = factura sin identificar: no crear su item de índice
+        # (PK "FV#" basura que además envenena la unicidad R-091).
+        if not str(folio_fv or "").strip():
+            continue
         items_transact.append({
             "Put": {
                 "TableName": TABLE_NAME,
@@ -225,6 +229,8 @@ def cambiar_estado(
     # 3. Actualizar índices FV si aprobado
     if nuevo_estado in {"AUTO_APROBADA", "APROBADA_MANUAL"}:
         for fv in folios_fv:
+            if not str(fv or "").strip():
+                continue
             items_transact.append({
                 "Update": {
                     "TableName": TABLE_NAME,
