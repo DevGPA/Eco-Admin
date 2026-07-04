@@ -463,8 +463,17 @@ function App(){
   const cargarTodo=async()=>{
     setLoading(true);
     try{
-      const[c,sol,cl,mc]=await Promise.all([api.catalogos(),api.listar("combustible"),api.listar("checklist"),api.listar("montacargas")]);
-      setCat(c);setData({combustible:sol,checklist:cl,montacargas:mc});
+      // Los catálogos son esenciales; cárgalos primero.
+      const c=await api.catalogos();
+      setCat(c);
+      // Los historiales de cada módulo se cargan por separado: si la cuenta no
+      // tiene acceso a alguno (403), NO debe tumbar toda la app (queda vacío).
+      const[sol,cl,mc]=await Promise.all([
+        api.listar("combustible").catch(()=>[]),
+        api.listar("checklist").catch(()=>[]),
+        api.listar("montacargas").catch(()=>[]),
+      ]);
+      setData({combustible:sol,checklist:cl,montacargas:mc});
     }catch(e){showToast("⚠️ "+e.message);}
     setLoading(false);
   };
