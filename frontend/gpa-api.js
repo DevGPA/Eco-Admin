@@ -336,12 +336,7 @@ class GpaApi {
    * @returns {{ EN_REVISION, ESCALADA, aprobadas, rechazadas, kpis }}
    */
   async cargarKanban(desde, hasta) {
-    // KPIs: si el filtro abarca UN solo mes, ese mes; con un rango amplio
-    // (p.ej. "Todo"), el mes actual — pedir el mes de `desde` daría los KPIs
-    // de un mes viejo (ceros) aunque el tablero sí tenga casos.
-    const unMes = desde && hasta && desde.slice(0, 7) === hasta.slice(0, 7);
-    const kpiRef = unMes ? desde : new Date().toISOString().slice(0, 10);
-    const [revision, escaladas, autoAprob, manualAprob, autoRech, manualRech, kpisData] =
+    const [revision, escaladas, autoAprob, manualAprob, autoRech, manualRech] =
       await Promise.all([
         this.monitor({ estado: 'EN_REVISION', desde, hasta }),
         this.monitor({ estado: 'ESCALADA',    desde, hasta }),
@@ -349,18 +344,47 @@ class GpaApi {
         this.monitor({ estado: 'APROBADA_MANUAL',  desde, hasta }),
         this.monitor({ estado: 'AUTO_RECHAZADA',   desde, hasta }),
         this.monitor({ estado: 'RECHAZADA_MANUAL', desde, hasta }),
-        this.kpis(
-          parseInt(kpiRef.slice(0, 4)),
-          parseInt(kpiRef.slice(5, 7))
-        ),
       ]);
 
-    return {
+    const data = {
       EN_REVISION: revision.items    || [],
       ESCALADA:    escaladas.items   || [],
       aprobadas:   [...(autoAprob.items || []), ...(manualAprob.items || [])],
       rechazadas:  [...(autoRech.items || []),  ...(manualRech.items || [])],
-      kpis:        kpisData,
+    };
+    // KPIs derivados del MISMO rango filtrado que las columnas. Antes se pedían
+    // a /kpis del "mes actual", que contradecía al tablero cuando el filtro era
+    // "Todo" o un mes distinto (KPIs en 0 con columnas llenas).
+    data.kpis = this._kpisDeRango(data);
+    return data;
+  }
+
+  _kpisDeRango(data) {
+    const todos = [...data.EN_REVISION, ...data.ESCALADA,
+                   ...data.aprobadas, ...data.rechazadas];
+    let monto = 0, flete = 0, dispersiones = 0;
+    const fleteras = new Set();
+    let tcFecha = '', tcVal = 0;
+    for (const it of todos) {
+      monto += parseFloat(it.montoBaseUSD || 0) || 0;
+      flete += parseFloat(it.fleteBaseUSD || 0) || 0;
+      if (String(it.codigoMotor || '').indexOf('R-8') === 0) dispersiones++;
+      if (it.fletaRFC) fleteras.add(it.fletaRFC);
+      const tc = parseFloat(it.tipoCambioRef || 0) || 0;
+      const fe = String(it.fechaEvaluacion || '');
+      if (tc > 0 && fe > tcFecha) { tcFecha = fe; tcVal = tc; }
+    }
+    const total = todos.length;
+    return {
+      total,
+      aprobadas:   data.aprobadas.length,
+      rechazadas:  data.rechazadas.length,
+      en_revision: data.EN_REVISION.length,
+      pct_aprobacion: total ? Math.round(data.aprobadas.length / total * 1000) / 10 : 0,
+      pct_flete_global: monto ? Math.round(flete / monto * 10000) / 100 : 0,
+      dispersiones,
+      fleteras_activas: fleteras.size,
+      tc_referencia: tcVal || null,
     };
   }
 
