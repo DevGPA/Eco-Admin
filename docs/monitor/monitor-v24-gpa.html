@@ -1013,6 +1013,17 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 </div>
 <div class="eval-results" id="evalResults" style="display:none">
   <div class="er-header"><div class="er-title">Resultados de evaluaci&oacute;n &middot; Motor v2.4</div><button class="er-close" id="erClose">&#x2715;</button></div>
+  <!-- Barra de avance del MOTOR: se actualiza consultando el API mientras el
+       backend hace OCR + evaluación (los escaneos tardan varios minutos). -->
+  <div id="erProgress" style="display:none;padding:10px 14px 4px;">
+    <div style="display:flex;justify-content:space-between;font:700 11px 'IBM Plex Mono',monospace;color:var(--ink2,#5a6b8a);margin-bottom:5px;">
+      <span id="erProgTxt">Motor procesando…</span><span id="erProgPct">0%</span>
+    </div>
+    <div style="height:8px;border-radius:99px;background:rgba(90,107,138,.15);overflow:hidden;">
+      <div id="erProgFill" style="height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--teal,#3AADAD),var(--navy,#1C2535));transition:width .6s ease;"></div>
+    </div>
+    <div id="erProgEta" style="font:600 10px 'Nunito Sans',sans-serif;color:var(--ink3,#8A96B0);margin-top:4px;">El motor está leyendo y evaluando cada documento (OCR de escaneos puede tardar varios minutos)…</div>
+  </div>
   <div class="er-grid" id="erGrid"></div>
   <div class="er-summary" id="erSummary"></div>
 </div>
@@ -1834,7 +1845,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     var fecha = new Date().toISOString().slice(0, 10);
+    var t0iso = new Date().toISOString();   // inicio del lote (para la barra de avance)
     var results = [];
+    var subidos = [];
     for (var i = 0; i < evalFiles.length; i++) {
       var f = evalFiles[i];
       var base = f.name.replace(/\.(pdf|xml)$/i, '');
@@ -1850,6 +1863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!put.ok) throw new Error('S3 PUT ' + put.status + (await _s3Code(put)));
         results.push({folioCP: base, codigoMotor:'EN PROCESO',
           concepto:'Subido al motor \u00B7 OCR + evaluaci\u00F3n en curso\u2026', estado:'PENDIENTE'});
+        subidos.push(f.name);
       } catch (e) {
         results.push({folioCP: base, codigoMotor:'ERROR',
           concepto:'No se pudo subir: ' + e.message, estado:'ERROR'});
@@ -1860,6 +1874,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showResults(results);
     // Refrescar el tablero: los casos van apareciendo conforme el backend eval\u00FAa.
     if (typeof refrescarTableroVariasVeces === 'function') refrescarTableroVariasVeces();
+    // Barra de avance del motor: consulta el API y actualiza cada tarjeta
+    // "EN PROCESO" con su veredicto real conforme el backend termina.
+    if (subidos.length) vigilarProcesamiento(subidos, t0iso);
   }
 
   function showResults(results) {
@@ -1879,7 +1896,7 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (r.codigoMotor==='SIN_CP'||r.codigoMotor==='ERROR'||r.codigoMotor==='CONN_ERR') cc='stop';
       else if (r.codigoMotor.match && r.codigoMotor.match(/^R-(1|2|3)/)) cc='stop';
       else if (r.codigoMotor.match && r.codigoMotor.match(/^R-(5|8)/)) cc='warn';
-      h += '<div class="er-item"><span class="er-folio">' + _esc(r.folioCP) +
+      h += '<div class="er-item" data-fn="' + _esc(_normFolio(r.folioCP)) + '"><span class="er-folio">' + _esc(r.folioCP) +
            '</span><span class="er-code ' + cc + '">' + _esc(r.codigoMotor) +
            '</span><span class="er-concept">' + _esc(r.concepto) + '</span></div>';
     }
@@ -1954,6 +1971,9 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('evalResults').style.display = 'none';
     });
   });
+  // startEvaluation (pantalla de carga post-login) reutiliza este panel para
+  // mostrar la barra de avance del motor.
+  window.showResults = showResults;
 })();
 
 
@@ -2124,11 +2144,14 @@ async function startEvaluation() {
   // Subir cada archivo a S3 (pendientes/) con URL prefirmada → el backend
   // lo procesa de forma asíncrona (OCR → motor → DynamoDB).
   const fecha = new Date().toISOString().slice(0, 10);
+  const t0iso = new Date().toISOString();   // inicio del lote (barra de avance)
   const total = classifiedFiles.length || 1;
   let done = 0, okN = 0, errN = 0;
   const errores = [];
+  const resultados = [], subidos = [];
 
   for (const cf of classifiedFiles) {
+    const base = cf.name.replace(/\.(pdf)$/i, '');
     try {
       const r = await fetch(API_CONFIG.apiUrl + '/upload-url', {
         method: 'POST',
@@ -2140,8 +2163,13 @@ async function startEvaluation() {
       const put = await fetch(url, { method: 'PUT', body: cf.file });
       if (!put.ok) throw new Error('S3 PUT ' + put.status + (await _s3Code(put)));
       okN++;
+      subidos.push(cf.name);
+      resultados.push({ folioCP: base, codigoMotor: 'EN PROCESO',
+        concepto: 'Subido al motor · OCR + evaluación en curso…', estado: 'PENDIENTE' });
     } catch (e) {
       errN++; errores.push(cf.name + ' → ' + e.message);
+      resultados.push({ folioCP: base, codigoMotor: 'ERROR',
+        concepto: 'No se pudo subir: ' + e.message, estado: 'ERROR' });
     }
     done++;
     bar.style.width = Math.round(done / total * 100) + '%';
@@ -2154,14 +2182,16 @@ async function startEvaluation() {
     : `✓ ${okN} documentos subidos · el motor los está procesando…`;
   if (errN) console.error('Errores de subida:', errores);
 
-  // Pasar al monitor y refrescar el Kanban. El procesamiento del backend es
-  // asíncrono (OCR + motor por cada PDF tarda segundos), así que refrescamos
-  // varias veces para que los casos vayan apareciendo sin recargar a mano.
+  // Pasar al monitor, mostrar el panel de resultados con la BARRA DE AVANCE
+  // del motor (cada tarjeta pasa de EN PROCESO a su veredicto real) y refrescar
+  // el Kanban conforme el backend evalúa.
   setTimeout(() => {
     const us = document.getElementById('uploadScreen');
     us.classList.add('hidden');
     setTimeout(() => us.style.display = 'none', 350);
+    if (typeof showResults === 'function' && resultados.length) showResults(resultados);
     refrescarTableroVariasVeces();
+    if (subidos.length) vigilarProcesamiento(subidos, t0iso);
   }, 1200);
 }
 
@@ -2181,6 +2211,99 @@ async function _s3Code(resp) {
     const m = t.match(/<Code>([^<]+)<\/Code>/);
     return m ? ' · ' + m[1] : '';
   } catch (e) { return ''; }
+}
+
+// ── Barra de avance del MOTOR ─────────────────────────────────────
+// Tras subir, el backend procesa asíncrono (OCR + evaluación; escaneos tardan
+// minutos). Este vigilante consulta el API cada pocos segundos, actualiza cada
+// tarjeta "EN PROCESO" a su veredicto real y mueve la barra X/N.
+function _normFolio(s) {
+  return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+async function _consultaEstado(estado) {
+  const r = await fetch(API_CONFIG.apiUrl + '/monitor?estado=' + estado +
+      '&desde=2000-01-01&hasta=2099-12-31',
+      { headers: { 'Authorization': 'Bearer ' + _session.token } });
+  if (!r.ok) return [];
+  const d = await r.json().catch(function(){ return {}; });
+  return d.items || [];
+}
+
+function _pintaVeredicto(fn, codigo, concepto, estado) {
+  const el = document.querySelector('.er-item[data-fn="' + fn + '"]');
+  if (!el) return;
+  let cc = 'pend';
+  if (estado === 'AUTO_APROBADA' || estado === 'APROBADA_MANUAL') cc = 'go';
+  else if (estado.indexOf('RECHAZADA') >= 0 || estado === 'BLOQUEADA') cc = 'stop';
+  else if (estado === 'EN_REVISION' || estado === 'ESCALADA') cc = 'warn';
+  const code = el.querySelector('.er-code');
+  const conc = el.querySelector('.er-concept');
+  if (code) { code.textContent = codigo; code.className = 'er-code ' + cc; }
+  if (conc) conc.textContent = concepto;
+  el.dataset.listo = '1';
+}
+
+async function vigilarProcesamiento(nombres, t0iso) {
+  // nombres: nombres de archivo subidos; t0iso: inicio del lote (solo cuentan
+  // resultados evaluados DESPUÉS, para no confundir con registros históricos).
+  const prog = document.getElementById('erProgress');
+  const fill = document.getElementById('erProgFill');
+  const txt  = document.getElementById('erProgTxt');
+  const pct  = document.getElementById('erProgPct');
+  const eta  = document.getElementById('erProgEta');
+  if (!prog) return;
+  prog.style.display = 'block';
+  const meta = nombres.map(function(n){ return { fn: _normFolio(n.replace(/\.(pdf)$/i,'')), listo: false }; });
+  const N = meta.length;
+  const ESTADOS = ['EN_REVISION','ESCALADA','AUTO_APROBADA','APROBADA_MANUAL',
+                   'AUTO_RECHAZADA','RECHAZADA_MANUAL','BLOQUEADA'];
+  const t0 = new Date(new Date(t0iso).getTime() - 120000).toISOString(); // 2 min de tolerancia
+  const inicio = Date.now();
+  let ticks = 0;
+
+  while (Date.now() - inicio < 15 * 60000) {           // máx 15 min
+    ticks++;
+    let items = [];
+    for (const e of ESTADOS) {
+      try { items = items.concat((await _consultaEstado(e)).map(function(i){ i._e = e; return i; })); }
+      catch (err) {}
+    }
+    const nuevos = items.filter(function(i){ return String(i.fechaEvaluacion || '') >= t0; });
+    for (const m of meta) {
+      if (m.listo) continue;
+      const hit = nuevos.find(function(i) {
+        const f = _normFolio(i.folioCP);
+        return f && m.fn && (f.indexOf(m.fn) >= 0 || m.fn.indexOf(f) >= 0);
+      });
+      if (hit) {
+        m.listo = true;
+        const cod = hit._e === 'BLOQUEADA' ? (hit.codigoMotor || 'R-092') : (hit.codigoMotor || '—');
+        const con = hit._e === 'BLOQUEADA' ? 'Duplicado — ya existe un caso activo de este folio'
+                                           : (hit.conceptoMotor || hit._e);
+        _pintaVeredicto(m.fn, cod, con, hit._e);
+      }
+    }
+    const done = meta.filter(function(m){ return m.listo; }).length;
+    const p = Math.round(done / N * 100);
+    fill.style.width = p + '%';
+    pct.textContent = p + '%';
+    txt.textContent = 'Motor procesando: ' + done + ' de ' + N + ' documentos';
+    const mins = Math.round((Date.now() - inicio) / 60000);
+    eta.textContent = done === N ? '' :
+      'Evaluando… (' + mins + ' min transcurridos; el OCR de escaneos tarda varios minutos)';
+    if (ticks % 3 === 0 && window.gpaBridge && gpaBridge.refreshKanban) {
+      try { gpaBridge.refreshKanban(); } catch (e) {}
+    }
+    if (done === N) break;
+    await new Promise(function(res){ setTimeout(res, 10000); });   // cada 10 s
+  }
+  const done = meta.filter(function(m){ return m.listo; }).length;
+  txt.textContent = done === N
+    ? '✓ Motor terminó: ' + N + ' de ' + N + ' documentos procesados'
+    : '⏱ ' + done + ' de ' + N + ' procesados — los restantes siguen en el motor (revisa el tablero en unos minutos)';
+  eta.textContent = '';
+  try { if (window.gpaBridge && gpaBridge.refreshKanban) gpaBridge.refreshKanban(); } catch (e) {}
 }
 
 // Refresca el Kanban ahora y luego de forma escalonada (5s, 12s, 25s, 45s)
