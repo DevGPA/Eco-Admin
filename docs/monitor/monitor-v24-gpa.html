@@ -1006,6 +1006,11 @@ input::placeholder{color:var(--ink3);font-weight:400;}
     Seleccionar archivos PDF
   </label>
   <input type="file" id="evalFileInput" multiple accept=".pdf,.PDF" style="display:none">
+  <label for="evalDirInput" class="eval-select-btn" title="Toma todos los PDF de la carpeta (incluye subcarpetas)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    Seleccionar carpeta
+  </label>
+  <input type="file" id="evalDirInput" webkitdirectory multiple style="display:none">
   <div class="euz-files-wrap" id="euzFilesWrap" style="display:none"><div class="euz-files" id="euzFiles"></div></div>
   <span class="eval-count" id="evalCount" style="display:none">0</span>
   <button class="euz-clear" id="evalClear" style="display:none" title="Limpiar">&#x2715;</button>
@@ -1686,6 +1691,18 @@ window.addEventListener('load', () => {
       typeof gpaBridge !== 'undefined' && gpaBridge.refreshKanban) {
     try { gpaBridge.refreshKanban(); } catch (e) {}
   }
+  // Auto-refresco: el tablero se actualiza solo cada 60 s (solo con la pestaña
+  // visible y sesión activa) — sin necesidad de recargar a mano para ver datos
+  // nuevos que el motor haya evaluado.
+  if (!window._autoRefreshKanban) {
+    window._autoRefreshKanban = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (!(_session && _session.token)) return;
+      if (typeof gpaBridge !== 'undefined' && gpaBridge.refreshKanban) {
+        try { gpaBridge.refreshKanban(); } catch (e) {}
+      }
+    }, 60000);
+  }
 });
 
 function onLoginSuccess(email, silent) {
@@ -1949,20 +1966,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // Conectar eventos cuando el DOM carga
   document.addEventListener('DOMContentLoaded', function() {
     var fileInput = document.getElementById('evalFileInput');
+    var dirInput  = document.getElementById('evalDirInput');
     var clearBtn  = document.getElementById('evalClear');
     var goBtn     = document.getElementById('evalGoBtn');
     var closeBtn  = document.getElementById('erClose');
 
-    if (fileInput) fileInput.addEventListener('change', function() {
+    // Archivos sueltos y carpeta completa comparten el mismo flujo: se filtran
+    // los PDF (una carpeta puede traer Excel/otros) y se acumulan en evalFiles.
+    function agregarPdfs(files) {
       var arr = [];
-      for (var i = 0; i < this.files.length; i++) {
-        if (/\.pdf$/i.test(this.files[i].name)) arr.push(this.files[i]);
+      for (var i = 0; i < files.length; i++) {
+        if (/\.pdf$/i.test(files[i].name)) arr.push(files[i]);
       }
       if (arr.length) { evalFiles = evalFiles.concat(arr); render(); }
+      return arr.length;
+    }
+    if (fileInput) fileInput.addEventListener('change', function() { agregarPdfs(this.files); });
+    if (dirInput) dirInput.addEventListener('change', function() {
+      var n = agregarPdfs(this.files);
+      if (!n) alert('La carpeta seleccionada no contiene archivos PDF.');
+      this.value = '';   // permite volver a elegir la misma carpeta
     });
     if (clearBtn) clearBtn.addEventListener('click', function() {
       evalFiles = [];
       if (fileInput) fileInput.value = '';
+      if (dirInput) dirInput.value = '';
       render();
       document.getElementById('evalResults').style.display = 'none';
     });
