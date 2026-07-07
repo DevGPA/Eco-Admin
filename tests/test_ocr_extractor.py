@@ -509,14 +509,16 @@ def test_caso_usd_sin_tipo_cambio_es_error():
     assert res["casos"][0]["error"] == "SIN_TIPO_CAMBIO"
 
 
-def test_caso_sin_tipo_cambio_siempre_es_error():
-    # Sin TC no se puede evaluar (el flete es MXN y los mínimos USD), sea USD o MXN.
+def test_caso_mxn_sin_tc_ya_no_es_error():
+    # Regla 2026-07-04 (usuario): FV en MXN vs flete en MXN se evalúa DIRECTO;
+    # el TC solo se necesita cuando hay factura en USD (ver
+    # test_usd_sin_tc_sigue_siendo_error).
     cp = cp_doc("FAC04927", 3330.0, "40086093")
     fv = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "FM40086093",
           "subtotal": 3852.25, "moneda": "MXN", "partidas": []}   # MXN sin TC
     res = emparejar_casos([cp, fv])
-    assert res["casos"][0]["status"] == "ERROR"
-    assert res["casos"][0]["error"] == "SIN_TIPO_CAMBIO"
+    assert res["casos"][0]["status"] == "OK"
+    assert res["casos"][0]["monedaFV"] == "MXN"
 
 
 def test_caso_a_solicitud_convierte_partidas_mxn_a_usd():
@@ -794,3 +796,36 @@ def test_origen_destino_estrella_ambiguo_no_adivina():
     ]
     oc, oe, dc, de = _origen_destino(lineas)
     assert oe is None and de is None
+
+
+# ── Reglas de negocio 2026-07-04 (retro del usuario con casos reales) ──
+def test_mxn_vs_mxn_sin_tc_evalua_directo():
+    # 119483518: FV en MXN sin tipo de cambio → NO es error; MXN vs MXN directo.
+    cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=1000, moneda="MXN", folio="C1")
+    fv_mxn = pag(emisor=RFC_GPA, receptor=CLIENTE, subtotal=17350.0, moneda="MXN", folio="F-9111")
+    res = emparejar_casos([cp_pag, fv_mxn], "X")
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["monedaFV"] == "MXN" and caso["montoVentaFV"] == 17350.0
+    assert caso["tipoCambioRef"] > 0          # respaldo solo para los mínimos USD
+
+
+def test_tc_se_busca_en_todas_las_facturas():
+    # 119581188: FV en MXN sin TC + FV en USD CON TC → el TC del caso es el de
+    # la factura USD y cada moneda se convierte por separado.
+    cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=3946.89, moneda="MXN", folio="C1")
+    fv_mxn = pag(emisor=RFC_GPA, receptor=CLIENTE, subtotal=1735.0, moneda="MXN", folio="F-9222")
+    fv_usd = fv(subtotal=800.0, folio="F-9333", tc=17.35)
+    res = emparejar_casos([cp_pag, fv_mxn, fv_usd], "X")
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["tipoCambioRef"] == 17.35
+    assert caso["monedaFV"] == "USD"
+    assert caso["montoVentaFV"] == pytest.approx(1735.0 / 17.35 + 800.0)   # 900.0
+
+
+def test_usd_sin_tc_sigue_siendo_error():
+    cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=100, moneda="MXN", folio="C1")
+    fv_usd = pag(emisor=RFC_GPA, receptor=CLIENTE, subtotal=500, moneda="USD", folio="F-9444")
+    res = emparejar_casos([cp_pag, fv_usd], "X")
+    assert res["casos"][0].get("error") == "SIN_TIPO_CAMBIO"

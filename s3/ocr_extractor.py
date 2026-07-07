@@ -26,7 +26,7 @@ from typing import Optional
 import boto3
 
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
-                             fletera_por_nombre)
+                             fletera_por_nombre, TIPO_CAMBIO_DEFAULT)
 
 logger = logging.getLogger(__name__)
 
@@ -581,16 +581,31 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
                 "detalle": f"El CP {cp.get('folio')} no tiene FV de GPA emparejada.",
                 "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     partidas = [pt for fv in fvs for pt in (fv.get("partidas") or [])]
-    fv0 = fvs[0]
-    moneda = (fv0.get("moneda") or "USD").upper()
-    tc = _num(fv0.get("tipoCambio")) or None
-    # El flete (CP) SIEMPRE viene en MXN y los mínimos de C1 son en USD, así que el
-    # tipo de cambio se necesita siempre (convertir flete y, si la FV es MXN, el monto).
-    # Sin TC válido, mejor marcar para revisión que evaluar con un valor inventado.
-    if not tc:
+    # Tipo de cambio: buscarlo en TODAS las facturas del caso (un caso puede
+    # traer una FV en MXN sin TC y otra en USD con TC — el TC vale para ambas).
+    tc = next((_num(fv.get("tipoCambio")) for fv in fvs
+               if _num(fv.get("tipoCambio")) > 0), None)
+    monedas = {((fv.get("moneda") or "").upper() or "USD") for fv in fvs}
+
+    if tc:
+        # Monto del caso en USD: cada factura se convierte según SU moneda.
+        total_usd = 0.0
+        for fv in fvs:
+            sub = _num(fv.get("subtotal"))
+            total_usd += (sub / tc) if (fv.get("moneda") or "USD").upper() == "MXN" else sub
+        monto, moneda = round(total_usd, 2), "USD"
+    elif monedas <= {"MXN"}:
+        # Regla de negocio: FV en MXN vs flete en MXN se evalúa DIRECTO (no
+        # requiere TC del documento). El TC de respaldo se usa únicamente para
+        # expresar los mínimos USD de C1; el % de flete (C5) no depende de él.
+        tc = TIPO_CAMBIO_DEFAULT
+        monto = round(sum(_num(fv.get("subtotal")) for fv in fvs), 2)
+        moneda = "MXN"
+    else:
+        # Hay factura en USD y ningún TC en el caso → sí requiere revisión
+        # (el flete está en MXN; convertirlo con un TC inventado altera el %).
         return {"status": "ERROR", "error": "SIN_TIPO_CAMBIO",
-                "detalle": f"FV {fv0.get('folio')} sin tipo de cambio; requiere revisión "
-                           "(el flete está en MXN y los mínimos en USD).",
+                "detalle": "FV en USD sin tipo de cambio en ninguna factura del caso.",
                 "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     return {
         "status": "OK",
@@ -602,7 +617,9 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
                      or cp.get("fleteraTexto")
                      or next((fv.get("fleteraTexto") for fv in fvs if fv.get("fleteraTexto")), "")),
         "fleteSinIvaMXN": _num(cp.get("subtotal")),
-        "montoVentaFV": sum(_num(fv.get("subtotal")) for fv in fvs),
+        # Monto del caso ya consolidado por moneda (mixto MXN+USD → USD con el
+        # TC del caso; todo-MXN sin TC → directo en MXN con TC de respaldo).
+        "montoVentaFV": monto,
         "monedaFV": moneda,
         "tipoCambioRef": tc,
         "origenEstado": cp.get("origenEstado"),
@@ -611,7 +628,7 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
         "origenSucursal": sucursal_de_origen(cp.get("origenCiudad"), cp.get("origenEstado")),
         "destinoEstado": cp.get("destinoEstado"),
         "destinoCiudad": cp.get("destinoCiudad"),
-        "fechaEmision": cp.get("fecha") or fv0.get("fecha") or "",
+        "fechaEmision": cp.get("fecha") or next((fv.get("fecha") for fv in fvs if fv.get("fecha")), "") or "",
         "partidas": partidas,
     }
 

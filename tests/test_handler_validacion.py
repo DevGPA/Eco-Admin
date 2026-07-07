@@ -141,3 +141,36 @@ def test_evaluar_no_truena_si_reemplazo_falla(monkeypatch):
 
     resp = h._route_evaluar(_evento(_body_valido()))
     assert resp["statusCode"] == 201
+
+
+# ── R-093 (sin factura anexa) + dedupe de tarjetas de error ──────────
+def _fake_ddb(monkeypatch, existentes=None):
+    import handler as h
+    import db.escritura as esc
+    escritos = []
+    class DDB:
+        def put_item(self, TableName=None, Item=None): escritos.append(Item)
+    monkeypatch.setattr(esc, "_dynamo_client", lambda: DDB())
+    monkeypatch.setattr(h, "get_por_rango_fecha", lambda e, d, hs: existentes or [])
+    return escritos
+
+
+def test_sin_fv_anexa_es_rechazo_r093(monkeypatch):
+    import handler as h
+    escritos = _fake_ddb(monkeypatch)
+    h._guardar_caso_error({"error": "SIN_FV_VINCULADA", "folioCP": "119480566",
+                           "detalle": "CP sin factura"}, "pendientes/x.pdf")
+    metas = [i for i in escritos if i["SK"]["S"] == "#META"]
+    assert metas[0]["estado"]["S"] == "AUTO_RECHAZADA"
+    assert metas[0]["codigoMotor"]["S"] == "R-093"
+    # y deja item CP# para que la re-subida con factura lo REEMPLACE sola
+    cps = [i for i in escritos if i["PK"]["S"] == "CP#119480566"]
+    assert len(cps) == 1 and cps[0]["estado"]["S"] == "AUTO_RECHAZADA"
+
+
+def test_error_ocr_duplicado_no_crea_otra_tarjeta(monkeypatch):
+    import handler as h
+    escritos = _fake_ddb(monkeypatch,
+        existentes=[{"folioCP": "TPQ1A-955", "codigoMotor": "R-093"}])
+    h._guardar_caso_error({"error": "SIN_FV_VINCULADA", "folioCP": "TPQ1A-955"}, "k.pdf")
+    assert escritos == []      # reintento de S3 → no duplica

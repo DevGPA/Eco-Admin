@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.12"  # folio FV vacio no envenena unicidad (R-091); folio serie FC/FA/FM extraido
+VERSION = "2.4.13"  # R-093 sin factura anexa; MXN vs MXN directo; TC de cualquier factura del caso; dedupe tarjetas error
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
@@ -376,18 +376,43 @@ def _guardar_caso_error(caso,key):
     """Persiste un caso que el OCR no pudo armar (SIN_TIPO_CAMBIO, SIN_FV_VINCULADA,
     SIN_CARTA_PORTE…) como EN_REVISION para que aparezca en el monitor."""
     try:
-        import uuid; from datetime import datetime,timezone; from db.escritura import _dynamo_client
+        import uuid; from datetime import datetime,timezone,timedelta; from db.escritura import _dynamo_client
         ahora=datetime.now(timezone.utc).isoformat(); sid=str(uuid.uuid4())
         folio=str(caso.get("folioCP") or caso.get("folioArchivo") or key.rsplit("/",1)[-1])
+        err=str(caso.get("error","OCR_ERROR"))
+        # CP sin factura anexa = motivo de RECHAZO del negocio (R-093). Los demás
+        # errores de extracción sí van a revisión humana.
+        if err in ("SIN_FV_VINCULADA","SIN_FACTURA_GPA"):
+            codigo,estado_reg,concepto="R-093","AUTO_RECHAZADA",R_CONCEPTOS.get("R-093","Sin factura anexa")
+        else:
+            codigo,estado_reg,concepto=err,"EN_REVISION","Documento requiere revisión (OCR)"
+        # DEDUPE: S3/Lambda reintentan el mismo objeto (entrega at-least-once y
+        # reintentos en escaneos grandes) → sin este guard, cada reintento creaba
+        # otra tarjeta idéntica (visto en prod: TPQ1A-955 ×8 EN_REVISION).
+        try:
+            desde=(datetime.now(timezone.utc)-timedelta(days=3)).strftime("%Y-%m-%d")
+            hasta=datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            for it in get_por_rango_fecha(estado_reg,desde,hasta):
+                if str(it.get("folioCP"))==folio and str(it.get("codigoMotor"))==codigo:
+                    logger.info("Error OCR duplicado %s (%s): ya hay tarjeta activa",folio,codigo)
+                    return
+        except Exception as e:
+            logger.warning("Dedupe de error OCR no disponible: %s",e)
         _dynamo_client().put_item(TableName=os.environ.get("DYNAMO_TABLE","gpa_fletes_dev"),
-            Item={"PK":{"S":f"SOL#{sid}"},"SK":{"S":"#META"},"estado":{"S":"EN_REVISION"},
-                  "codigoMotor":{"S":str(caso.get("error","OCR_ERROR"))},
-                  "conceptoMotor":{"S":"Documento requiere revisión (OCR)"},
+            Item={"PK":{"S":f"SOL#{sid}"},"SK":{"S":"#META"},"estado":{"S":estado_reg},
+                  "codigoMotor":{"S":codigo},
+                  "conceptoMotor":{"S":concepto},
                   "tipoOperacion":{"S":"VENTA_CLIENTE"},
                   "folioCP":{"S":folio},"fechaEmision":{"S":ahora[:10]},
                   "fechaEvaluacion":{"S":ahora},
                   "detalle":{"S":str(caso.get("detalle",""))},
                   "archivoS3":{"S":key}})
+        # El R-093 lleva item CP# para que al re-subir el PDF YA con su factura,
+        # la unicidad lo detecte como rechazo de máquina y lo REEMPLACE sola.
+        if codigo=="R-093" and folio:
+            _dynamo_client().put_item(TableName=os.environ.get("DYNAMO_TABLE","gpa_fletes_dev"),
+                Item={"PK":{"S":f"CP#{folio}"},"SK":{"S":f"SOL#{sid}"},
+                      "estado":{"S":estado_reg},"fechaEmision":{"S":ahora[:10]}})
     except Exception as e: logger.warning("No se pudo guardar caso de error OCR: %s",e)
 
 def _guardar_bloqueada(body,val):
