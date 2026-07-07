@@ -728,7 +728,14 @@ class GpaMonitorBridge {
         </div>
         <div class="cft">
           <div class="dps">
-            <span class="dp" onclick="gpaVerDetalle('${solId}')">${folio}</span>
+            ${(() => {
+              // Chip del folio: si el caso tiene su PDF en S3, clic = abrir el
+              // documento de referencia (aplica en las 4 columnas del kanban).
+              const arch = escapeHtml(String(item.archivoS3 || ''));
+              return arch
+                ? `<span class="dp" style="cursor:pointer" title="Abrir PDF de referencia" onclick="gpaAbrirPdf('${arch}')">📄 ${folio}</span>`
+                : `<span class="dp" onclick="gpaVerDetalle('${solId}')">${folio}</span>`;
+            })()}
           </div>
           <div class="bs">${btns}</div>
         </div>
@@ -871,6 +878,21 @@ window.gpaEscalar = async function(solId) {
     await gpaBridge.refreshKanban();
   } catch(e) {
     alert('Error al escalar: ' + e.message);
+  }
+};
+
+window.gpaAbrirPdf = async function(key) {
+  // Abre el PDF de referencia del caso (URL prefirmada de lectura, 5 min).
+  // La pestaña se abre ANTES del fetch para que el navegador no la bloquee
+  // como popup; si falla, se cierra y se avisa.
+  const tab = window.open('', '_blank');
+  try {
+    const d = await gpaApi._get('/documento', { key: key });
+    if (d && d.url) { tab.location = d.url; return; }
+    throw new Error('sin URL');
+  } catch (e) {
+    if (tab) tab.close();
+    alert('No se pudo abrir el documento: ' + (e.message || e));
   }
 };
 

@@ -93,6 +93,10 @@ def guardar_solicitud(resultado) -> dict:
         item_meta["fletaRFC"] = {"S": resultado.fleta_rfc}
     if resultado.destino_estado:
         item_meta["destinoEstado"] = {"S": resultado.destino_estado}
+    # Referencia al PDF en S3 (para abrirlo desde el monitor)
+    arch = getattr(resultado, "archivo_s3", "") or ""
+    if arch:
+        item_meta["archivoS3"] = {"S": arch}
 
     # ── Item índice CP ───────────────────────────────────────────
     item_cp = {

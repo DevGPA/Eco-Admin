@@ -61,3 +61,18 @@ def test_no_escribe_item_fv_con_folio_vacio(monkeypatch):
     pks = [it["Put"]["Item"]["PK"]["S"] for it in fake.transact]
     assert "FV#" not in pks                 # el folio vacío NO crea item
     assert "FV#FC20109420" in pks           # el folio real sí
+
+
+def test_archivo_s3_se_persiste(monkeypatch):
+    fake = FakeDynamo()
+    monkeypatch.setattr(escritura, "_dynamo_client", lambda: fake)
+    res = ResultadoMotor(
+        codigo_motor="R-000", concepto_motor="Apoyo completo",
+        estado="AUTO_APROBADA", tipo_operacion="VENTA_CLIENTE",
+        folio_cp="119623297", folios_fv=["FC1"], fleta_rfc="ACT68080665A",
+        origen_sucursal="GDL", destino_estado="Nuevo León", fecha_emision="2026-07-07",
+    )
+    res.archivo_s3 = "pendientes/2026-07-07/119623297.pdf"
+    escritura.guardar_solicitud(res)
+    meta = fake.transact[0]["Put"]["Item"]
+    assert meta["archivoS3"]["S"] == "pendientes/2026-07-07/119623297.pdf"

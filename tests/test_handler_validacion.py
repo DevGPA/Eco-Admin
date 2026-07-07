@@ -174,3 +174,25 @@ def test_error_ocr_duplicado_no_crea_otra_tarjeta(monkeypatch):
         existentes=[{"folioCP": "TPQ1A-955", "codigoMotor": "R-093"}])
     h._guardar_caso_error({"error": "SIN_FV_VINCULADA", "folioCP": "TPQ1A-955"}, "k.pdf")
     assert escritos == []      # reintento de S3 → no duplica
+
+
+# ── GET /documento (URL prefirmada de lectura del PDF) ────────────────
+def test_documento_genera_url_lectura(monkeypatch):
+    from handler import _route_documento
+    fake = _FakeS3()
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: fake)
+    monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
+    ev = {"requestContext": {}, "queryStringParameters": {"key": "pendientes/2026-07-07/x.pdf"}}
+    resp = _route_documento(ev)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["url"].startswith("https://")
+    assert fake.llamada["op"] == "get_object"
+    assert fake.llamada["Params"]["Key"] == "pendientes/2026-07-07/x.pdf"
+
+
+def test_documento_rechaza_key_vacia_o_traversal(monkeypatch):
+    from handler import _route_documento
+    monkeypatch.setenv("S3_BUCKET", "gpa-docs-test")
+    assert _route_documento({"requestContext": {}, "queryStringParameters": {}})["statusCode"] == 400
+    assert _route_documento({"requestContext": {}, "queryStringParameters":
+                             {"key": "../otra/cosa"}})["statusCode"] == 400

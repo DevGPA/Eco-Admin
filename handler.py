@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.14"  # desglose de consolidados (hoja-Excel del PDF) anexado al detalle del caso
+VERSION = "2.4.15"  # PDF de referencia clickeable (GET /documento + archivoS3 en el caso)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
@@ -98,6 +98,7 @@ def _router(event):
         ("GET","/auditor/sucursal"):  _route_auditor_sucursal,
         ("GET","/auditor/destino"):   _route_auditor_destino,
         ("POST","/upload-url"):       _route_upload_url,
+        ("GET","/documento"):         _route_documento,
         ("GET","/health"):            _route_health,
     }
     fn=RUTAS.get((method,path))
@@ -137,6 +138,7 @@ def _route_evaluar(event):
                 f"{len(des)} guías · ${suma:,.2f} MXN",detalle))
         except Exception as e:
             logger.warning("Desglose consolidado no anexado: %s",e)
+    resultado.archivo_s3=str(b.get("archivoS3") or "")   # PDF de referencia (S3)
     reg=guardar_solicitud(resultado)
     # Re-procesamiento: los AUTO_RECHAZADA previos del mismo folio quedan
     # REEMPLAZADA (fuera del Kanban; el historial se conserva para auditoría).
@@ -193,6 +195,29 @@ def _route_upload_url(event):
         "put_object", Params={"Bucket":bucket,"Key":key}, ExpiresIn=900)
     logger.info("UPLOAD-URL %s user=%s",key,_uid(event))
     return _ok({"url":url,"key":key,"bucket":bucket,"fecha":fecha})
+
+
+def _route_documento(event):
+    """URL prefirmada de LECTURA para abrir el PDF de un caso desde el monitor.
+    El bucket es privado; la URL dura 5 minutos y solo firma objetos del bucket."""
+    import boto3
+    from botocore.config import Config
+    key=str(_qs(event).get("key") or "").strip()
+    if not key or ".." in key:
+        return _err("'key' requerida",400)
+    bucket=os.environ.get("S3_BUCKET","")
+    if not bucket: return _err("S3_BUCKET no configurado",500)
+    region=os.environ.get("AWS_REGION") or "us-east-1"
+    s3=boto3.client("s3", region_name=region,
+                    endpoint_url=f"https://s3.{region}.amazonaws.com",
+                    config=Config(signature_version="s3v4",
+                                  s3={"addressing_style":"virtual"}))
+    url=s3.generate_presigned_url("get_object",
+        Params={"Bucket":bucket,"Key":key,
+                "ResponseContentDisposition":"inline",
+                "ResponseContentType":"application/pdf"},
+        ExpiresIn=300)
+    return _ok({"url":url})
 
 
 def _build_solicitud_input(b: dict) -> SolicitudInput:
@@ -367,6 +392,7 @@ def _handle_s3(event):
                     resultados.append({"key":key,"folioCP":caso.get("folioCP"),"error":caso.get("error")})
                     continue
                 sol=caso_a_solicitud(caso)
+                sol["archivoS3"]=key   # referencia al PDF para abrirlo desde el monitor
                 resp=_route_evaluar({"requestContext":{},"path":"/evaluar","httpMethod":"POST","body":json.dumps(sol)})
                 resultados.append({"key":key,"folioCP":caso["folioCP"],"status":resp["statusCode"],"body":json.loads(resp["body"])})
         except Exception as exc:

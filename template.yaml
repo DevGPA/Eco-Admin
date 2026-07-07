@@ -223,6 +223,14 @@ Resources:
             Method: POST
             Path:   /upload-url
 
+        # API Gateway — GET /documento (URL prefirmada para VER el PDF de un caso)
+        ApiDocumento:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: GET
+            Path:   /documento
+
         # API Gateway — POST /aprobar
         ApiAprobar:
           Type: HttpApi
