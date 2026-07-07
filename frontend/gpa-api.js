@@ -707,6 +707,10 @@ class GpaMonitorBridge {
     if (estado === 'EN_REVISION' || estado === 'ESCALADA') {
       btns = `<button class="btn btnd" onclick="gpaRechazar('${solId}')">✕</button>` +
              `<button class="btn btnp" onclick="gpaAprobar('${solId}')">✓ Aprobar</button>`;
+    } else if (estado === 'AUTO_RECHAZADA') {
+      // El aprobador puede ANULAR un rechazo del motor (autorizar con motivo).
+      btns = `<button class="btn" onclick="gpaVerDetalle('${solId}')">Ver</button>` +
+             `<button class="btn btnp" onclick="gpaAutorizar('${solId}')">✓ Autorizar</button>`;
     }
 
     return `
@@ -878,6 +882,21 @@ window.gpaEscalar = async function(solId) {
     await gpaBridge.refreshKanban();
   } catch(e) {
     alert('Error al escalar: ' + e.message);
+  }
+};
+
+window.gpaAutorizar = async function(solId) {
+  // Anular un rechazo AUTOMÁTICO del motor: requiere motivo (queda en el
+  // historial como decisión humana → APROBADA_MANUAL).
+  const motivo = prompt('Vas a AUTORIZAR una solicitud que el motor rechazó.\n' +
+                        'Escribe el motivo (obligatorio):');
+  if (motivo === null) return;                    // canceló
+  if (!motivo.trim()) { alert('El motivo es obligatorio para autorizar un rechazo.'); return; }
+  try {
+    await gpaApi.aprobar(solId, 'AUTORIZACIÓN DE RECHAZO AUTOMÁTICO: ' + motivo.trim());
+    await gpaBridge.refreshKanban();
+  } catch (e) {
+    alert('Error al autorizar: ' + e.message);
   }
 };
 
