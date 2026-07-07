@@ -829,3 +829,40 @@ def test_usd_sin_tc_sigue_siendo_error():
     fv_usd = pag(emisor=RFC_GPA, receptor=CLIENTE, subtotal=500, moneda="USD", folio="F-9444")
     res = emparejar_casos([cp_pag, fv_usd], "X")
     assert res["casos"][0].get("error") == "SIN_TIPO_CAMBIO"
+
+
+# ── Desglose de consolidados (hoja-Excel dentro del PDF, caso ACRED3129) ──
+def test_parse_desglose_consolidado():
+    from s3.ocr_extractor import _parse_desglose
+    texto = ("No. GUÍA\nFECHA\nCIUDAD\nCOMPAÑÍA\nMÉTODO D# DE PAQU TOTAL\n"
+             "48980JRZE38QLZEJ\n22/05/2026 SAN PATRICIO\nTHE POOLCITY\nConvenio\n1\n500.00\n$     \n"
+             "47910OK6SAUJZLBB\n22/05/2026 La Barca\nRIVAS DURAN\nConvenio\n2\n240.00\n$     \n")
+    rows = _parse_desglose(texto)
+    assert len(rows) == 2
+    assert rows[0] == {"guia": "48980JRZE38QLZEJ", "fecha": "22/05/2026",
+                       "ciudad": "SAN PATRICIO", "compania": "THE POOLCITY",
+                       "paquetes": 1, "total": 500.0}
+    assert rows[1]["total"] == 240.0
+    assert _parse_desglose("página normal sin tabla") == []
+
+
+def test_desglose_viaja_al_caso_y_solicitud():
+    from s3.ocr_extractor import _pagina_desde_texto
+    hoja = _pagina_desde_texto([
+        {"text": "No. GUÍA", "top": 0.05, "left": 0.1}, {"text": "FECHA", "top": 0.05, "left": 0.3},
+        {"text": "CIUDAD", "top": 0.05, "left": 0.4}, {"text": "COMPAÑÍA", "top": 0.05, "left": 0.5},
+        {"text": "MÉTODO D# DE PAQU TOTAL", "top": 0.05, "left": 0.7},
+        {"text": "48980JRZE38QLZEJ", "top": 0.08, "left": 0.1},
+        {"text": "22/05/2026 SAN PATRICIO", "top": 0.10, "left": 0.1},
+        {"text": "THE POOLCITY", "top": 0.12, "left": 0.1},
+        {"text": "Convenio", "top": 0.14, "left": 0.1},
+        {"text": "1", "top": 0.16, "left": 0.1},
+        {"text": "500.00", "top": 0.18, "left": 0.1},
+    ])
+    assert hoja["tipoDoc"] == "DESGLOSE" and len(hoja["desglose"]) == 1
+    res = emparejar_casos([hoja, cp(1000.0, "ACRED1"), fv(900.0, "F-7777")], "ACRED1")
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["desglose"][0]["guia"] == "48980JRZE38QLZEJ"
+    sol = caso_a_solicitud(caso)
+    assert sol["desgloseConsolidado"][0]["total"] == 500.0

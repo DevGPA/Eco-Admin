@@ -638,6 +638,10 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
     De las páginas OCR de UN PDF (que puede traer varios CP y varias FV) arma
     UN caso por cada CP, emparejando su(s) FV por el folio del campo Comentarios.
     """
+    # Hojas de DESGLOSE de consolidados: se recolectan y anexan a los casos.
+    desglose = [r for p in paginas for r in (p.get("desglose") or [])]
+    paginas = [p for p in paginas if not p.get("desglose")]
+
     cps, fvs, ajenas = [], [], []
     for p in paginas:
         clase = clasificar_pagina(p)
@@ -694,7 +698,12 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         if not match and len(cps) == 1 and facturas:
             match = list(facturas)
             usadas.update(range(len(facturas)))
-        casos.append(_construir_caso(cp, match, folio_archivo))
+        caso = _construir_caso(cp, match, folio_archivo)
+        # Consolidados: anexar la tabla de desglose (guía/ciudad/total) al caso
+        # para que el revisor la vea en el detalle del monitor.
+        if desglose and caso.get("status") == "OK":
+            caso["desglose"] = desglose
+        casos.append(caso)
 
     fvs_sin_cp = [facturas[i].get("folio") for i in range(len(facturas)) if i not in usadas]
     # Observabilidad: un PDF que no arma casos antes desaparecía sin rastro.
@@ -747,6 +756,8 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
         "tipoCambioRef": tc,
         "campoEntregaFV": "ENTREGA_DOMICILIO",
         "fechaEmision": fecha_emision or caso.get("fechaEmision") or "",
+        # Consolidados: tabla de desglose (guía/ciudad/total) para el detalle.
+        "desgloseConsolidado": caso.get("desglose", []),
     }
 
 
@@ -961,9 +972,44 @@ def _origen_destino(lineas):
     return (None, None, None, None)
 
 
+# ── Desglose de consolidados (hoja-Excel dentro del PDF) ──────────
+# Los consolidados (ACRED/GDL…) incluyen una página con la tabla de revisión:
+# No. GUÍA | FECHA | CIUDAD | COMPAÑÍA | MÉTODO | # PAQUETES | TOTAL.
+# Se extrae y se anexa al detalle del caso para que el revisor la vea en el
+# monitor (es la misma tabla contra la que hoy revisan en Excel).
+_RE_DESGLOSE_ROW = re.compile(
+    r"(?m)^([A-Z0-9]{10,})\s*\n(\d{2}/\d{2}/\d{4})\s+(.+)\n(.+)\n(.+)\n(\d+)\n([\d,]+\.\d{2})")
+
+
+def _parse_desglose(texto: str) -> list[dict]:
+    up = (texto or "").upper()
+    if "GU" not in up or "TOTAL" not in up or "CIUDAD" not in up:
+        return []
+    rows = []
+    for m in _RE_DESGLOSE_ROW.finditer(texto):
+        rows.append({"guia": m.group(1), "fecha": m.group(2),
+                     "ciudad": " ".join(m.group(3).split()),
+                     "compania": " ".join(m.group(4).split()),
+                     "paquetes": int(m.group(6)),
+                     "total": float(m.group(7).replace(",", ""))})
+    return rows
+
+
 def _pagina_desde_texto(lineas: list[dict]) -> dict:
     """Construye el dict de página (mismos campos que _parse_textract) desde la
     capa de texto del PDF. Reusa los helpers de RFC/emisor-receptor/tipo/folio."""
+    # ¿Es la hoja de DESGLOSE de un consolidado? (tabla guía/ciudad/total, sin
+    # RFCs). Se marca como tal para anexarla a los casos del PDF, no se clasifica.
+    _texto_pagina = "\n".join(ln["text"] for ln in lineas)
+    _rows_desglose = _parse_desglose(_texto_pagina)
+    if _rows_desglose:
+        return {"tipoDoc": "DESGLOSE", "desglose": _rows_desglose,
+                "rfcEmisor": None, "rfcReceptor": None, "rfcsDetectados": [],
+                "subtotal": None, "moneda": None, "tipoCambio": None, "folio": None,
+                "fecha": None, "comentarios": None, "origenEstado": None,
+                "origenCiudad": None, "destinoEstado": None, "destinoCiudad": None,
+                "fletaRFC": None, "fleteraTexto": "", "partidas": []}
+
     rfcs_pos = _rfcs_en_lineas(lineas)
     rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
     tipo_doc = _tipo_documento(lineas)

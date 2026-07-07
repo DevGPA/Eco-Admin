@@ -20,7 +20,7 @@ from __future__ import annotations
 import json, os, logging, traceback
 from dataclasses import asdict
 from typing import Any
-from motor.evaluador import (SolicitudInput, evaluar,
+from motor.evaluador import (SolicitudInput, evaluar, CriterioDetalle,
                               CartaPorte, FacturaVenta, Partida, LineaCargo)
 from motor.catalogos import R_CONCEPTOS, normalizar_destino
 from db.validaciones import verificar_unicidad
@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.13"  # R-093 sin factura anexa; MXN vs MXN directo; TC de cualquier factura del caso; dedupe tarjetas error
+VERSION = "2.4.14"  # desglose de consolidados (hoja-Excel del PDF) anexado al detalle del caso
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
@@ -124,6 +124,19 @@ def _route_evaluar(event):
         return _err(val["detalle"],409,val["codigo"])
     sol=_build_solicitud_input(b)
     resultado=evaluar(sol)
+    # Consolidados: anexar el desglose (guía/ciudad/total) al detalle del caso —
+    # es la tabla contra la que el revisor valida (antes lo hacía en Excel).
+    des=b.get("desgloseConsolidado") or []
+    if des:
+        try:
+            suma=sum(float(d.get("total",0) or 0) for d in des)
+            detalle="; ".join(f"{d.get('guia','?')} → {d.get('ciudad','?')} ({d.get('compania','')}) "
+                              f"${float(d.get('total',0) or 0):,.2f}" for d in des)[:900]
+            resultado.criterios.append(CriterioDetalle(
+                "Desglose consolidado","INFO",
+                f"{len(des)} guías · ${suma:,.2f} MXN",detalle))
+        except Exception as e:
+            logger.warning("Desglose consolidado no anexado: %s",e)
     reg=guardar_solicitud(resultado)
     # Re-procesamiento: los AUTO_RECHAZADA previos del mismo folio quedan
     # REEMPLAZADA (fuera del Kanban; el historial se conserva para auditoría).
