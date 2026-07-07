@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.15"  # PDF de referencia clickeable (GET /documento + archivoS3 en el caso)
+VERSION = "2.4.16"  # Origen/destino: estados con nombre completo (Toluca/Edo. México), sin duplicar terminal, alias CHI
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

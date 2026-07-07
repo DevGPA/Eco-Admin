@@ -26,7 +26,8 @@ from typing import Optional
 import boto3
 
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
-                             fletera_por_nombre, TIPO_CAMBIO_DEFAULT)
+                             fletera_por_nombre, TIPO_CAMBIO_DEFAULT,
+                             normalizar_destino, DESTINOS_CATALOGO)
 
 logger = logging.getLogger(__name__)
 
@@ -787,6 +788,8 @@ _EDO_ABBR = {
     "QRO": "Querétaro", "SLP": "San Luis Potosí", "VER": "Veracruz",
     "TAMPS": "Tamaulipas", "TAB": "Tabasco", "CHIS": "Chiapas", "OAX": "Oaxaca",
     "SIN": "Sinaloa", "SON": "Sonora", "COAH": "Coahuila", "CHIH": "Chihuahua",
+    # "CIUDAD JUAREZ, CHI" (Tresguerras trunca CHIH; Chiapas siempre es CHIS)
+    "CHI": "Chihuahua",
     "DGO": "Durango", "ZAC": "Zacatecas", "AGS": "Aguascalientes", "COL": "Colima",
     "MICH": "Michoacán", "MOR": "Morelos", "NAY": "Nayarit", "HGO": "Hidalgo",
     "PUE": "Puebla", "GRO": "Guerrero", "CAMP": "Campeche", "TLAX": "Tlaxcala",
@@ -860,16 +863,34 @@ def _tc_moneda(lineas):
 
 
 def _ciudad_estado(txt):
-    """'VALLADOLID, YUC.' → ('Valladolid','Yucatán'); tolera sufijo ', MEX' de las
-    filas de domicilio ('GUADALAJARA, JAL., MEX'). None si no es ciudad,estado."""
-    t = re.sub(r",?\s*(MEX|MEXICO|MÉXICO)\.?$", "", txt.strip(), flags=re.I).strip().rstrip(",")
+    """'VALLADOLID, YUC.' → ('Valladolid','Yucatán'). Acepta abreviaturas
+    ('JAL.', 'Q.R.') y nombres COMPLETOS tras la coma ('TOLUCA, EDO. DE
+    MEXICO', 'MERIDA, YUCATAN'); tolera el sufijo-país ', MEX' de las filas
+    de domicilio. None si no es ciudad,estado."""
+    raw = txt.strip().rstrip(",")
+    t = re.sub(r",?\s*(MEX|MEXICO|MÉXICO)\.?$", "", raw, flags=re.I).strip().rstrip(",")
+    # 1) Abreviatura corta tras la coma
     m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]+?),\s*([A-ZÑ][A-ZÑ. ]{1,5}?)\.?$", t)
-    if not m:
-        return None
-    ciudad = " ".join(m.group(1).split()).title()
-    abbr = re.sub(r"[.\s]", "", m.group(2)).upper()
-    estado = _EDO_ABBR.get(abbr)
-    return (ciudad, estado) if estado else None
+    if m:
+        abbr = re.sub(r"[.\s]", "", m.group(2)).upper()
+        estado = _EDO_ABBR.get(abbr)
+        if estado:
+            return (" ".join(m.group(1).split()).title(), estado)
+    # 2) Nombre COMPLETO del estado tras la última coma. OJO: se intenta sobre
+    # el texto ORIGINAL además del recortado — el recorte ", MEX" mutila
+    # "EDO. DE MEXICO" → "EDO. DE" (bug real del folio 119581944, Toluca).
+    for cand in (raw, t):
+        if "," not in cand:
+            continue
+        ciudad_p, cola = cand.rsplit(",", 1)
+        # Cola tal cual y sin puntos: "EDO. DE MEXICO" solo tiene alias
+        # como "EDO DE MEXICO".
+        for cola_v in (cola.strip().strip("."), re.sub(r"\.", "", cola).strip()):
+            canon = normalizar_destino(cola_v)
+            if (canon in DESTINOS_CATALOGO or canon.upper() in ("CHIAPAS", "OAXACA")) \
+                    and re.match(r"^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]*$", ciudad_p.strip()):
+                return (" ".join(ciudad_p.split()).title(), canon)
+    return None
 
 
 def _estado_de_token(tok: Optional[str]) -> Optional[str]:
@@ -965,9 +986,19 @@ def _origen_destino(lineas):
         dst = der[0] if der else None
         if ori and dst:
             return (ori[2][0], ori[2][1], dst[2][0], dst[2][1])
+        # Ambos en el mismo lado pero en la MISMA fila y con plazas DISTINTAS
+        # → extremos: izquierdo=origen, derecho=destino.
         fila0 = cands[0][0]
         fila = sorted((c for c in cands if abs(c[0] - fila0) < 0.02), key=lambda c: c[1])
-        return (fila[0][2][0], fila[0][2][1], fila[-1][2][0], fila[-1][2][1])
+        if len(fila) >= 2 and fila[0][2] != fila[-1][2]:
+            return (fila[0][2][0], fila[0][2][1], fila[-1][2][0], fila[-1][2][1])
+        # Solo un candidato legible → devolver ese lado y dejar el otro vacío
+        # (revisión). NUNCA duplicarlo como origen Y destino (folio 119581944:
+        # destino quedaba "Jalisco" siendo Toluca/Edo. México).
+        if ori:
+            return (ori[2][0], ori[2][1], None, None)
+        if dst:
+            return (None, None, dst[2][0], dst[2][1])
 
     return (None, None, None, None)
 

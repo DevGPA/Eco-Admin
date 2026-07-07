@@ -745,6 +745,43 @@ def test_origen_prefiere_ciudad_que_mapea_a_sucursal():
     assert de == "Guerrero"
 
 
+def test_ciudad_estado_nombre_completo():
+    # Estados con NOMBRE COMPLETO tras la coma (folio real 119581944: Toluca).
+    from s3.ocr_extractor import _ciudad_estado
+    assert _ciudad_estado("TOLUCA, EDO. DE MEXICO") == ("Toluca", "Edo. México")
+    assert _ciudad_estado("MERIDA, YUCATAN") == ("Merida", "Yucatán")
+    # "CIUDAD JUAREZ, CHI" (Tresguerras trunca CHIH; Chiapas siempre es CHIS)
+    assert _ciudad_estado("CIUDAD JUAREZ, CHI") == ("Ciudad Juarez", "Chihuahua")
+    assert _ciudad_estado("TUXTLA GUTIERREZ, CHIS.") == ("Tuxtla Gutierrez", "Chiapas")
+
+
+def test_origen_destino_no_duplica_con_un_solo_candidato():
+    # Folio real 119581944: la fila superior trae la terminal + un destino que
+    # antes no parseaba → el fallback duplicaba la terminal como origen Y
+    # destino ("Jalisco" siendo Toluca). Con un solo lado legible, el otro debe
+    # quedar vacío (revisión), nunca duplicado.
+    lineas = [
+        {"text": "GONZALEZ GALLO, JAL.", "top": 0.14, "left": 0.12},
+        {"text": "DESTINO ILEGIBLE SIN COMA", "top": 0.14, "left": 0.58},
+        {"text": "GUADALAJARA, JAL., MEX", "top": 0.22, "left": 0.06},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert (oc, oe) == ("Guadalajara", "Jalisco")
+    assert dc is None and de is None               # jamás "Gonzalez Gallo"
+
+
+def test_origen_destino_toluca_estado_completo():
+    # Caso 119581944 completo: destino con nombre de estado completo a la derecha.
+    lineas = [
+        {"text": "GONZALEZ GALLO, JAL.", "top": 0.14, "left": 0.12},
+        {"text": "TOLUCA, EDO. DE MEXICO", "top": 0.14, "left": 0.58},
+        {"text": "GUADALAJARA, JAL., MEX", "top": 0.22, "left": 0.06},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert (oc, oe) == ("Guadalajara", "Jalisco")
+    assert (dc, de) == ("Toluca", "Edo. México")
+
+
 def test_fletera_por_nombre_en_texto_de_la_factura():
     # El CP trae el RFC de la fletera en el LOGO (no en texto), pero la factura
     # de GPA dice "Embarcar por TRES GUERRAS" → la fletera se resuelve a nivel caso.
