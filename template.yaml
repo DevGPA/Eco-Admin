@@ -169,7 +169,7 @@ Parameters:
 
   BedrockModelId:
     Type:    String
-    Default: us.anthropic.claude-sonnet-4-20250514-v1:0
+    Default: us.anthropic.claude-sonnet-4-5-20250929-v1:0
     Description: Modelo / inference-profile de Claude en Bedrock (OcrBackend bedrock/hibrido y lectura del sello)
 
   RfcGpa:

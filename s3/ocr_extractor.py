@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID",
-    "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 )
 OCR_DPI = int(os.environ.get("OCR_DPI", "200"))
 
