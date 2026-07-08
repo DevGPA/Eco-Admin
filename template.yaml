@@ -42,10 +42,11 @@ Globals:
     # binario de pymupdf funcione en la Lambda.
     Architectures: [x86_64]
     MemorySize:   512
-    # 300 s: el OCR (Textract) procesa varias páginas por documento. Las rutas de
-    # API Gateway responden rápido (API GW corta a 29 s de todos modos); el path
-    # S3→OCR es asíncrono y aprovecha el tiempo completo.
-    Timeout:      300
+    # 900 s: el OCR procesa varias páginas por documento; con Claude visión un
+    # PDF de 25 páginas toma ~5 min (300 s lo cortaba a la mitad — lote 26-06).
+    # Las rutas de API Gateway responden rápido (API GW corta a 29 s de todos
+    # modos); el path S3→OCR es asíncrono y aprovecha el tiempo completo.
+    Timeout:      900
     Tracing:      Active          # AWS X-Ray habilitado
     Layers:
       - !Ref DependenciasLayer
