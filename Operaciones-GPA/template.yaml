@@ -361,12 +361,11 @@ Resources:
       UserPoolName: !Sub gpa-ops-users-${Env}
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
-      # Envío de correos vía Amazon SES (remitente verificado). En sandbox SES solo
-      # entrega a correos verificados; al aprobar el "production access" llega a todos.
-      EmailConfiguration:
-        EmailSendingAccount: DEVELOPER
-        SourceArn: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/alertas.gpa.com.mx"
-        From: "Sistema de Gestión GPA <avisos@alertas.gpa.com.mx>"
+      # NOTA: envío de correos por SES pendiente (dominio alertas.gpa.com.mx sin
+      # verificar DKIM). Mientras tanto se usa el remitente por defecto de Cognito
+      # (COGNITO_DEFAULT). Para activar SES: verificar el dominio + production access,
+      # y volver a agregar aquí EmailConfiguration (DEVELOPER, SourceArn=identity/
+      # alertas.gpa.com.mx, From=avisos@alertas.gpa.com.mx). Ver memoria del proyecto.
       Policies:
         PasswordPolicy:
           MinimumLength:    8
