@@ -164,13 +164,13 @@ Parameters:
   OcrBackend:
     Type:          String
     Default:       textract
-    AllowedValues: [textract, bedrock]
-    Description:   Motor de OCR (textract = nativo AWS, recomendado)
+    AllowedValues: [textract, bedrock, hibrido]
+    Description:   Motor de OCR (textract nativo; bedrock = Claude visión; hibrido = Textract y Bedrock solo si la página sale ilegible)
 
   BedrockModelId:
     Type:    String
     Default: us.anthropic.claude-sonnet-4-20250514-v1:0
-    Description: Modelo / inference-profile de Claude en Bedrock (solo si OcrBackend=bedrock)
+    Description: Modelo / inference-profile de Claude en Bedrock (OcrBackend bedrock/hibrido y lectura del sello)
 
   RfcGpa:
     Type:    String

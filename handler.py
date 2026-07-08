@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.17"  # Dispersiones internas (GPA→GPA / Pre Guía) + notas de crédito como anexo
+VERSION = "2.5.0"   # M846228 suma FVs + Bedrock visión (adaptador, híbrido, sello GS0xxx)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
@@ -138,6 +138,13 @@ def _route_evaluar(event):
                 f"{len(des)} guías · ${suma:,.2f} MXN",detalle))
         except Exception as e:
             logger.warning("Desglose consolidado no anexado: %s",e)
+    # Sello de Control Presupuestal leído del documento (visión): visible en el
+    # detalle para el revisor (código de gasto GS0xxx + tipo de flete).
+    if b.get("codigoSAP") or b.get("tipoFleteSello"):
+        resultado.criterios.append(CriterioDetalle(
+            "Sello presupuestal","INFO",
+            str(b.get("codigoSAP") or "sin código"),
+            str(b.get("tipoFleteSello") or "")))
     resultado.archivo_s3=str(b.get("archivoS3") or "")   # PDF de referencia (S3)
     reg=guardar_solicitud(resultado)
     # Re-procesamiento: los AUTO_RECHAZADA previos del mismo folio quedan
@@ -359,7 +366,8 @@ def _route_auditor_destino(event):
 # ── GET /health ───────────────────────────────────────────────────
 def _route_health(event):
     import boto3; from datetime import datetime,timezone
-    checks={"lambda":"ok","version":VERSION}
+    checks={"lambda":"ok","version":VERSION,
+            "ocr":os.environ.get("OCR_BACKEND","textract").lower()}
     try:
         boto3.client("dynamodb").describe_table(TableName=os.environ.get("DYNAMO_TABLE","gpa_fletes_dev"))
         checks["dynamodb"]="ok"
@@ -369,8 +377,8 @@ def _route_health(event):
         if bucket: boto3.client("s3").head_bucket(Bucket=bucket); checks["s3"]="ok"
         else: checks["s3"]="not-configured"
     except Exception as e: checks["s3"]=f"error:{str(e)[:60]}"
-    # "version" es informativo, no un check — excluirlo del veredicto
-    all_ok=all(v in("ok","not-configured") for k,v in checks.items() if k!="version")
+    # "version"/"ocr" son informativos, no checks — excluirlos del veredicto
+    all_ok=all(v in("ok","not-configured") for k,v in checks.items() if k not in("version","ocr"))
     checks["timestamp"]=datetime.now(timezone.utc).isoformat()
     checks["status"]="healthy" if all_ok else "degraded"
     return _ok(checks, 200 if all_ok else 503)

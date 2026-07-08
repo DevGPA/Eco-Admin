@@ -110,6 +110,11 @@ parameter_overrides = [
   "UmbralTarifaDisp=0.10",
   "UmbralCargoEnvio=0.01",
   "BackorderEnabled=false",
+  # Motor de OCR para escaneos: textract | bedrock (prueba A/B) | hibrido
+  # (estado final: Textract primero, Bedrock solo si la página sale ilegible).
+  # Cambiar de modo = editar esta línea y `sam deploy --config-env prod`.
+  # Requiere Bedrock Model access (Anthropic Claude, us-east-1) para bedrock/hibrido.
+  "OcrBackend=textract",
 ]
 
 tags = "Proyecto=GPA-Admin Env=prod Motor=v2.4"

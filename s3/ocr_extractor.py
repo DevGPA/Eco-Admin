@@ -27,7 +27,7 @@ import boto3
 
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
                              fletera_por_nombre, TIPO_CAMBIO_DEFAULT,
-                             normalizar_destino, DESTINOS_CATALOGO)
+                             normalizar_destino, DESTINOS_CATALOGO, SAPS_DISPERSION)
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +80,36 @@ PROMPT_OCR = (
     "    pesoKg/volumenL/presentacion = tamaño/presentación de UNA unidad del producto "
     '(p.ej. "50 KGS", "20 L"); es el factor que define si el producto es excluido por '
     "tamaño. Extrae el número del peso/volumen de la descripción si viene ahí.\n"
+    '  "fleteraNombre": string|null (razón social de la fletera/transportista, aunque '
+    "su RFC solo esté en el logo del membrete)\n"
+    '  "esNotaCredito": boolean     (true si es nota de crédito / CFDI tipo E-Egreso)\n'
+    '  "esPreguia": boolean         (true si la página es el formato interno '
+    '"Pre Guía Almacén Origen" de GPA)\n'
+    '  "destinatarioGPA": boolean   (true si el bloque DESTINATARIO del comprobante es '
+    "General de Productos para el Agua — GPA se envía a sí misma)\n"
+    "SELLO de Control Presupuestal: estampa rectangular de GPA (encabezado 'Formato de "
+    "Control Presupuestal') con centro de costo, cuenta contable, código SAP y casillas "
+    "de sucursal. Si aparece en la página:\n"
+    '  "codigoSAP": string|null     (código GS0xxx del sello, p.ej. "GS0231")\n'
+    '  "sucursalSello": string|null (casilla de sucursal MARCADA: Guadalajara, '
+    "Monterrey, Pto. Vallarta, México, Cancún, Los Cabos o Corporativo)\n"
+    '  "tipoFleteSello": string|null (texto del recuadro TIPO DE FLETE, p.ej. '
+    '"DISP. SEMANAL", "GARANTIAS Y DEVOLUCIONES")\n'
     "Si la página no es un comprobante (anexo, acuse, etc.), usa tipoDocumento=OTRO "
-    "y los demás en null/[]."
+    "y los demás en null/[]/false."
+)
+
+# Prompt corto para leer SOLO el sello presupuestal (páginas CP digitales cuya
+# capa de texto es exacta pero el sello es una imagen estampada).
+PROMPT_SELLO = (
+    "La imagen es una carta porte con un SELLO rectangular de 'Formato de Control "
+    "Presupuestal' de General de Productos para el Agua (GPA). Devuelve EXCLUSIVAMENTE "
+    "un objeto JSON:\n"
+    '  "codigoSAP": string|null     (código GS0xxx impreso en el sello, p.ej. "GS0231")\n'
+    '  "sucursalSello": string|null (casilla de sucursal MARCADA: Guadalajara, '
+    "Monterrey, Pto. Vallarta, México, Cancún, Los Cabos o Corporativo)\n"
+    '  "tipoFleteSello": string|null (texto del recuadro TIPO DE FLETE)\n'
+    "Si no hay sello visible, todo en null."
 )
 
 
@@ -101,11 +129,26 @@ def render_paginas_pdf(pdf_bytes: bytes, dpi: int = OCR_DPI) -> list[bytes]:
 
 
 # ── OCR de una página — backend conmutable (OCR_BACKEND) ──────────
+def _pagina_pobre(p: dict) -> bool:
+    """Página OCR sin nada que emparejar: ni un RFC ni un monto."""
+    return not p.get("rfcsDetectados") and not _num(p.get("subtotal"))
+
+
 def ocr_pagina(imagen_png: bytes, client=None) -> dict:
-    """Extrae los campos del comprobante de UNA página (Textract o Bedrock)."""
+    """Extrae los campos del comprobante de UNA página.
+    Backends (env OCR_BACKEND): "textract" | "bedrock" | "hibrido".
+    hibrido = Textract primero; si la página sale POBRE (sin RFC y sin monto),
+    reintenta con Bedrock (Claude visión) y se queda con esa; si Bedrock falla,
+    conserva lo de Textract (fail-open)."""
     if OCR_BACKEND == "bedrock":
         return _ocr_bedrock(imagen_png, client=client)
-    return _ocr_textract(imagen_png, client=client)
+    pagina = _ocr_textract(imagen_png, client=client)
+    if OCR_BACKEND == "hibrido" and _pagina_pobre(pagina):
+        try:
+            pagina = _ocr_bedrock(imagen_png)
+        except Exception as exc:
+            logger.warning("Híbrido: Bedrock falló, se conserva Textract: %s", exc)
+    return pagina
 
 
 # --- Backend 1: Amazon Textract (nativo AWS, recomendado) ---------
@@ -259,10 +302,13 @@ def _folio_no_fiscal(lineas) -> Optional[str]:
             if m:
                 return m.group(1).replace(" ", "")
     # Serie-folio de las facturas GPA sin la palabra "Folio" en la línea:
-    # el encabezado dice "Factura  FC 20109707" (o FA/FM/FLC + dígitos). Sin
-    # esto el folio de la FV quedaba vacío y rompía la unicidad (R-091).
+    # el encabezado dice "Factura  FC 20109707" (o FA/FM/FLC/FMTY + dígitos —
+    # la serie es F + sucursal, hasta 3 letras más). Sin esto el folio de la FV
+    # quedaba vacío: rompía la unicidad (R-091) y fundía facturas DISTINTAS de
+    # un mismo PDF como si fueran una multipágina (M846228 no sumaba sus FVs).
     for ln in lineas:
-        m = re.search(r"\b(F[ACMV]|FLC)\s?-?(\d{6,})\b", ln["text"].upper())
+        # (?!AX\b): "FAX 8183722126" no es una serie de factura.
+        m = re.search(r"\b(F(?!AX\b)[A-Z]{1,3})\s?-?(\d{6,})\b", ln["text"].upper())
         if m:
             return m.group(1) + m.group(2)
     return None
@@ -401,6 +447,81 @@ def _partidas_de_tablas(blocks, by_id, texto_celda) -> list[dict]:
 
 
 # --- Backend 2: Amazon Bedrock (Claude visión) --------------------
+_RE_SAP = re.compile(r"\bGS0\d{3}\b")
+
+# Casilla del sello → sucursal del catálogo (para rellenar origen vacío).
+_SUCURSAL_SELLO = {
+    "GUADALAJARA": ("Guadalajara", "Jalisco"),
+    "MONTERREY": ("Monterrey", "Nuevo León"),
+    "PTO. VALLARTA": ("Puerto Vallarta", "Jalisco"),
+    "PUERTO VALLARTA": ("Puerto Vallarta", "Jalisco"),
+    "MEXICO": ("Iztapalapa", "CDMX"),
+    "MÉXICO": ("Iztapalapa", "CDMX"),
+    "CANCUN": ("Cancun", "Quintana Roo"),
+    "CANCÚN": ("Cancun", "Quintana Roo"),
+    "LOS CABOS": ("Cabo San Lucas", "Baja California Sur"),
+}
+
+
+def _codigo_sap_valido(v) -> str:
+    m = _RE_SAP.search(str(v or "").upper())
+    return m.group(0) if m else ""
+
+
+def _adaptar_bedrock(raw: dict) -> dict:
+    """Mapea el JSON del modelo (PROMPT_OCR) al MISMO contrato de dict de página
+    que _parse_textract/_pagina_desde_texto. Sin esto, el pipeline (clasificar_
+    pagina, emparejar_casos) no entiende la salida de Bedrock: 'tipoDocumento'
+    usa otro vocabulario, faltan rfcsDetectados/señales y los RFC vienen crudos."""
+    emisor = _norm_rfc(raw.get("rfcEmisor"))
+    receptor = _norm_rfc(raw.get("rfcReceptor"))
+    fleta = _norm_rfc(raw.get("fletaRFC"))
+    tipo_map = {"CARTA_PORTE": "CP", "FACTURA": "FV"}
+    tipo_doc = tipo_map.get(str(raw.get("tipoDocumento") or "").upper()) \
+               or clasificar_por_rfc(emisor, receptor)
+    folio = raw.get("folio")
+    if folio and _UUID_RE.search(str(folio)):
+        folio = None    # folio fiscal (UUID) no es el folio del comprobante
+    partidas = [{
+        "descripcion": str(p.get("descripcion") or ""),
+        "cantidad": _num(p.get("cantidad")) or 1.0,
+        "importe": _num(p.get("importe")),
+        "pesoKg": _num(p.get("pesoKg")) or None,
+        "volumenL": _num(p.get("volumenL")) or None,
+        "presentacion": p.get("presentacion"),
+        "claveSat": p.get("claveSat"),
+    } for p in (raw.get("partidas") or []) if isinstance(p, dict)]
+    return {
+        "rfcEmisor":      emisor,
+        "rfcReceptor":    receptor,
+        "rfcsDetectados": list(dict.fromkeys(r for r in (emisor, receptor, fleta) if r)),
+        "tipoDoc":        tipo_doc if tipo_doc in ("CP", "FV") else (raw.get("tipoDocumento") or "OTRO"),
+        "subtotal":       _num(raw.get("subtotal")) or None,
+        "moneda":         (str(raw.get("moneda") or "").upper() or None),
+        "tipoCambio":     _num(raw.get("tipoCambio")) or None,
+        "folio":          folio,
+        "fecha":          _fecha_iso(str(raw.get("fecha") or "")),
+        "comentarios":    raw.get("comentarios"),
+        "origenEstado":   raw.get("origenEstado"),
+        "origenCiudad":   raw.get("origenCiudad"),
+        "destinoEstado":  raw.get("destinoEstado"),
+        "destinoCiudad":  raw.get("destinoCiudad"),
+        # Fletera: solo un RFC del catálogo autorizado (nunca uno inventado).
+        "fletaRFC":       fleta if fleta in FLETERAS_AUTORIZADAS else
+                          (emisor if emisor in FLETERAS_AUTORIZADAS else ""),
+        "fleteraTexto":   fletera_por_nombre(str(raw.get("fleteraNombre") or "")),
+        "partidas":       partidas,
+        # Señales especiales (mismas que _senales_especiales en los otros caminos)
+        "esNotaCredito":  bool(raw.get("esNotaCredito")),
+        "esPreguia":      bool(raw.get("esPreguia")),
+        "destinatarioGPA": bool(raw.get("destinatarioGPA")),
+        # Sello de Control Presupuestal (validado; "" si no pasa el formato)
+        "codigoSAP":      _codigo_sap_valido(raw.get("codigoSAP")),
+        "sucursalSello":  str(raw.get("sucursalSello") or "").strip(),
+        "tipoFleteSello": str(raw.get("tipoFleteSello") or "").strip(),
+    }
+
+
 def _ocr_bedrock(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID) -> dict:
     client = client or boto3.client("bedrock-runtime")
     resp = client.converse(
@@ -415,7 +536,35 @@ def _ocr_bedrock(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_I
         inferenceConfig={"maxTokens": 4096, "temperature": 0},
     )
     texto = resp["output"]["message"]["content"][0]["text"]
-    return _parse_json(texto)
+    return _adaptar_bedrock(_parse_json(texto))
+
+
+def leer_sello_cp(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID) -> dict:
+    """Lee SOLO el sello de Control Presupuestal de una página CP (el sello es
+    una imagen estampada incluso en CFDI digitales — la capa de texto nunca lo
+    trae). Fail-open: cualquier error devuelve {} y el caso queda como estaba."""
+    try:
+        client = client or boto3.client("bedrock-runtime")
+        resp = client.converse(
+            modelId=model_id,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"text": PROMPT_SELLO},
+                    {"image": {"format": "png", "source": {"bytes": imagen_png}}},
+                ],
+            }],
+            inferenceConfig={"maxTokens": 300, "temperature": 0},
+        )
+        raw = _parse_json(resp["output"]["message"]["content"][0]["text"])
+        return {
+            "codigoSAP": _codigo_sap_valido(raw.get("codigoSAP")),
+            "sucursalSello": str(raw.get("sucursalSello") or "").strip(),
+            "tipoFleteSello": str(raw.get("tipoFleteSello") or "").strip(),
+        }
+    except Exception as exc:
+        logger.warning("leer_sello_cp falló (se ignora): %s", exc)
+        return {}
 
 
 def _parse_json(texto: str) -> dict:
@@ -619,13 +768,24 @@ def _consolidar_fvs(fv_pages: list[dict]) -> list[dict]:
     """Agrupa páginas FV en facturas (1 FV por factura) por orden de lectura:
     - un folio NUEVO inicia una factura distinta (se sumarán entre sí);
     - mismo folio, o página sin folio (continuación), pertenece a la factura en curso
-      (su Sub-Total se repite, NO se suma).
+      (su Sub-Total se repite, NO se suma) — SALVO que traiga un Sub-Total
+      DISTINTO no-cero: una factura multipágina REPITE su subtotal en cada
+      página, así que un subtotal diferente es OTRA factura aunque el folio no
+      se haya podido leer (M846228: 3 facturas sin folio legible se fundían en
+      una y el %flete salía contra 1 sola en vez de la suma).
     Así varias facturas de un CP siguen sumándose, pero una factura multipágina cuenta
     una sola vez."""
     grupos = []
     for p in fv_pages:
         d = _digitos(p.get("folio"))
-        if grupos and (not d or d == _digitos(grupos[-1][0].get("folio"))):
+        misma = bool(grupos) and (not d or d == _digitos(grupos[-1][0].get("folio")))
+        if misma and not d:
+            sub_p = round(_num(p.get("subtotal")), 2)
+            subs_grupo = {round(_num(q.get("subtotal")), 2)
+                          for q in grupos[-1] if _num(q.get("subtotal")) > 0}
+            if sub_p > 0 and subs_grupo and sub_p not in subs_grupo:
+                misma = False           # sin folio pero con OTRO subtotal → otra factura
+        if misma:
             grupos[-1].append(p)        # continuación / misma factura
         else:
             grupos.append([p])          # folio nuevo → factura distinta
@@ -670,6 +830,13 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str,
             return {"status": "ERROR", "error": "SIN_TIPO_CAMBIO",
                     "detalle": "FV en USD sin tipo de cambio en ninguna factura del caso.",
                     "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
+    # Origen: el real de la carta porte; si quedó ilegible, la casilla de
+    # sucursal del SELLO presupuestal es un respaldo confiable (la marca GPA).
+    ori_ciudad, ori_estado = cp.get("origenCiudad"), cp.get("origenEstado")
+    if not ori_ciudad:
+        sello_suc = str(cp.get("sucursalSello") or "").upper().strip()
+        if sello_suc in _SUCURSAL_SELLO:
+            ori_ciudad, ori_estado = _SUCURSAL_SELLO[sello_suc]
     return {
         # Destinatario GPA → el motor rutea a la Capa 1a (dispersión interna).
         "destinatarioRFC": RFC_GPA if es_dispersion else "",
@@ -687,14 +854,18 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str,
         "montoVentaFV": monto,
         "monedaFV": moneda,
         "tipoCambioRef": tc,
-        "origenEstado": cp.get("origenEstado"),
-        "origenCiudad": cp.get("origenCiudad"),
+        "origenEstado": ori_estado,
+        "origenCiudad": ori_ciudad,
         # Sucursal derivada del ORIGEN real (no de la facturación); '' si no es plaza GPA
-        "origenSucursal": sucursal_de_origen(cp.get("origenCiudad"), cp.get("origenEstado")),
+        "origenSucursal": sucursal_de_origen(ori_ciudad, ori_estado),
         "destinoEstado": cp.get("destinoEstado"),
         "destinoCiudad": cp.get("destinoCiudad"),
         "fechaEmision": cp.get("fecha") or next((fv.get("fecha") for fv in fvs if fv.get("fecha")), "") or "",
         "partidas": partidas,
+        # Sello de Control Presupuestal (si se pudo leer): rutea GS0231/32 a
+        # dispersión y deja listo GS0247 (com.ped) para su regla.
+        "codigoSAP": cp.get("codigoSAP") or "",
+        "tipoFleteSello": cp.get("tipoFleteSello") or "",
     }
 
 
@@ -769,7 +940,8 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
             match = list(facturas)
             usadas.update(range(len(facturas)))
         caso = _construir_caso(cp, match, folio_archivo,
-                               es_dispersion=hay_preguia or bool(cp.get("destinatarioGPA")))
+                               es_dispersion=(hay_preguia or bool(cp.get("destinatarioGPA"))
+                                              or (cp.get("codigoSAP") or "") in SAPS_DISPERSION))
         # Consolidados: anexar la tabla de desglose (guía/ciudad/total) al caso
         # para que el revisor la vea en el detalle del monitor.
         if desglose and caso.get("status") == "OK":
@@ -816,6 +988,9 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
         "foliosFV": caso["foliosFV"],
         # Dispersión interna (GPA→GPA): rutea a la Capa 1a del motor.
         "destinatarioRFC": caso.get("destinatarioRFC") or "",
+        # Sello presupuestal (GS0231/32 → dispersión; GS0247 com.ped pendiente).
+        "codigoSAP": caso.get("codigoSAP") or "",
+        "tipoFleteSello": caso.get("tipoFleteSello") or "",
         "origenSucursal": caso.get("origenSucursal", ""),
         "destinoEstado": caso.get("destinoEstado") or "",
         "destinoCiudad": caso.get("destinoCiudad") or "",
@@ -1226,7 +1401,15 @@ def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict
             try:
                 texto = page.get_text() or ""
                 if _texto_util(texto):           # capa de texto legible → directo
-                    paginas.append(_pagina_desde_texto(_lineas_pdf_pagina(page)))
+                    p = _pagina_desde_texto(_lineas_pdf_pagina(page))
+                    # El SELLO presupuestal es una IMAGEN estampada incluso en
+                    # CFDI digitales: la capa de texto nunca lo trae. Con Bedrock
+                    # disponible, leerlo de la página CP (1 llamada; fail-open).
+                    if (OCR_BACKEND in ("bedrock", "hibrido")
+                            and clasificar_pagina(p) == "CP" and not p.get("codigoSAP")):
+                        png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
+                        p.update({k: v for k, v in leer_sello_cp(png).items() if v})
+                    paginas.append(p)
                 else:                            # revuelto/escaneo → rasterizar + OCR
                     png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
                     paginas.append(ocr_pagina(png, client=client))

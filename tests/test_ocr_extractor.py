@@ -180,14 +180,16 @@ def test_factura_multipagina_no_duplica_subtotal():
     assert caso["montoVentaFV"] == 1200      # NO 2400 (no se duplica)
 
 
-def test_factura_multipagina_subtotales_distintos_toma_mayor():
-    # Sin folio fiable y subtotales distintos → toma el mayor (suele ser el total).
+def test_facturas_sin_folio_subtotales_distintos_son_facturas_distintas():
+    # REGLA CORREGIDA con el caso real M846228: una factura multipágina REPITE
+    # su subtotal; páginas sin folio con subtotales DISTINTOS son facturas
+    # DISTINTAS y se SUMAN (antes se tomaba solo el mayor → %flete inflado).
     cp_pag = pag(emisor=CARRIER, receptor=RFC_GPA, subtotal=900, moneda="MXN", folio="CP2")
     fv_p1 = fv(subtotal=300, folio=None, tc=17.5)
     fv_p2 = fv(subtotal=950, folio=None, tc=17.5)
     res = emparejar_casos([cp_pag, fv_p1, fv_p2], folio_archivo="ARCH2")
-    assert res["totalFacturas"] == 1
-    assert res["casos"][0]["montoVentaFV"] == 950
+    assert res["totalFacturas"] == 2
+    assert res["casos"][0]["montoVentaFV"] == 1250   # 300 + 950
 
 
 def test_un_cp_con_varias_facturas_distintas_suma_subtotales():
@@ -419,6 +421,114 @@ def test_ocr_bedrock_parsea_json():
     fake = FakeBedrock({"rfcEmisor": RFC_GPA, "subtotal": 4.41})
     d = ocr._ocr_bedrock(b"png", client=fake)
     assert d["rfcEmisor"] == RFC_GPA and d["subtotal"] == 4.41
+
+
+def test_adaptar_bedrock_cumple_contrato_de_pagina():
+    # El JSON crudo del modelo debe mapearse al MISMO contrato que _parse_textract:
+    # tipoDoc CP/FV, RFCs normalizados, rfcsDetectados, señales y sello validado.
+    raw = {
+        "rfcEmisor": "UER-230428-II0", "rfcReceptor": "GPA-840221-9Y1",
+        "tipoDocumento": "CARTA_PORTE", "subtotal": "1,462.96", "moneda": "mxn",
+        "tipoCambio": None, "folio": "3fde084e-5e98-4c07-a8b1-5343fc0d5bdc",
+        "fecha": "2026-06-08", "comentarios": None,
+        "origenEstado": "Jalisco", "origenCiudad": "Guadalajara",
+        "destinoEstado": "Nuevo León", "destinoCiudad": "Monterrey",
+        "fletaRFC": "XXXX999999XX9", "fleteraNombre": "TRES GUERRAS",
+        "esNotaCredito": False, "esPreguia": True, "destinatarioGPA": True,
+        "codigoSAP": "codigo GS0231 ok", "sucursalSello": "Monterrey",
+        "tipoFleteSello": "DISP. SEMANAL",
+        "partidas": [{"descripcion": "Bomba", "cantidad": "2", "importe": "1,000.00"}],
+    }
+    p = ocr._adaptar_bedrock(raw)
+    assert p["tipoDoc"] == "CP"
+    assert p["rfcReceptor"] == "GPA8402219Y1"          # normalizado sin guiones
+    assert "UER230428II0" in p["rfcsDetectados"]
+    assert p["folio"] is None                          # UUID fiscal descartado
+    assert p["subtotal"] == 1462.96 and p["moneda"] == "MXN"
+    assert p["fletaRFC"] == ""                         # RFC inventado NO autorizado
+    assert p["fleteraTexto"] != ""                     # razón social sí resolvió
+    assert p["esPreguia"] is True and p["destinatarioGPA"] is True
+    assert p["codigoSAP"] == "GS0231"                  # extraído y validado GS0xxx
+    assert p["partidas"][0]["importe"] == 1000.0
+
+
+def test_adaptar_bedrock_codigo_sap_invalido_se_descarta():
+    p = ocr._adaptar_bedrock({"tipoDocumento": "FACTURA", "codigoSAP": "GSXX31"})
+    assert p["codigoSAP"] == "" and p["tipoDoc"] == "FV"
+
+
+def test_hibrido_pagina_pobre_reintenta_con_bedrock(monkeypatch):
+    monkeypatch.setattr(ocr, "OCR_BACKEND", "hibrido")
+    monkeypatch.setattr(ocr, "_ocr_textract",
+                        lambda png, client=None: {"rfcsDetectados": [], "subtotal": None})
+    llamadas = []
+    def fake_bedrock(png, client=None):
+        llamadas.append(1)
+        return {"rfcsDetectados": [RFC_GPA], "subtotal": 811.66}
+    monkeypatch.setattr(ocr, "_ocr_bedrock", fake_bedrock)
+    p = ocr.ocr_pagina(b"png")
+    assert llamadas and p["subtotal"] == 811.66
+
+
+def test_hibrido_bedrock_falla_conserva_textract(monkeypatch):
+    monkeypatch.setattr(ocr, "OCR_BACKEND", "hibrido")
+    pagina_txt = {"rfcsDetectados": [], "subtotal": None, "tipoDoc": "OTRO"}
+    monkeypatch.setattr(ocr, "_ocr_textract", lambda png, client=None: pagina_txt)
+    def bedrock_roto(png, client=None):
+        raise RuntimeError("AccessDenied")
+    monkeypatch.setattr(ocr, "_ocr_bedrock", bedrock_roto)
+    assert ocr.ocr_pagina(b"png") is pagina_txt        # fail-open
+
+
+def test_hibrido_pagina_buena_no_llama_bedrock(monkeypatch):
+    monkeypatch.setattr(ocr, "OCR_BACKEND", "hibrido")
+    monkeypatch.setattr(ocr, "_ocr_textract",
+                        lambda png, client=None: {"rfcsDetectados": [RFC_GPA], "subtotal": 100.0})
+    def bedrock_prohibido(png, client=None):
+        raise AssertionError("no debía llamarse")
+    monkeypatch.setattr(ocr, "_ocr_bedrock", bedrock_prohibido)
+    assert ocr.ocr_pagina(b"png")["subtotal"] == 100.0
+
+
+def test_leer_sello_cp_valida_y_es_failopen():
+    fake = FakeBedrock({"codigoSAP": "GS0231", "sucursalSello": "Monterrey",
+                        "tipoFleteSello": "DISP. SEMANAL"})
+    s = ocr.leer_sello_cp(b"png", client=fake)
+    assert s == {"codigoSAP": "GS0231", "sucursalSello": "Monterrey",
+                 "tipoFleteSello": "DISP. SEMANAL"}
+    fake2 = FakeBedrock({"codigoSAP": "GSXX", "sucursalSello": None, "tipoFleteSello": None})
+    assert ocr.leer_sello_cp(b"png", client=fake2)["codigoSAP"] == ""
+    class Roto:
+        def converse(self, **kw): raise RuntimeError("AccessDenied")
+    assert ocr.leer_sello_cp(b"png", client=Roto()) == {}     # fail-open
+
+
+def test_sello_gs0231_hace_el_caso_dispersion_sin_fv():
+    # CP con sello GS0231 y sin factura anexa → dispersión interna, no R-093.
+    cp_pag = dict(pag(receptor=RFC_GPA, subtotal=29739.88, moneda="MXN", folio="119338784"),
+                  codigoSAP="GS0231", tipoFleteSello="DISP. SEMANAL")
+    res = emparejar_casos([cp_pag], "119338784")
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["destinatarioRFC"] == RFC_GPA
+    assert caso["codigoSAP"] == "GS0231"
+    sol = caso_a_solicitud(caso)
+    assert sol["codigoSAP"] == "GS0231" and sol["tipoFleteSello"] == "DISP. SEMANAL"
+
+
+def test_sucursal_sello_es_respaldo_de_origen_vacio():
+    # Origen ilegible pero sello con casilla Monterrey → origenSucursal MTY.
+    cp_pag = dict(pag(receptor=RFC_GPA, subtotal=500.0, moneda="MXN", folio="C9"),
+                  sucursalSello="Monterrey")
+    fv_pag = fv(subtotal=5000.0, folio="FA123456", tc=17.5)
+    res = emparejar_casos([cp_pag, fv_pag], "X")
+    caso = res["casos"][0]
+    assert caso["origenSucursal"] == "MTY"
+    # Y NUNCA pisa un origen legible.
+    cp2 = dict(pag(receptor=RFC_GPA, subtotal=500.0, moneda="MXN", folio="C10"),
+               origenCiudad="Guadalajara", origenEstado="Jalisco", sucursalSello="Monterrey")
+    res2 = emparejar_casos([cp2, fv(subtotal=5000.0, folio="FA123457", tc=17.5)], "X")
+    assert res2["casos"][0]["origenSucursal"] == "GDL"
 
 
 def test_caso_a_solicitud_mapea_campos():
@@ -826,6 +936,39 @@ def test_destinatario_gpa_pareado_misma_fila():
         {"text": "(XAXX010101000)RAUL ROJAS MEDINA", "top": 0.167, "left": 0.683},
     ]
     assert _senales_especiales(venta)["destinatarioGPA"] is False
+
+
+def test_folio_fv_serie_sucursal():
+    # M846228: la serie de la factura es F + sucursal ("FMTY 70088749");
+    # el regex solo cubría FA/FC/FM/FV/FLC → folio vacío → las 3 facturas del
+    # PDF se fundían como una multipágina y el %flete salía contra 1 sola.
+    from s3.ocr_extractor import _folio_no_fiscal
+    assert _folio_no_fiscal([{"text": "FMTY 70088749", "top": 0.05, "left": 0.76}]) == "FMTY70088749"
+    assert _folio_no_fiscal([{"text": "Factura FGDL 20109707", "top": 0.02, "left": 0.6}]) == "FGDL20109707"
+    # "FAX + número" no es una serie de factura.
+    assert _folio_no_fiscal([{"text": "FAX 8183722126", "top": 0.05, "left": 0.1}]) is None
+
+
+def test_consolidar_fvs_sin_folio_con_subtotales_distintos():
+    # Páginas FV sin folio legible pero con subtotales DISTINTOS son facturas
+    # DISTINTAS (una multipágina repite su subtotal). M846228: 1562.04 MXN +
+    # 1815.44 USD + 6248.17 MXN deben sumar, no quedarse con una.
+    from s3.ocr_extractor import _consolidar_fvs
+    pags = [
+        {"folio": None, "subtotal": 1562.04, "moneda": "MXN", "tipoCambio": None, "partidas": []},
+        {"folio": None, "subtotal": 1815.44, "moneda": "USD", "tipoCambio": 17.21, "partidas": []},
+        {"folio": None, "subtotal": 6248.17, "moneda": "MXN", "tipoCambio": None, "partidas": []},
+    ]
+    fvs = _consolidar_fvs(pags)
+    assert len(fvs) == 3
+    assert sorted(round(f["subtotal"], 2) for f in fvs) == [1562.04, 1815.44, 6248.17]
+    # Y una factura multipágina (mismo subtotal repetido, sin folio) sigue siendo UNA.
+    pags2 = [
+        {"folio": "FA123456", "subtotal": 811.66, "moneda": "USD", "tipoCambio": 17.45, "partidas": []},
+        {"folio": None, "subtotal": 811.66, "moneda": "USD", "tipoCambio": None, "partidas": []},
+        {"folio": None, "subtotal": None, "moneda": None, "tipoCambio": None, "partidas": []},
+    ]
+    assert len(_consolidar_fvs(pags2)) == 1
 
 
 def test_fletera_por_nombre_en_texto_de_la_factura():
