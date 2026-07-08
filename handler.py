@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.3"   # Timeout Lambda 900s (PDFs escaneados de 25 páginas excedían 300s con visión)
+VERSION = "2.5.4"   # OCR de páginas en paralelo (4 hilos) + reintentos adaptativos Bedrock
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

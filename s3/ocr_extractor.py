@@ -448,6 +448,22 @@ def _partidas_de_tablas(blocks, by_id, texto_celda) -> list[dict]:
 
 
 # --- Backend 2: Amazon Bedrock (Claude visión) --------------------
+_BEDROCK_CLIENT = None
+
+
+def _bedrock_runtime():
+    """Cliente bedrock-runtime compartido (thread-safe) con reintentos
+    ADAPTATIVOS: con el OCR de páginas en paralelo, un ThrottlingException
+    puntual debe esperar-y-reintentar, no tirar la página a OTRO."""
+    global _BEDROCK_CLIENT
+    if _BEDROCK_CLIENT is None:
+        from botocore.config import Config
+        _BEDROCK_CLIENT = boto3.client("bedrock-runtime", config=Config(
+            retries={"max_attempts": 6, "mode": "adaptive"},
+            read_timeout=120))
+    return _BEDROCK_CLIENT
+
+
 _RE_SAP = re.compile(r"\bGS0\d{3}\b")
 
 # Casilla del sello → sucursal del catálogo (para rellenar origen vacío).
@@ -533,7 +549,7 @@ def _adaptar_bedrock(raw: dict) -> dict:
 
 
 def _ocr_bedrock(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_ID) -> dict:
-    client = client or boto3.client("bedrock-runtime")
+    client = client or _bedrock_runtime()
     resp = client.converse(
         modelId=model_id,
         messages=[{
@@ -554,7 +570,7 @@ def leer_sello_cp(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_
     una imagen estampada incluso en CFDI digitales — la capa de texto nunca lo
     trae). Fail-open: cualquier error devuelve {} y el caso queda como estaba."""
     try:
-        client = client or boto3.client("bedrock-runtime")
+        client = client or _bedrock_runtime()
         resp = client.converse(
             modelId=model_id,
             messages=[{
@@ -1425,17 +1441,43 @@ def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict
                     if (OCR_BACKEND in ("bedrock", "hibrido")
                             and clasificar_pagina(p) == "CP" and not p.get("codigoSAP")):
                         png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
-                        p.update({k: v for k, v in leer_sello_cp(png).items() if v})
-                    paginas.append(p)
+                        paginas.append((i, "sello", p, png))
+                    else:
+                        paginas.append((i, "lista", p, None))
                 else:                            # revuelto/escaneo → rasterizar + OCR
                     png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
-                    paginas.append(ocr_pagina(png, client=client))
+                    paginas.append((i, "ocr", None, png))
             except Exception as exc:   # una página ilegible no tumba el lote
                 logger.warning("Página %d de %s ilegible: %s", i + 1, folio_archivo, exc)
-                paginas.append({"tipoDoc": "OTRO"})
+                paginas.append((i, "lista", {"tipoDoc": "OTRO"}, None))
     finally:
         doc.close()
-    return emparejar_casos(paginas, folio_archivo)
+
+    # Fase 2 — OCR/sello en PARALELO. En serie, un escaneo de 25 páginas
+    # (~30 s de visión por página) excedía incluso los 900 s de la Lambda
+    # (GDL1A-21701, lote 26-06). Son llamadas de red (I/O): con 4 hilos el
+    # mismo documento baja a ~3 min. La rasterización (pymupdf) queda arriba,
+    # en un solo hilo, porque fitz no es thread-safe.
+    def _resolver(t):
+        i, tipo, p, png = t
+        try:
+            if tipo == "ocr":
+                return ocr_pagina(png, client=client)
+            if tipo == "sello":
+                p.update({k: v for k, v in leer_sello_cp(png).items() if v})
+            return p
+        except Exception as exc:
+            logger.warning("Página %d de %s ilegible: %s", i + 1, folio_archivo, exc)
+            return {"tipoDoc": "OTRO"}
+
+    if any(t[1] != "lista" for t in paginas):
+        from concurrent.futures import ThreadPoolExecutor
+        hilos = max(1, int(os.environ.get("OCR_CONCURRENCIA", "4")))
+        with ThreadPoolExecutor(max_workers=hilos) as ex:
+            resueltas = list(ex.map(_resolver, paginas))
+    else:
+        resueltas = [t[2] for t in paginas]
+    return emparejar_casos(resueltas, folio_archivo)
 
 
 def procesar_objeto_s3(bucket: str, key: str, s3_client=None, bedrock_client=None) -> dict:
