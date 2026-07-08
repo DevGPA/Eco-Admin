@@ -361,6 +361,12 @@ Resources:
       UserPoolName: !Sub gpa-ops-users-${Env}
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
+      # Envío de correos vía Amazon SES (remitente verificado). En sandbox SES solo
+      # entrega a correos verificados; al aprobar el "production access" llega a todos.
+      EmailConfiguration:
+        EmailSendingAccount: DEVELOPER
+        SourceArn: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/avisos@alertas.gpa.com.mx"
+        From: "Sistema de Gestión GPA <avisos@alertas.gpa.com.mx>"
       Policies:
         PasswordPolicy:
           MinimumLength:    8
