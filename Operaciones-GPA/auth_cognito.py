@@ -108,6 +108,11 @@ def guardar_cuenta(d: dict) -> dict:
     except c.exceptions.UserNotFoundException:
         existe = False
 
+    # Si es un ALTA (cuenta nueva) y el correo YA existe, se rechaza para no
+    # sobreescribir la cuenta existente. (El correo es el usuario; no hay duplicados.)
+    if d.get("nuevo") and existe:
+        raise ValueError(f"Ya existe una cuenta con el correo {email}. Usa «Editar» para modificarla.")
+
     creado = False
     if not existe:
         # ALTA: Cognito GENERA una contraseña temporal automáticamente y la envía en el
