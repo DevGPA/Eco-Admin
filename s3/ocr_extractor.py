@@ -70,7 +70,8 @@ PROMPT_OCR = (
     '  "tipoCambio": number|null  (si aparece "Tipo de Cambio")\n'
     '  "folio": string|null       (folio o serie-folio del comprobante)\n'
     '  "fecha": string|null        (fecha de emisión en formato YYYY-MM-DD)\n'
-    '  "comentarios": string|null (texto del campo Comentarios; suele enlazar la FV: "F-40086093")\n'
+    '  "comentarios": string|null (texto de Comentarios/Observaciones y CUALQUIER '
+    'referencia a facturas: "F-40086093", "Facturas asociadas: 70088673")\n'
     '  "origenEstado": string|null, "origenCiudad": string|null\n'
     '  "destinoEstado": string|null, "destinoCiudad": string|null\n'
     '  "fletaRFC": string|null    (RFC de la fletera/transportista, = emisor del CP)\n'
@@ -476,9 +477,18 @@ def _adaptar_bedrock(raw: dict) -> dict:
     emisor = _norm_rfc(raw.get("rfcEmisor"))
     receptor = _norm_rfc(raw.get("rfcReceptor"))
     fleta = _norm_rfc(raw.get("fletaRFC"))
+    # Clasificación: el ROL del RFC manda sobre el TÍTULO (regla del modelo de
+    # documentos GPA). Las facturas de fletera se titulan "Factura" (Estrella:
+    # "Factura M845517") pero la fletera EMITE y GPA paga → es CP; confiar en el
+    # tipoDocumento del modelo las volvía FV y rompía el emparejado (lote 26-06).
     tipo_map = {"CARTA_PORTE": "CP", "FACTURA": "FV"}
-    tipo_doc = tipo_map.get(str(raw.get("tipoDocumento") or "").upper()) \
-               or clasificar_por_rfc(emisor, receptor)
+    tipo_doc = clasificar_por_rfc(emisor, receptor)
+    if tipo_doc == "ERROR":
+        if (fleta and fleta in FLETERAS_AUTORIZADAS) \
+                or (emisor and emisor in FLETERAS_AUTORIZADAS):
+            tipo_doc = "CP"          # una fletera AUTORIZADA emite → carta porte
+        else:
+            tipo_doc = tipo_map.get(str(raw.get("tipoDocumento") or "").upper()) or "ERROR"
     folio = raw.get("folio")
     if folio and _UUID_RE.search(str(folio)):
         folio = None    # folio fiscal (UUID) no es el folio del comprobante
@@ -724,10 +734,16 @@ def armar_caso(paginas: list[dict], folio_archivo: str = "") -> dict:
 
 # ── Varios CP/FV en un PDF → varios casos (1 caso por CP) ─────────
 def _folios_referenciados(comentarios: Optional[str]) -> list[str]:
-    """Folios de FV referenciados en Comentarios del CP (p.ej. 'F-40086093')."""
+    """Folios de FV referenciados en el CP: 'F-40086093' en Comentarios, o
+    'Facturas asociadas: 70088673' (facturas de fletera, p.ej. Estrella)."""
     if not comentarios:
         return []
-    return re.findall(r"F[-\s]?0*(\d{4,})", comentarios.upper())
+    up = comentarios.upper()
+    refs = re.findall(r"F[-\s]?0*(\d{4,})", up)
+    m = re.search(r"FACTURAS?\s+ASOCIADAS?:?\s*([\d,\s/]+)", up)
+    if m:
+        refs += re.findall(r"0*(\d{4,})", m.group(1))
+    return refs
 
 
 def _digitos(s: Optional[str]) -> str:
@@ -1331,7 +1347,8 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
     tc, moneda = _tc_moneda(lineas)
     full = " ".join(ln["text"] for ln in lineas)
     coment = None
-    mcom = re.search(r"(?:OBSERVACIONES|COMENTARIOS|REF)[:\s].{0,120}", full, re.I)
+    mcom = re.search(r"(?:OBSERVACIONES|COMENTARIOS|REF|FACTURAS?\s+ASOCIADAS?)[:\s].{0,120}",
+                     full, re.I)
     if mcom:
         coment = mcom.group(0)
 

@@ -457,6 +457,36 @@ def test_adaptar_bedrock_codigo_sap_invalido_se_descarta():
     assert p["codigoSAP"] == "" and p["tipoDoc"] == "FV"
 
 
+def test_adaptar_bedrock_rol_rfc_manda_sobre_titulo():
+    # Caso real M845517 (Estrella): el documento se TITULA "Factura" pero la
+    # fletera emite y GPA es el receptor/pagador → es CARTA PORTE. El rol del
+    # RFC manda sobre el tipoDocumento que reporte el modelo.
+    p = ocr._adaptar_bedrock({
+        "rfcEmisor": "TEE070612ITA", "rfcReceptor": RFC_GPA,
+        "tipoDocumento": "FACTURA", "subtotal": 300.0,
+    })
+    assert p["tipoDoc"] == "CP"
+    # Y una factura de GPA (GPA emite) es FV aunque el modelo diga otra cosa.
+    p2 = ocr._adaptar_bedrock({
+        "rfcEmisor": RFC_GPA, "rfcReceptor": "XAXX010101000",
+        "tipoDocumento": "CARTA_PORTE", "subtotal": 338.0,
+    })
+    assert p2["tipoDoc"] == "FV"
+    # Fletera autorizada emite y el receptor no se leyó → CP.
+    p3 = ocr._adaptar_bedrock({"rfcEmisor": "TEE070612ITA", "tipoDocumento": "FACTURA"})
+    assert p3["tipoDoc"] == "CP"
+
+
+def test_folios_referenciados_facturas_asociadas():
+    # Estrella enlaza la FV de GPA con "Facturas asociadas: 70088673".
+    from s3.ocr_extractor import _folios_referenciados, _fv_coincide
+    refs = _folios_referenciados("Facturas asociadas:  70088673")
+    assert "70088673" in refs
+    assert _fv_coincide("FMTY 70088673", refs)
+    # Formato clásico sigue funcionando.
+    assert "40086093" in _folios_referenciados("Comentarios: F-40086093")
+
+
 def test_hibrido_pagina_pobre_reintenta_con_bedrock(monkeypatch):
     monkeypatch.setattr(ocr, "OCR_BACKEND", "hibrido")
     monkeypatch.setattr(ocr, "_ocr_textract",
