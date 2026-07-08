@@ -85,11 +85,12 @@ SUCURSALES_VALIDAS       = {"GDL", "CDMX", "MTY", "CUN", "PVR", "SJD"}
 SUCURSAL_ORIGEN_DISPERSION = "GDL"
 
 # RFCs internos GPA que disparan DISPERSIÓN_INTERNA (Capa 1a) por igualdad exacta.
-# Configurable vía env RECEPTORES_INTERNOS_GPA="RFC1,RFC2". Vacío por defecto:
-# la dispersión se detecta entonces solo por el código SAP (SAP_DISPERSION).
+# Configurable vía env RECEPTORES_INTERNOS_GPA="RFC1,RFC2". Default: el propio
+# RFC de GPA — una carta porte cuyo DESTINATARIO es GPA (GPA se envía a sí
+# misma) es dispersión por definición (caso real 119338784, Pre Guía CE-0843).
 RECEPTORES_INTERNOS_GPA = {
     r.strip().upper()
-    for r in os.environ.get("RECEPTORES_INTERNOS_GPA", "").split(",")
+    for r in os.environ.get("RECEPTORES_INTERNOS_GPA", RFC_GPA).split(",")
     if r.strip()
 }
 

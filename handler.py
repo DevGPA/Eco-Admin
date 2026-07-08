@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.4.16"  # Origen/destino: estados con nombre completo (Toluca/Edo. México), sin duplicar terminal, alias CHI
+VERSION = "2.4.17"  # Dispersiones internas (GPA→GPA / Pre Guía) + notas de crédito como anexo
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

@@ -782,6 +782,52 @@ def test_origen_destino_toluca_estado_completo():
     assert (dc, de) == ("Toluca", "Edo. México")
 
 
+def test_nota_de_credito_es_anexo_no_cp():
+    # TPQ1A-955 pág. 2: la NC de la fletera (E-Egreso, receptor GPA) clasificaba
+    # como 2ª carta porte y creaba un caso fantasma.
+    from s3.ocr_extractor import _senales_especiales, clasificar_pagina
+    lineas = [
+        {"text": "URUZ ENVIA Y RECIBE", "top": 0.05, "left": 0.2},
+        {"text": "TIPO COMPROBANTE E Egreso", "top": 0.15, "left": 0.5},
+        {"text": "Nota de crédito", "top": 0.20, "left": 0.06},
+        {"text": "(GPA8402219Y1)GENERAL DE PRODUCTOS", "top": 0.30, "left": 0.1},
+    ]
+    s = _senales_especiales(lineas)
+    assert s["esNotaCredito"] is True
+    assert clasificar_pagina({"esNotaCredito": True, "rfcReceptor": RFC_GPA}) == "ANEXO"
+
+
+def test_preguia_dispersion_sin_fv_no_es_r093():
+    # 119338784: CP GPA→GPA + Pre Guía Almacén Origen → dispersión interna,
+    # no lleva factura de venta (antes moría en SIN_FV_VINCULADA/R-093).
+    cp_pag = dict(pag(receptor=RFC_GPA, subtotal=29739.88, moneda="MXN", folio="119338784"),
+                  fletaRFC=OSORIO)
+    preguia = {"tipoDoc": "OTRO", "esPreguia": True, "rfcEmisor": None, "rfcReceptor": None,
+               "rfcsDetectados": [], "subtotal": None, "moneda": None, "tipoCambio": None,
+               "folio": None, "fecha": None, "comentarios": None, "partidas": []}
+    res = emparejar_casos([cp_pag, preguia], "119338784")
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["destinatarioRFC"] == RFC_GPA
+    assert caso["foliosFV"] == []
+
+
+def test_destinatario_gpa_pareado_misma_fila():
+    from s3.ocr_extractor import _senales_especiales
+    # Dispersión: GPA como remitente Y destinatario en la misma fila.
+    disp = [
+        {"text": "(XAXX010101000)GENERAL DE PRODUCTOS PARA", "top": 0.167, "left": 0.229},
+        {"text": "(XAXX010101000)GENERAL DE PRODUCTOS PARA", "top": 0.167, "left": 0.683},
+    ]
+    assert _senales_especiales(disp)["destinatarioGPA"] is True
+    # Venta: el lado derecho es el CLIENTE → no es dispersión.
+    venta = [
+        {"text": "(XAXX010101000)GENERAL DE PRODUCTOS PARA", "top": 0.167, "left": 0.229},
+        {"text": "(XAXX010101000)RAUL ROJAS MEDINA", "top": 0.167, "left": 0.683},
+    ]
+    assert _senales_especiales(venta)["destinatarioGPA"] is False
+
+
 def test_fletera_por_nombre_en_texto_de_la_factura():
     # El CP trae el RFC de la fletera en el LOGO (no en texto), pero la factura
     # de GPA dice "Embarcar por TRES GUERRAS" → la fletera se resuelve a nivel caso.

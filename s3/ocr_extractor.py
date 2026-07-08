@@ -295,6 +295,7 @@ def _parse_textract(resp: dict) -> dict:
 
     # --- Refuerzo con texto crudo ---
     lineas = _lineas_texto(blocks)
+    senales = _senales_especiales(lineas)
     rfcs_pos = _rfcs_en_lineas(lineas)
     rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
     tipo_doc = _tipo_documento(lineas)
@@ -357,6 +358,7 @@ def _parse_textract(resp: dict) -> dict:
         "fletaRFC":      emisor,   # en un CP, la fletera es el emisor
         "fleteraTexto":  fletera_por_nombre(" ".join(ln["text"] for ln in lineas)),
         "partidas":      _partidas_de_tablas(blocks, by_id, _texto),
+        **senales,       # esNotaCredito / esPreguia / destinatarioGPA
     }
 
 
@@ -438,9 +440,63 @@ def clasificar_por_rfc(rfc_emisor: Optional[str], rfc_receptor: Optional[str],
     return "ERROR"
 
 
+def _sin_acentos(s: str) -> str:
+    nfkd = unicodedata.normalize("NFKD", s or "")
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).upper()
+
+
+_RE_NOTA_CREDITO = re.compile(r"NOTA\s+(?:DE\s+)?CREDITO|\bE\s*-\s*EGRESO\b")
+_RE_PREGUIA = re.compile(r"PRE\s*GUIA\s+ALMACEN\s+ORIGEN")
+
+
+def _senales_especiales(lineas: list[dict]) -> dict:
+    """Señales de página que cambian el armado del caso (capa texto Y Textract):
+    - esNotaCredito: CFDI de Egreso / nota de crédito → es ANEXO, no CP ni FV
+      (la NC de la fletera clasificaba como 2ª carta porte y creaba un caso
+      fantasma — TPQ1A-955 pág. 2; la NC de GPA se confundiría con una FV).
+    - esPreguia: "Pre Guía Almacén Origen" (formato interno GRL-AL-FO-17) →
+      el PDF es una dispersión interna, que no lleva factura de venta.
+    - destinatarioGPA: carta porte cuyo bloque DESTINATARIO es el propio GPA
+      (GPA→GPA) → dispersión interna (caso real 119338784).
+    """
+    texto = _sin_acentos(" ".join(ln["text"] for ln in lineas))
+    # (a) Nombre GPA justo bajo el rótulo DESTINATARIO (Textract lee el banner;
+    # en la capa de texto del PDF el rótulo suele ser imagen y no aparece).
+    destinatario_gpa = False
+    for lbl in lineas:
+        if "DESTINATARIO" not in _sin_acentos(lbl["text"]):
+            continue
+        for ln in lineas:
+            if (lbl["top"] - 0.01 <= ln["top"] <= lbl["top"] + 0.10
+                    and ln["left"] >= 0.45
+                    and "GENERAL DE PRODUCTOS" in _sin_acentos(ln["text"])):
+                destinatario_gpa = True
+                break
+        if destinatario_gpa:
+            break
+    # (b) Respaldo geométrico: la fila remitente/destinatario trae el nombre de
+    # GPA en AMBOS lados (izq=remitente, der=destinatario) → GPA→GPA. En una
+    # venta, el lado derecho es el cliente.
+    if not destinatario_gpa:
+        gpa_pos = [(ln["top"], ln["left"]) for ln in lineas
+                   if ln["top"] < 0.35 and "GENERAL DE PRODUCTOS" in _sin_acentos(ln["text"])]
+        destinatario_gpa = any(
+            li < 0.45 <= ld and abs(ti - td) <= 0.03
+            for ti, li in gpa_pos for td, ld in gpa_pos)
+    return {
+        "esNotaCredito": bool(_RE_NOTA_CREDITO.search(texto)),
+        "esPreguia": bool(_RE_PREGUIA.search(texto)),
+        "destinatarioGPA": destinatario_gpa,
+    }
+
+
 def clasificar_pagina(p: dict, rfc_gpa: str = RFC_GPA) -> str:
     """Clasifica una página combinando señales: rol del RFC (emisor/receptor) y,
     como respaldo, presencia del RFC de GPA en el texto + tipo de documento."""
+    # Anexos que NO son comprobantes del caso: nota de crédito (CFDI Egreso) y
+    # Pre Guía Almacén Origen. Clasificarlos como CP/FV rompía el emparejado.
+    if p.get("esNotaCredito") or p.get("esPreguia"):
+        return "ANEXO"
     c = clasificar_por_rfc(p.get("rfcEmisor"), p.get("rfcReceptor"), rfc_gpa)
     if c in ("CP", "FV"):
         return c
@@ -576,39 +632,47 @@ def _consolidar_fvs(fv_pages: list[dict]) -> list[dict]:
     return [_fv_consolidada(g) for g in grupos]
 
 
-def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str) -> dict:
-    if not fvs:
+def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str,
+                    es_dispersion: bool = False) -> dict:
+    if not fvs and not es_dispersion:
         return {"status": "ERROR", "error": "SIN_FV_VINCULADA",
                 "detalle": f"El CP {cp.get('folio')} no tiene FV de GPA emparejada.",
                 "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     partidas = [pt for fv in fvs for pt in (fv.get("partidas") or [])]
-    # Tipo de cambio: buscarlo en TODAS las facturas del caso (un caso puede
-    # traer una FV en MXN sin TC y otra en USD con TC — el TC vale para ambas).
-    tc = next((_num(fv.get("tipoCambio")) for fv in fvs
-               if _num(fv.get("tipoCambio")) > 0), None)
-    monedas = {((fv.get("moneda") or "").upper() or "USD") for fv in fvs}
-
-    if tc:
-        # Monto del caso en USD: cada factura se convierte según SU moneda.
-        total_usd = 0.0
-        for fv in fvs:
-            sub = _num(fv.get("subtotal"))
-            total_usd += (sub / tc) if (fv.get("moneda") or "USD").upper() == "MXN" else sub
-        monto, moneda = round(total_usd, 2), "USD"
-    elif monedas <= {"MXN"}:
-        # Regla de negocio: FV en MXN vs flete en MXN se evalúa DIRECTO (no
-        # requiere TC del documento). El TC de respaldo se usa únicamente para
-        # expresar los mínimos USD de C1; el % de flete (C5) no depende de él.
-        tc = TIPO_CAMBIO_DEFAULT
-        monto = round(sum(_num(fv.get("subtotal")) for fv in fvs), 2)
-        moneda = "MXN"
+    if not fvs:
+        # Dispersión interna (GPA→GPA / Pre Guía): no lleva factura de venta.
+        # El motor la evalúa contra la tabla de tarifas, no contra la venta.
+        tc, monto, moneda = TIPO_CAMBIO_DEFAULT, 0.0, "MXN"
     else:
-        # Hay factura en USD y ningún TC en el caso → sí requiere revisión
-        # (el flete está en MXN; convertirlo con un TC inventado altera el %).
-        return {"status": "ERROR", "error": "SIN_TIPO_CAMBIO",
-                "detalle": "FV en USD sin tipo de cambio en ninguna factura del caso.",
-                "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
+        # Tipo de cambio: buscarlo en TODAS las facturas del caso (un caso puede
+        # traer una FV en MXN sin TC y otra en USD con TC — el TC vale para ambas).
+        tc = next((_num(fv.get("tipoCambio")) for fv in fvs
+                   if _num(fv.get("tipoCambio")) > 0), None)
+        monedas = {((fv.get("moneda") or "").upper() or "USD") for fv in fvs}
+
+        if tc:
+            # Monto del caso en USD: cada factura se convierte según SU moneda.
+            total_usd = 0.0
+            for fv in fvs:
+                sub = _num(fv.get("subtotal"))
+                total_usd += (sub / tc) if (fv.get("moneda") or "USD").upper() == "MXN" else sub
+            monto, moneda = round(total_usd, 2), "USD"
+        elif monedas <= {"MXN"}:
+            # Regla de negocio: FV en MXN vs flete en MXN se evalúa DIRECTO (no
+            # requiere TC del documento). El TC de respaldo se usa únicamente para
+            # expresar los mínimos USD de C1; el % de flete (C5) no depende de él.
+            tc = TIPO_CAMBIO_DEFAULT
+            monto = round(sum(_num(fv.get("subtotal")) for fv in fvs), 2)
+            moneda = "MXN"
+        else:
+            # Hay factura en USD y ningún TC en el caso → sí requiere revisión
+            # (el flete está en MXN; convertirlo con un TC inventado altera el %).
+            return {"status": "ERROR", "error": "SIN_TIPO_CAMBIO",
+                    "detalle": "FV en USD sin tipo de cambio en ninguna factura del caso.",
+                    "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}
     return {
+        # Destinatario GPA → el motor rutea a la Capa 1a (dispersión interna).
+        "destinatarioRFC": RFC_GPA if es_dispersion else "",
         "status": "OK",
         "folioCP": str(cp.get("folio") or folio_archivo),
         "foliosFV": [str(fv.get("folio") or "") for fv in fvs],
@@ -683,6 +747,11 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
     # PDF son su factura.
     facturas = _consolidar_fvs(fvs)
 
+    # Dispersión interna: si CUALQUIER página del PDF es la Pre Guía Almacén
+    # Origen, o el CP tiene a GPA como DESTINATARIO (GPA→GPA), el caso no lleva
+    # factura de venta — no debe morir en SIN_FV_VINCULADA (caso 119338784).
+    hay_preguia = any(p.get("esPreguia") for p in paginas)
+
     casos, usadas = [], set()
     for cp in cps:
         refs = _folios_referenciados(cp.get("comentarios"))
@@ -699,7 +768,8 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         if not match and len(cps) == 1 and facturas:
             match = list(facturas)
             usadas.update(range(len(facturas)))
-        caso = _construir_caso(cp, match, folio_archivo)
+        caso = _construir_caso(cp, match, folio_archivo,
+                               es_dispersion=hay_preguia or bool(cp.get("destinatarioGPA")))
         # Consolidados: anexar la tabla de desglose (guía/ciudad/total) al caso
         # para que el revisor la vea en el detalle del monitor.
         if desglose and caso.get("status") == "OK":
@@ -744,6 +814,8 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
     return {
         "folioCP": caso["folioCP"],
         "foliosFV": caso["foliosFV"],
+        # Dispersión interna (GPA→GPA): rutea a la Capa 1a del motor.
+        "destinatarioRFC": caso.get("destinatarioRFC") or "",
         "origenSucursal": caso.get("origenSucursal", ""),
         "destinoEstado": caso.get("destinoEstado") or "",
         "destinoCiudad": caso.get("destinoCiudad") or "",
@@ -1041,6 +1113,7 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
                 "origenCiudad": None, "destinoEstado": None, "destinoCiudad": None,
                 "fletaRFC": None, "fleteraTexto": "", "partidas": []}
 
+    senales = _senales_especiales(lineas)
     rfcs_pos = _rfcs_en_lineas(lineas)
     rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
     tipo_doc = _tipo_documento(lineas)
@@ -1121,6 +1194,7 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
         # logo) — se usa a nivel caso si el CP no trajo RFC.
         "fleteraTexto":   fletera_por_nombre(full),
         "partidas":       [],   # del texto aún no se extraen renglones (ver follow-up)
+        **senales,              # esNotaCredito / esPreguia / destinatarioGPA
     }
 
 
