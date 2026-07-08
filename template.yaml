@@ -376,7 +376,17 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
               Resource: '*'   # los inference-profiles abarcan varias regiones
+            # Los modelos Claude se activan vía suscripción de AWS Marketplace;
+            # el rol que INVOCA necesita poder completarla/consultarla o Bedrock
+            # devuelve AccessDenied (aws-marketplace:Subscribe) aunque el Model
+            # access de la cuenta ya esté concedido.
+            - Effect: Allow
+              Action:
+                - aws-marketplace:Subscribe
+                - aws-marketplace:ViewSubscriptions
+              Resource: '*'
 
       Tags:
         Proyecto: GPA-Admin

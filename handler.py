@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.1"   # Adaptador Bedrock: rol del RFC manda sobre título; enlace "Facturas asociadas"
+VERSION = "2.5.2"   # IAM: permisos Marketplace para invocar Claude desde la Lambda
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
