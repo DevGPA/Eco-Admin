@@ -145,6 +145,45 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
   img{max-width:100%!important}
   body{background:#fff}
 }
+/* ── Tablero de Seguimiento: layout ancho de PC/laptop (celular queda igual) ── */
+@media(min-width:1000px){
+  #root:has(.seg-root){max-width:1180px}
+  .wrap:has(.seg-root){max-width:1180px}
+}
+.seg-title{font-size:20px;font-weight:800;color:#19212e;margin-bottom:2px}
+.seg-title span{font-size:13px;font-weight:500;color:#888}
+.seg-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0 14px}
+.seg-alert{flex:1;min-width:220px;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600}
+.dlb{border:1px solid #ddd;background:#fff;color:#333;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
+.dlb:disabled{opacity:.5;cursor:default}
+.seg-fbar{background:#fff;border:1px solid ${C.blueLt};border-radius:12px;padding:12px 14px;margin-bottom:16px;display:flex;flex-direction:column;gap:10px}
+.seg-frow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg-fl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#5b6675}
+.seg-frow select{width:auto;min-width:180px}
+.seg-lock{background:${C.blueLt};color:${C.blue};border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600}
+.seg-period{margin-left:auto;font-size:12.5px;color:#5b6675}
+.seg-mc{border:1px solid #e4e9f0;background:#f4f6f9;color:#5b6675;border-radius:20px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer;user-select:none}
+.seg-mc.on{background:${C.blue};border-color:${C.blue};color:#fff}
+.seg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.seg-kpi{background:#fff;border:1px solid #e4e9f0;border-radius:12px;padding:14px 16px}
+.seg-kl{font-size:12px;color:#5b6675;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.seg-kv{font-size:28px;font-weight:800;margin-top:6px;line-height:1}
+.seg-ks{font-size:11.5px;color:#5b6675;margin-top:4px}
+.seg-kbar{height:5px;border-radius:3px;background:#eef2f7;margin-top:10px;overflow:hidden}
+.seg-kbar>i{display:block;height:100%}
+.seg-mod{background:#fff;border:1px solid #e4e9f0;border-radius:14px;margin-bottom:16px;overflow:hidden}
+.seg-modh{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid #eef2f7;flex-wrap:wrap}
+.seg-modh h2{margin:0;font-size:16px;font-weight:800;color:#19212e}
+.seg-cad{font-size:11px;font-weight:600;color:#5b6675}
+.seg-pct{margin-left:auto;font-size:15px;font-weight:800}
+.seg-modb{padding:10px 16px 14px}
+.seg-h3{font-size:11.5px;color:${C.blue};font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:12px 0 4px}
+.seg-tbl{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.seg-tbl table{width:100%;border-collapse:collapse;font-size:13px}
+.seg-tbl th,.seg-tbl td{text-align:center;padding:7px 10px;border-bottom:1px solid #eef2f7;white-space:nowrap}
+.seg-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#5b6675;font-weight:700}
+.seg-tbl td.u,.seg-tbl th.u{text-align:left}
+.seg-tbl .sub2{font-size:11px;color:#8a94a3;font-weight:400}
 `;
 
 // ─── HELPERS ────────────────────────────────────────────────────────
@@ -1798,15 +1837,43 @@ const segUltRango=(regs,pred,ini,fin)=>{const g=(regs||[]).filter(r=>{const d=ym
 
 // Calcula el cumplimiento de todos los módulos seleccionados.
 function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys,hoy}){
-  const hoyStr=ymd(hoy);const out=[];const inc=k=>!modKeys||modKeys.includes(k);
-  // Combustible: L/X/V por unidad
+  const hoyStr=ymd(hoy);const out=[];const inc=k=>!modKeys||modKeys.includes(k);const ahora=hoy.getTime();
+  // Combustible: (1) Solicitudes L/X/V por unidad, límite 10:00 (hora local/centro de México);
+  //             (2) Reportes de carga: cada solicitud APROBADA (asignación) exige un reporte en 18 h.
   if(inc("combustible")){
-    const units=segUnidades(cat,"combustible",sucs),lun=segLunes(hoy);
+    const units=segUnidades(cat,"combustible",sucs),lun=segLunes(hoy),dom=segAdd(lun,6);
     const dias=[0,2,4].map(o=>segAdd(lun,o)).filter(d=>ymd(d)<=hoyStr);
     const cols=dias.map(d=>({key:ymd(d),label:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][(d.getDay()+6)%7]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
     let cu=0,pe=0,ve=0;const problemas=[];
-    const filas=units.map(v=>{const celdas=cols.map(c=>{const reg=segUltDia(combustible,v.id,c.key);const est=segEstado(!!reg,c.key,hoyStr);est==="cumplido"?cu++:est==="vencido"?ve++:pe++;if(reg&&reg.status==="Rechazada")problemas.push({titulo:"#"+(v.economico||v.id)+" · "+c.label,sub:"Carga rechazada · "+(v.sucursal||""),reg,tipo:"combustible"});return {estado:est,reg,esHoy:c.esHoy};});return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas};});
-    out.push({key:"combustible",label:"Combustible",grupo:"veh",periodoLbl:"Semana en curso · Lun/Mié/Vie",cols,filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
+    const esSol=r=>r.formato!=="reporte";
+    // (1) Solicitudes — límite 10:00 del día esperado
+    const filasSol=units.map(v=>{const celdas=cols.map(c=>{
+      const lim10=new Date(c.key+"T10:00:00").getTime();
+      const regsDia=(combustible||[]).filter(r=>esSol(r)&&String(r.vehicleId)===String(v.id)&&ymd(r.fecha)===c.key).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
+      const onTime=regsDia.find(r=>new Date(r.fecha).getTime()<=lim10);
+      const reg=onTime||regsDia[0]||null;
+      const est=onTime?"cumplido":(ahora>lim10?"vencido":"pendiente");
+      est==="cumplido"?cu++:est==="vencido"?ve++:pe++;
+      return {estado:est,reg,esHoy:c.esHoy,tarde:!!(reg&&!onTime)};
+    });return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas};});
+    // (2) Reportes de carga por asignación (solicitud aprobada) — límite 18 h desde la aprobación
+    const H18=18*3600*1000;const tAp=r=>new Date(r.fechaAut||r.fecha).getTime();
+    const asigns=(combustible||[]).filter(r=>esSol(r)&&r.status==="Aprobada"&&(!sucs||sucs.includes(r.sucursal)));
+    const reportes=(combustible||[]).filter(r=>r.formato==="reporte");
+    const porVeh={};asigns.forEach(a=>{(porVeh[a.vehicleId]=porVeh[a.vehicleId]||[]).push(a);});
+    Object.values(porVeh).forEach(arr=>arr.sort((a,b)=>tAp(a)-tAp(b)));
+    const enSem=t=>{const d=ymd(new Date(t));return d>=ymd(lun)&&d<=ymd(dom);};
+    const filasRep=[];
+    Object.keys(porVeh).forEach(vid=>{const arr=porVeh[vid];const v=(cat.vehicles||[]).find(x=>String(x.id)===String(vid))||{};
+      arr.forEach((a,i)=>{const ini=tAp(a);if(!enSem(ini))return;const fin=i+1<arr.length?tAp(arr[i+1]):Infinity;
+        const rep=reportes.filter(r=>String(r.vehicleId)===String(vid)).map(r=>({r,t:new Date(r.fecha).getTime()})).filter(x=>x.t>=ini&&x.t<fin).sort((a,b)=>a.t-b.t)[0];
+        const lim=ini+H18;const est=rep?"cumplido":(ahora>lim?"vencido":"pendiente");
+        est==="cumplido"?cu++:est==="vencido"?ve++:pe++;
+        filasRep.push({unidad:"#"+(v.economico||vid)+(v.placas?" · "+v.placas:""),sub:v.sucursal||a.sucursal,asignLbl:fdt(a.fechaAut||a.fecha),limiteLbl:fdt(new Date(lim)),estado:est,reg:rep?rep.r:a});
+      });});
+    // Problemas: solicitudes/reportes rechazados en la semana
+    (combustible||[]).filter(r=>r.status==="Rechazada"&&(!sucs||sucs.includes(r.sucursal))&&ymd(r.fecha)>=ymd(lun)&&ymd(r.fecha)<=ymd(dom)).forEach(r=>problemas.push({titulo:"#"+(r.economico||r.vehicleId)+" · "+(r.formato==="reporte"?"Reporte de carga":"Solicitud"),sub:"Rechazada · "+(r.sucursal||"")+" · "+fdate(r.fecha),reg:r,tipo:"combustible"}));
+    out.push({key:"combustible",label:"Combustible",grupo:"combustible",periodoLbl:"Solicitudes L/X/V (límite 10:00) + reportes por asignación (18 h)",sol:{cols,filas:filasSol},rep:{filas:filasRep},resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
   }
   // Reparto: semanal + mensual por unidad (SIN bloque de problemas)
   if(inc("reparto")){
@@ -1848,7 +1915,12 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
   return out;
 }
 // Celdas faltantes (pendiente/vencido) de un módulo, para exportar "qué falta"
-function segFaltantes(m){const out=[];if(!m.filas)return out;
+function segFaltantes(m){const out=[];
+  if(m.grupo==="combustible"){
+    (m.sol.filas||[]).forEach(f=>f.celdas.forEach((c,i)=>{if(c.estado!=="cumplido")out.push({q:"Solicitud "+f.label+" — "+((m.sol.cols[i]||{}).label||""),estado:c.estado});}));
+    (m.rep.filas||[]).forEach(f=>{if(f.estado!=="cumplido")out.push({q:"Reporte de carga "+f.unidad+" — asignación "+f.asignLbl,estado:f.estado});});
+    return out;}
+  if(!m.filas)return out;
   if(m.grupo==="veh"){m.filas.forEach(f=>f.celdas.forEach((c,i)=>{if(m.soloHoyCuenta&&!c.esHoy)return;if(c.estado!=="cumplido")out.push({q:f.label+" — "+((m.cols[i]||{}).label||""),estado:c.estado});}));}
   else{m.filas.forEach(f=>f.celdas.forEach(c=>{if(c.estado!=="cumplido")out.push({q:f.plantilla.nombre+" — "+c.suc,estado:c.estado});}));}
   return out;}
@@ -1858,7 +1930,10 @@ const segPct=r=>r&&r.total?Math.round(r.cumplido*100/r.total):0;
 function segCSV(mods,meta){
   const filas=[["Tablero de Seguimiento","Fecha",meta.fechaLbl],["","Sucursal",meta.sucursal],[]];
   mods.forEach(m=>{if(m.cargar)return;const r=m.resumen||{};filas.push(["MÓDULO",m.label,"Cumplimiento "+segPct(r)+"% ("+r.cumplido+"/"+r.total+") · pendientes "+r.pendiente+" · vencidos "+r.vencido]);
-    if(m.grupo==="veh"){filas.push(["Unidad","Columna","Estado"]);m.filas.forEach(f=>f.celdas.forEach((c,i)=>filas.push([f.label+(f.sub?" ("+f.sub+")":""),(m.cols[i]||{}).label||"",EST_LBL[c.estado]])));}
+    if(m.grupo==="combustible"){
+      filas.push(["Solicitud (unidad)","Día (límite 10:00)","Estado"]);m.sol.filas.forEach(f=>f.celdas.forEach((c,i)=>filas.push([f.label+(f.sub?" ("+f.sub+")":""),(m.sol.cols[i]||{}).label||"",EST_LBL[c.estado]+(c.tarde?" (tarde)":"")])));
+      filas.push(["Reporte de carga (unidad)","Asignación aprobada","Estado (límite 18 h)"]);m.rep.filas.forEach(f=>filas.push([f.unidad+(f.sub?" ("+f.sub+")":""),f.asignLbl,EST_LBL[f.estado]]));
+    }else if(m.grupo==="veh"){filas.push(["Unidad","Columna","Estado"]);m.filas.forEach(f=>f.celdas.forEach((c,i)=>filas.push([f.label+(f.sub?" ("+f.sub+")":""),(m.cols[i]||{}).label||"",EST_LBL[c.estado]])));}
     else{filas.push(["Formulario","Sucursal","Estado"]);m.filas.forEach(f=>f.celdas.forEach(c=>filas.push([f.plantilla.nombre,c.suc,EST_LBL[c.estado]])));}
     if(m.conProblemas&&m.problemas.length){filas.push(["","",""]);filas.push(["PROBLEMAS de "+m.label,"",""]);m.problemas.forEach(p=>filas.push([p.titulo,p.sub,""]));}
     filas.push([]);});
@@ -1871,7 +1946,16 @@ function segHTML(mods,meta,logo){
   mods.forEach(m=>{if(m.cargar)return;const r=m.resumen||{};
     body+=`<h2>${esc(m.label)} <small>· ${segPct(r)}% (${r.cumplido}/${r.total}) · pendientes ${r.pendiente} · vencidos ${r.vencido}</small></h2>`;
     body+=`<div class="per">${esc(m.periodoLbl||"")}</div>`;
-    if(m.grupo==="veh"){
+    if(m.grupo==="combustible"){
+      body+=`<h3>Solicitudes (límite 10:00)</h3><div class="sc"><table><thead><tr><th>Unidad</th>${m.sol.cols.map(c=>`<th>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>`;
+      m.sol.filas.forEach(f=>{body+=`<tr><td><b>${esc(f.label)}</b><br><span class="mut">${esc(f.sub||"")}</span></td>${f.celdas.map(c=>`<td>${chip(c.estado)}${c.tarde?" <span class=mut>(tarde)</span>":""}</td>`).join("")}</tr>`;});
+      body+=`</tbody></table></div>`;
+      body+=`<h3>Reportes de carga por asignación (límite 18 h)</h3>`;
+      if(m.rep.filas.length){body+=`<div class="sc"><table><thead><tr><th>Unidad</th><th>Asignación aprobada</th><th>Reporte</th></tr></thead><tbody>`;
+        m.rep.filas.forEach(f=>{body+=`<tr><td><b>${esc(f.unidad)}</b><br><span class="mut">${esc(f.sub||"")}</span></td><td class="mut">${esc(f.asignLbl)}</td><td>${chip(f.estado)}</td></tr>`;});
+        body+=`</tbody></table></div>`;}
+      else body+=`<div class="ok">Sin asignaciones (solicitudes aprobadas) en la semana — no se exige reporte de carga.</div>`;
+    }else if(m.grupo==="veh"){
       body+=`<div class="sc"><table><thead><tr><th>Unidad</th>${m.cols.map(c=>`<th>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>`;
       m.filas.forEach(f=>{body+=`<tr><td><b>${esc(f.label)}</b><br><span class="mut">${esc(f.sub||"")}</span></td>${f.celdas.map(c=>`<td>${chip(c.estado)}</td>`).join("")}</tr>`;});
       body+=`</tbody></table></div>`;
@@ -1886,6 +1970,7 @@ function segHTML(mods,meta,logo){
     .hd{background:${C.blue};color:#fff;padding:16px 20px;display:flex;align-items:center;gap:14px}.hd img{height:40px;background:#fff;border-radius:6px;padding:3px}
     .hd h1{font-size:18px;margin:0}.hd .sub{font-size:12px;opacity:.85;margin-top:2px}
     .wrap{max-width:900px;margin:0 auto;padding:16px}h2{font-size:15px;color:${C.blue};margin:22px 0 2px;border-bottom:2px solid ${C.blueLt};padding-bottom:5px}h2 small{font-weight:600;color:#666;font-size:12px}
+    h3{font-size:12px;color:${C.blue};margin:12px 0 4px;text-transform:uppercase;letter-spacing:.04em}
     .per{font-size:12px;color:#888;margin-bottom:8px}.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12px;background:#fff;border-radius:8px;overflow:hidden}
     th,td{border:1px solid #eee;padding:6px 8px;text-align:center}th{background:#f0f4f9;color:#555}td:first-child,th:first-child{text-align:left}.mut{color:#999;font-size:11px}
     .fb{background:#fff;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px}.fh{font-size:13px;font-weight:700}.fs{margin-top:6px;display:flex;flex-wrap:wrap;gap:8px}.fsu{font-size:11px}
@@ -1936,10 +2021,16 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}
   const[exp,setExp]=useState({combustible:true,reparto:true,montacargas:true});
   const[detalle,setDetalle]=useState(null);
   const[bajando,setBajando]=useState(false);
+  // En PC/laptop se despliega el tablero ancho (estilo dashboard); en celular queda como está.
+  const[esPC,setEsPC]=useState(()=>typeof window!=="undefined"&&!!(window.matchMedia&&window.matchMedia("(min-width:1000px)").matches));
+  useEffect(()=>{if(!window.matchMedia)return;const mq=window.matchMedia("(min-width:1000px)");const h=e=>setEsPC(e.matches);mq.addEventListener?mq.addEventListener("change",h):mq.addListener(h);return()=>{mq.removeEventListener?mq.removeEventListener("change",h):mq.removeListener(h);};},[]);
   const esForm=mk=>formModKeys.includes(mk);
   const pltsDe=mk=>(cat.plantillas||[]).filter(p=>p.modulo===mk&&p.activo!==false);
   const cargarModuloUI=async mk=>{setCargando(s=>({...s,[mk]:true}));const res={};for(const p of pltsDe(mk)){if(formData[p.clave]===undefined){try{res[p.clave]=await api.listarFormulario(p.clave);}catch(e){res[p.clave]=[];}}}setFormData(s=>({...s,...res}));setCargando(s=>({...s,[mk]:false}));};
   const cargarTodos=async()=>{let acc={...formData};for(const mk of formModKeys){if(!puede(mk))continue;for(const p of pltsDe(mk)){if(acc[p.clave]===undefined){try{acc[p.clave]=await api.listarFormulario(p.clave);}catch(e){acc[p.clave]=[];}}}}setFormData(acc);return acc;};
+  // Carga paralela de todos los formularios (para el dashboard de PC, que muestra todo expandido)
+  const cargarTodosPar=async()=>{const claves=[];formModKeys.forEach(mk=>{if(!puede(mk))return;pltsDe(mk).forEach(p=>{if(formData[p.clave]===undefined)claves.push(p.clave);});});if(!claves.length)return;setCargando(s=>({...s,__all:true}));const res=await Promise.all(claves.map(cl=>api.listarFormulario(cl).then(r=>[cl,r]).catch(()=>[cl,[]])));const upd={};res.forEach(([cl,r])=>upd[cl]=r);setFormData(s=>({...s,...upd}));setCargando(s=>({...s,__all:false}));};
+  useEffect(()=>{if(esPC)cargarTodosPar();/* eslint-disable-next-line */},[esPC]);
   const toggleExp=mk=>{const abriendo=!exp[mk];setExp(s=>({...s,[mk]:abriendo}));if(abriendo&&esForm(mk)&&pltsDe(mk).some(p=>formData[p.clave]===undefined))cargarModuloUI(mk);};
   const toggleMod=mk=>setSelMods(s=>s.includes(mk)?s.filter(x=>x!==mk):[...s,mk]);
   const mods=useMemo(()=>segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData,sucs,modKeys:selMods,hoy}),[cat,data,formData,fSuc,selMods]);
@@ -1949,6 +2040,13 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}
       if(fmt==="csv")segCSV(full,meta);else if(fmt==="html")segHTML(full,meta,await _logoData());else segPDF(full,meta,await _logoData());showToast("✓ Descarga lista");}
     catch(e){showToast("⚠️ "+e.message);}setBajando(false);};
   const totProblemas=mods.reduce((a,m)=>a+(m.conProblemas?(m.problemas||[]).length:0),0);
+  const totVenc=mods.reduce((a,m)=>a+((m.resumen&&!m.cargar)?m.resumen.vencido:0),0);
+  const totPend=mods.reduce((a,m)=>a+((m.resumen&&!m.cargar)?m.resumen.pendiente:0),0);
+  const pctCol=p=>p>=90?C.green:p>=60?C.amber:C.red;
+  const modNombre=mk=>SEG_MOD_LBL[mk]||((cat.modulos||[]).find(mo=>mo.clave===mk)||{}).nombre||mk;
+  // Tabla de una matriz unidad×columnas (reusada por combustible/veh en el dashboard de PC)
+  const TablaVehPC=({cols,filas,soloHoy,tipoKey})=>(<div className="seg-tbl"><table><thead><tr><th className="u">Unidad</th>{cols.map(c=><th key={c.key} style={c.esHoy?{color:C.blue}:null}>{c.label}</th>)}</tr></thead><tbody>{filas.map(f=><tr key={f.id}><td className="u"><b>{f.label}</b>{f.sub&&<div className="sub2">{f.sub}</div>}</td>{f.celdas.map((c,i)=><td key={i}><SegCelda estado={c.estado} dim={soloHoy&&!c.esHoy} onClick={c.reg&&tipoKey?()=>setDetalle({reg:c.reg,tipo:tipoKey}):null}/>{c.tarde&&<div style={{fontSize:9,color:C.amber}}>tarde</div>}</td>)}</tr>)}</tbody></table></div>);
+  const ProblemasPC=({m})=>(m.conProblemas?(m.problemas.length===0?<div style={{fontSize:12,color:C.green,marginTop:10}}>✓ Sin problemas en el período.</div>:<div className="prb" style={{marginTop:12}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:6}}>🚩 Qué está mal ({m.problemas.length})</div>{m.problemas.map((p,i)=><div key={i} onClick={()=>p.reg&&setDetalle({reg:p.reg,plantilla:p.plantilla,tipo:p.tipo})} style={{padding:"6px 0",borderTop:i?".5px dashed #f0c0c0":"none",cursor:p.reg?"pointer":"default",display:"flex",justifyContent:"space-between",gap:8}}><span><b style={{color:C.red}}>{p.titulo}</b> <span style={{fontSize:11,color:"#a06"}}>{p.sub}</span></span>{p.reg&&<span style={{fontSize:11,color:C.blue}}>Ver ›</span>}</div>)}</div>):<div style={{marginTop:10,fontSize:12,color:"#888",background:"#f7f9fc",border:"1px dashed #e2e8f0",borderRadius:8,padding:"8px 12px"}}>ℹ️ Los problemas de Reparto se consultan en su tablero dedicado.</div>);
 
   if(detalle){const{reg,plantilla,tipo}=detalle;const cerrar=()=>setDetalle(null);const noop=async()=>{};
     if(tipo==="form")return<FormDinamicoDetail reg={reg} plantilla={plantilla} canAuth={false} reqAut={false} onEstado={noop} onBack={cerrar}/>;
@@ -1956,8 +2054,52 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}
     if(tipo==="combustible")return<SolDetail sol={reg} rol={rol} refrescar={noop} showToast={showToast} onBack={cerrar}/>;
     return<div><button className="bs" onClick={cerrar}>← Volver</button><div className="empty">Sin vista de detalle para este registro.</div></div>;
   }
+  // ── Filtros y chips de módulos (compartidos) ──
+  const chipsMods=(cls)=>allMods.map(mk=><span key={mk} className={cls+(selMods.includes(mk)?" on":"")} onClick={()=>toggleMod(mk)}>{modNombre(mk)}{selMods.includes(mk)?" ✓":""}</span>);
+  const selectSuc=<select value={fSuc} onChange={e=>setFSuc(e.target.value)}>{(!sucursalesUser||sucursalesUser.length>1)&&<option value="__todas">Todas {sucursalesUser?"(mías)":""}</option>}{sucAll.map(s=><option key={s} value={s}>{s}</option>)}</select>;
+
+  // ═══ LAYOUT PC / LAPTOP (dashboard ancho, estilo mockup) ═══
+  if(esPC)return(
+    <div className="seg-root">
+      <div className="seg-title">📊 Tablero de Seguimiento <span>· Cumplimiento por módulo · Hoy {meta.fechaLbl}</span></div>
+      <div className="seg-tools">
+        <div className="seg-alert" style={{background:totVenc?C.redLt:C.greenLt,color:totVenc?C.red:C.green,border:"1px solid "+(totVenc?C.red:C.green)}}>{totVenc?`🔔 ${totVenc} vencido(s)`:"✓ Sin vencidos"}{totPend?` · ${totPend} pendiente(s)`:""}{totProblemas?` · ${totProblemas} problema(s)`:""}</div>
+        <div style={{display:"flex",gap:8}}><button className="dlb" disabled={bajando} onClick={()=>exportar("html")}>⬇ HTML</button><button className="dlb" disabled={bajando} onClick={()=>exportar("pdf")}>⬇ PDF</button><button className="dlb" disabled={bajando} onClick={()=>exportar("csv")}>⬇ CSV</button></div>
+      </div>
+      <div className="seg-fbar">
+        <div className="seg-frow"><span className="seg-fl">Sucursal</span>{selectSuc}{sucursalesUser&&<span className="seg-lock">🔒 Limitado a tu acceso</span>}<span className="seg-period">Hoy <b>{meta.fechaLbl}</b></span></div>
+        <div className="seg-frow"><span className="seg-fl">Módulos</span>{chipsMods("seg-mc")}<span style={{fontSize:11,color:"#aaa"}}>(selección múltiple)</span></div>
+      </div>
+      {cargando.__all&&<div className="spin"/>}
+      <div className="seg-kpis">
+        {mods.map(m=>{const p=segPct(m.resumen);return<div key={m.key} className="seg-kpi"><div className="seg-kl">{m.label}</div><div className="seg-kv" style={{color:m.cargar?"#bbb":pctCol(p)}}>{m.cargar?"…":p+"%"}</div><div className="seg-ks">{m.cargar?"cargando…":`${m.resumen.cumplido}/${m.resumen.total} cumplidos`}</div><div className="seg-kbar"><i style={{width:(m.cargar?0:p)+"%",background:pctCol(p)}}/></div></div>;})}
+        <div className="seg-kpi"><div className="seg-kl">Problemas</div><div className="seg-kv" style={{color:totProblemas?C.red:C.green}}>{totProblemas}</div><div className="seg-ks">sin contar Reparto</div><div className="seg-kbar"><i style={{width:(totProblemas?100:0)+"%",background:C.red}}/></div></div>
+      </div>
+      {selMods.length===0&&<div className="card"><div className="empty">Selecciona uno o más módulos.</div></div>}
+      {mods.map(m=>(
+        <div key={m.key} className="seg-mod">
+          <div className="seg-modh"><h2>{m.label}</h2><span className="seg-cad">{m.periodoLbl}</span>{!m.cargar&&<span className="seg-pct" style={{color:pctCol(segPct(m.resumen))}}>{segPct(m.resumen)}%</span>}</div>
+          <div className="seg-modb">
+            {m.cargar?<div className="spin"/>:<>
+              {m.grupo==="combustible"&&<>
+                <div className="seg-h3">Solicitudes · límite 10:00</div>
+                {m.sol.filas.length?<TablaVehPC cols={m.sol.cols} filas={m.sol.filas} tipoKey="combustible"/>:<div style={{fontSize:12,color:"#888"}}>Sin unidades en el alcance.</div>}
+                <div className="seg-h3">Reportes de carga · por asignación (18 h)</div>
+                {m.rep.filas.length?<div className="seg-tbl"><table><thead><tr><th className="u">Unidad</th><th className="u">Asignación aprobada</th><th>Reporte</th></tr></thead><tbody>{m.rep.filas.map((f,i)=><tr key={i}><td className="u"><b>{f.unidad}</b>{f.sub&&<div className="sub2">{f.sub}</div>}</td><td className="u" style={{fontSize:11,color:"#888"}}>{f.asignLbl}</td><td><SegCelda estado={f.estado} onClick={f.reg?()=>setDetalle({reg:f.reg,tipo:"combustible"}):null}/></td></tr>)}</tbody></table></div>:<div style={{fontSize:12,color:"#888"}}>Sin asignaciones (solicitudes aprobadas) esta semana — no se pide reporte de carga.</div>}
+              </>}
+              {m.grupo==="veh"&&(m.filas.length?<TablaVehPC cols={m.cols} filas={m.filas} soloHoy={m.soloHoyCuenta} tipoKey={m.key==="montacargas"?"montacargas":null}/>:<div style={{fontSize:12,color:"#888"}}>Sin unidades en el alcance.</div>)}
+              {m.grupo==="form"&&(m.filas.length?<div className="seg-tbl"><table><thead><tr><th className="u">Formulario</th>{sucs.map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{m.filas.map(f=><tr key={f.plantilla.clave}><td className="u"><b>{f.plantilla.nombre}</b><div className="sub2">{f.periodoLbl}</div></td>{f.celdas.map(c=><td key={c.suc}><SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/></td>)}</tr>)}</tbody></table></div>:<div style={{fontSize:12,color:"#888"}}>Sin formularios en el alcance.</div>)}
+              <ProblemasPC m={m}/>
+            </>}
+          </div>
+        </div>
+      ))}
+      <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:10}}>Verde = cumplido · Ámbar = pendiente (en plazo) · Rojo = vencido</div>
+    </div>
+  );
+
   return(
-    <div>
+    <div className="seg-root">
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:2}}>📊 Tablero de Seguimiento</div>
       <div style={{fontSize:11,color:"#888",marginBottom:12}}>Cumplimiento por módulo · Hoy {meta.fechaLbl}</div>
       <div className="card">
@@ -1998,6 +2140,20 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}
                 <thead><tr style={{color:"#888"}}><th style={{textAlign:"left",padding:"4px 6px"}}>Unidad</th>{m.cols.map(c=><th key={c.key} style={{padding:"4px 4px",fontWeight:c.esHoy?700:500,color:c.esHoy?C.blue:"#888"}}>{c.label}</th>)}</tr></thead>
                 <tbody>{m.filas.map(f=><tr key={f.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.label}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td>{f.celdas.map((c,i)=>{const verDet=c.reg&&(m.key==="montacargas"||m.key==="combustible");return<td key={i} style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={c.estado} dim={m.soloHoyCuenta&&!c.esHoy} onClick={verDet?()=>setDetalle({reg:c.reg,tipo:m.key}):null}/></td>;})}</tr>)}</tbody>
               </table>
+            </div>}
+            {!m.cargar&&m.grupo==="combustible"&&<div>
+              <div style={{fontSize:11,fontWeight:700,color:C.blue,margin:"2px 0 4px"}}>Solicitudes · límite 10:00</div>
+              {m.sol.filas.length===0?<div style={{fontSize:11,color:"#aaa"}}>Sin unidades en el alcance.</div>:
+              <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",fontSize:12,width:"100%",minWidth:m.sol.cols.length*44+120}}>
+                <thead><tr style={{color:"#888"}}><th style={{textAlign:"left",padding:"4px 6px"}}>Unidad</th>{m.sol.cols.map(c=><th key={c.key} style={{padding:"4px 4px",fontWeight:c.esHoy?700:500,color:c.esHoy?C.blue:"#888"}}>{c.label}</th>)}</tr></thead>
+                <tbody>{m.sol.filas.map(f=><tr key={f.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.label}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td>{f.celdas.map((c,i)=><td key={i} style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,tipo:"combustible"}):null}/>{c.tarde&&<div style={{fontSize:8,color:C.amber}}>tarde</div>}</td>)}</tr>)}</tbody>
+              </table></div>}
+              <div style={{fontSize:11,fontWeight:700,color:C.blue,margin:"12px 0 4px"}}>Reportes de carga · por asignación (18 h)</div>
+              {m.rep.filas.length===0?<div style={{fontSize:11,color:"#aaa"}}>Sin asignaciones (solicitudes aprobadas) esta semana — no se pide reporte.</div>:
+              <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",fontSize:12,width:"100%",minWidth:320}}>
+                <thead><tr style={{color:"#888"}}><th style={{textAlign:"left",padding:"4px 6px"}}>Unidad</th><th style={{textAlign:"left",padding:"4px 6px"}}>Asignación</th><th style={{padding:"4px 4px"}}>Reporte</th></tr></thead>
+                <tbody>{m.rep.filas.map((f,i)=><tr key={i} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.unidad}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td><td style={{padding:"5px 6px",fontSize:10,color:"#888"}}>{f.asignLbl}</td><td style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={f.estado} onClick={f.reg?()=>setDetalle({reg:f.reg,tipo:"combustible"}):null}/></td></tr>)}</tbody>
+              </table></div>}
             </div>}
             {!m.cargar&&m.grupo==="form"&&m.filas.length>0&&<div>{m.filas.map(f=><div key={f.plantilla.clave} style={{padding:"8px 0",borderTop:".5px solid #f0f0f0"}}><div style={{fontSize:12,fontWeight:600}}>{f.plantilla.nombre}</div><div style={{fontSize:10,color:"#aaa",marginBottom:4}}>{f.periodoLbl}</div><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{f.celdas.map(c=><span key={c.suc} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}>{c.suc} <SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/></span>)}</div></div>)}</div>}
             {/* Qué está mal */}
