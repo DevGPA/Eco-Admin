@@ -185,16 +185,15 @@ function NuevaSolicitud({session,onDone,onCancel,showToast}){
   </div>;
 }
 
-/* ─── MODAL DE CAPTURA (transporte / anticipo / comprobante) ───────────────── */
+/* ─── MODAL DE CAPTURA (anticipo / comprobante) ────────────────────────────── */
 function CapturaModal({tipo,onSubmit,onCancel}){
   const[d,setD]=useState({});
   const set=(k,v)=>setD(s=>({...s,[k]:v}));
   const campos = {
-    transporte:[["modo","Modo (Avión/Autobús/Terrestre)","text"],["proveedor","Proveedor / aerolínea","text"],["monto","Monto cotizado","number"],["nota","Nota","text"]],
     anticipo:[["monto","Monto liberado","number"],["referencia","Referencia / folio pago","text"],["nota","Nota","text"]],
     comprobante:[["concepto","Concepto","text"],["tipo","Tipo (Hospedaje/Alimentos/Transporte/Representación)","text"],["monto","Monto","number"],["cfdi","¿Tiene CFDI? (si/no)","text"]],
   }[tipo]||[];
-  const titulo = {transporte:"Registrar transporte",anticipo:"Datos del anticipo",comprobante:"Agregar comprobante"}[tipo];
+  const titulo = {anticipo:"Datos del anticipo",comprobante:"Agregar comprobante"}[tipo];
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",display:"flex",alignItems:"center",
       justifyContent:"center",padding:16,zIndex:100}}>
     <div style={{background:"#fff",borderRadius:12,padding:20,width:"100%",maxWidth:420}}>
@@ -203,6 +202,119 @@ function CapturaModal({tipo,onSubmit,onCancel}){
         <input style={inputStyle} type={t} value={d[k]||""} onChange={e=>set(k,e.target.value)}/></Field>)}
       <div style={{marginTop:8}}>
         <Btn onClick={()=>onSubmit(d)}>Guardar</Btn>
+        <Btn ghost onClick={onCancel}>Cancelar</Btn>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── MODAL DE TRANSPORTE: cotizador de vuelos (rol compras) ───────────────── */
+// Criterio del sistema: DIRECTO → PRECIO → HORARIO. El ranking lo hace el
+// backend (mismo criterio venga de Duffel o de captura manual); si la red
+// falla se ordena localmente con la misma regla.
+const AEROLINEAS=["Volaris","Viva Aerobus","Aeroméxico","Otra"];
+const rankLocal=ops=>[...ops].sort((a,b)=>
+  (a.directo?0:1)-(b.directo?0:1) || (a.precio-b.precio) || String(a.salida).localeCompare(String(b.salida)));
+
+function OpcionVuelo({o,activa,onPick}){
+  const hora=s=>{ if(!s) return "—"; const t=s.includes("T")?s.split("T")[1]:s; return t.slice(0,5); };
+  return <div onClick={onPick} style={{border:`1.5px solid ${activa?C.teal:C.border}`,background:activa?C.tealXL:"#fff",
+      borderRadius:10,padding:"8px 10px",marginBottom:6,cursor:"pointer"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <span style={{fontWeight:700,fontSize:13}}>{o.rank}. {o.aerolinea}{o.vuelo?` · ${o.vuelo}`:""}</span>
+      <span style={{fontWeight:700,fontSize:14,color:C.navy}}>{fmt(o.precio)}</span>
+    </div>
+    <div style={{fontSize:11.5,color:C.inkMid,marginTop:2}}>
+      {hora(o.salida)} → {hora(o.llegada)} · {(o.motivos||[]).join(" · ")}
+      {o.recomendada&&<span style={{marginLeft:6,color:C.tealDark,fontWeight:700}}>★ Recomendada</span>}
+    </div>
+  </div>;
+}
+
+function TransporteModal({sol,onSubmit,onCancel,showToast}){
+  const esAvion=(sol.transporte||"Avión")==="Avión";
+  const[g,setG]=useState({modo:sol.transporte||"",proveedor:"",monto:"",nota:""});           // no-avión
+  const[busq,setBusq]=useState({origen:"GDL",destino:sol.destCode||"",fecha:sol.ida||"",regreso:sol.ret||""});
+  const[ops,setOps]=useState([]); const[sel,setSel]=useState(0);
+  const[aviso,setAviso]=useState(""); const[busy,setBusy]=useState(false); const[verMas,setVerMas]=useState(false);
+  const[nuevo,setNuevo]=useState({aerolinea:"Volaris",vuelo:"",salida:"",llegada:"",directo:true,precio:""});
+  const setB=(k,v)=>setBusq(s=>({...s,[k]:v})); const setN=(k,v)=>setNuevo(s=>({...s,[k]:v}));
+
+  const buscar=async()=>{
+    if(!busq.destino||!busq.fecha){ showToast("⚠️ Indica destino (código) y fecha"); return; }
+    setBusy(true); setAviso("");
+    try{ const r=await api.cotizarVuelos(busq);
+      setOps(r.opciones||[]); setSel(0); setAviso(r.aviso||"");
+      if((r.opciones||[]).length) showToast(`✓ ${r.opciones.length} opciones (${r.proveedor})`);
+    }catch(e){ setAviso(e.message); }
+    setBusy(false);
+  };
+  const agregar=async()=>{
+    if(!nuevo.precio||!nuevo.salida){ showToast("⚠️ Captura al menos salida y precio"); return; }
+    const lista=[...ops,{...nuevo,precio:Number(nuevo.precio),origen:busq.origen,destino:busq.destino,fuente:"manual"}];
+    setBusy(true);
+    try{ const r=await api.rankearVuelos(lista); setOps(r.opciones); }
+    catch{ setOps(rankLocal(lista).map((o,i)=>({...o,rank:i+1,recomendada:i===0,motivos:[o.directo?"Directo":"Con escalas"]}))); }
+    setSel(0); setNuevo({aerolinea:nuevo.aerolinea,vuelo:"",salida:"",llegada:"",directo:true,precio:""});
+    setBusy(false);
+  };
+  const guardar=()=>{
+    if(!esAvion){ if(!g.monto){ showToast("⚠️ Falta el monto"); return; } onSubmit(g); return; }
+    if(!ops.length){ showToast("⚠️ Agrega o busca al menos una opción"); return; }
+    const lista=ops.map((o,i)=>({...o,elegida:i===sel}));
+    const e=lista[sel];
+    onSubmit({modo:"Avión",proveedor:e.aerolinea,monto:e.precio,ruta:`${busq.origen}-${busq.destino}`,
+              criterio:"directo-precio-horario",opciones:lista.slice(0,10)});
+  };
+
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",display:"flex",alignItems:"center",
+      justifyContent:"center",padding:16,zIndex:100}}>
+    <div style={{background:"#fff",borderRadius:12,padding:20,width:"100%",maxWidth:480,maxHeight:"92vh",overflowY:"auto"}}>
+      <h3 style={{fontFamily:F.display,fontSize:18,fontWeight:400,marginBottom:12}}>
+        {esAvion?"Cotizar vuelo":"Registrar transporte"}</h3>
+
+      {!esAvion && <div>
+        {[["modo","Modo (Autobús/Terrestre)"],["proveedor","Proveedor / línea"],["monto","Monto cotizado"],["nota","Nota"]]
+          .map(([k,lbl])=><Field key={k} label={lbl}>
+            <input style={inputStyle} type={k==="monto"?"number":"text"} value={g[k]||""} onChange={e=>setG(s=>({...s,[k]:e.target.value}))}/></Field>)}
+      </div>}
+
+      {esAvion && <div>
+        <div style={{display:"flex",gap:8}}>
+          <div style={{width:80}}><Field label="Origen"><input style={inputStyle} value={busq.origen} onChange={e=>setB("origen",e.target.value.toUpperCase())}/></Field></div>
+          <div style={{width:80}}><Field label="Destino"><input style={inputStyle} value={busq.destino} placeholder="MTY" onChange={e=>setB("destino",e.target.value.toUpperCase())}/></Field></div>
+          <div style={{flex:1}}><Field label="Fecha"><input style={inputStyle} type="date" value={busq.fecha} onChange={e=>setB("fecha",e.target.value)}/></Field></div>
+        </div>
+        <Btn disabled={busy} onClick={buscar}>🔍 Buscar automático</Btn>
+        {aviso && <div style={{fontSize:11.5,color:C.amber,background:C.amberBg,borderRadius:8,padding:"7px 10px",margin:"8px 0"}}>{aviso}</div>}
+
+        <div style={{fontSize:11,fontWeight:700,color:C.inkLight,textTransform:"uppercase",letterSpacing:".06em",margin:"12px 0 6px"}}>
+          Capturar opción manual</div>
+        <div style={{display:"flex",gap:8}}>
+          <div style={{flex:1}}><Field label="Aerolínea"><select style={inputStyle} value={nuevo.aerolinea} onChange={e=>setN("aerolinea",e.target.value)}>
+            {AEROLINEAS.map(a=><option key={a}>{a}</option>)}</select></Field></div>
+          <div style={{width:110}}><Field label="Vuelo"><input style={inputStyle} value={nuevo.vuelo} placeholder="Y4 1234" onChange={e=>setN("vuelo",e.target.value)}/></Field></div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+          <div style={{flex:1}}><Field label="Salida"><input style={inputStyle} type="time" value={nuevo.salida} onChange={e=>setN("salida",e.target.value)}/></Field></div>
+          <div style={{flex:1}}><Field label="Llegada"><input style={inputStyle} type="time" value={nuevo.llegada} onChange={e=>setN("llegada",e.target.value)}/></Field></div>
+          <div style={{flex:1}}><Field label="Precio total"><input style={inputStyle} type="number" value={nuevo.precio} placeholder="2450" onChange={e=>setN("precio",e.target.value)}/></Field></div>
+        </div>
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12.5,color:C.inkMid,margin:"2px 0 8px"}}>
+          <input type="checkbox" checked={nuevo.directo} onChange={e=>setN("directo",e.target.checked)}/> Vuelo directo</label>
+        <Btn ghost disabled={busy} onClick={agregar}>＋ Agregar opción</Btn>
+
+        {ops.length>0 && <div style={{marginTop:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>
+            Mejores opciones (directo → precio → horario)</div>
+          {ops.slice(0,verMas?ops.length:3).map((o,i)=><OpcionVuelo key={i} o={o} activa={sel===i} onPick={()=>setSel(i)}/>)}
+          {ops.length>3 && <div onClick={()=>setVerMas(v=>!v)} style={{fontSize:12,color:C.blue,cursor:"pointer",padding:"4px 2px"}}>
+            {verMas?"Ver menos":`Ver ${ops.length-3} opciones más`}</div>}
+        </div>}
+      </div>}
+
+      <div style={{marginTop:12}}>
+        <Btn disabled={busy} onClick={guardar}>Guardar cotización</Btn>
         <Btn ghost onClick={onCancel}>Cancelar</Btn>
       </div>
     </div>
@@ -242,8 +354,11 @@ function Detalle({id,session,onBack,showToast}){
   const onAccion=a=> a.captura ? setCaptura({accion:a}) : ejecutar(a);
 
   return <div>
-    {captura && <CapturaModal tipo={captura.accion.captura}
-       onCancel={()=>setCaptura(null)} onSubmit={d=>ejecutar(captura.accion,d)}/>}
+    {captura && (captura.accion.captura==="transporte"
+      ? <TransporteModal sol={sol} showToast={showToast}
+          onCancel={()=>setCaptura(null)} onSubmit={d=>ejecutar(captura.accion,d)}/>
+      : <CapturaModal tipo={captura.accion.captura}
+          onCancel={()=>setCaptura(null)} onSubmit={d=>ejecutar(captura.accion,d)}/>)}
     <Btn ghost onClick={onBack}>← Volver</Btn>
     <div style={{display:"flex",alignItems:"center",gap:10,margin:"12px 0 14px"}}>
       <h2 style={{fontFamily:F.display,fontSize:22,fontWeight:400,margin:0}}>{sol.folio}</h2><Badge estado={sol.estado}/>
@@ -261,7 +376,15 @@ function Detalle({id,session,onBack,showToast}){
 
     {sol.transporteCotizado && <Card>
       <div style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Transporte cotizado</div>
-      {Object.entries(sol.transporteCotizado).map(([k,v])=><Row key={k} k={k} v={String(v)}/>)}
+      {Array.isArray(sol.transporteCotizado.opciones)
+        ? <div>
+            <Row k="Ruta / Modo" v={`${sol.transporteCotizado.ruta||"—"} · ${sol.transporteCotizado.modo||"—"}`}/>
+            {sol.transporteCotizado.opciones.filter(o=>o.top||o.elegida).map((o,i)=>
+              <Row key={i}
+                k={`${o.elegida?"✔ ":""}${o.rank}. ${o.aerolinea}${o.vuelo?" "+o.vuelo:""}`}
+                v={`${(o.salida||"").includes("T")?o.salida.split("T")[1].slice(0,5):(o.salida||"").slice(0,5)} · ${o.directo?"Directo":`${o.escalas} esc.`} · ${fmt(o.precio)}`}/>)}
+          </div>
+        : Object.entries(sol.transporteCotizado).map(([k,v])=><Row key={k} k={k} v={String(v)}/>)}
     </Card>}
     {sol.anticipoData && <Card>
       <div style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Anticipo</div>

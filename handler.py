@@ -9,6 +9,8 @@
 #   GET   /solicitudes/{id}            detalle
 #   POST  /solicitudes/{id}/estado     aprobar / rechazar (supervisor)
 #   POST  /solicitudes/{id}/paso       avanzar etapa del flujo (datos + estado)
+#   GET   /cotizador/vuelos            opciones de vuelo rankeadas (compras)
+#   POST  /cotizador/rankear           ordenar opciones capturadas a mano (compras)
 #   POST  /evidencias/url-subida       URL prefirmada para subir CFDI/ticket/firma
 #   POST  /admin/empleado|area|politica|tarifas|config   (solo admin)
 #   GET   /admin/cuentas · POST /admin/cuenta            (solo admin)
@@ -29,6 +31,7 @@ from db.escritura import (crear_solicitud, cambiar_estado, aplicar_paso,
 from db.queries import listar_solicitudes, get_solicitud, cargar_catalogos
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
+from cotizador import buscar_vuelos, rankear
 
 try:
     import boto3
@@ -137,6 +140,12 @@ def lambda_handler(event, context):
         if route == "POST /solicitudes/{id}/paso":
             return _paso(event, cl)
 
+        # ── Cotizador de vuelos (compras) ──
+        if route == "GET /cotizador/vuelos":
+            return _cotizar_vuelos(event, cl)
+        if route == "POST /cotizador/rankear":
+            return _rankear_manual(event, cl)
+
         # ── Evidencias ──
         if route == "POST /evidencias/url-subida":
             b = _body(event)
@@ -236,6 +245,29 @@ def _paso(event, cl):
     if nuevo:
         _notif_estado(rid, nuevo, cl)
     return _resp({"ok": True, "estado": nuevo, "etapa": etapa})
+
+
+# ── Cotizador de vuelos ──────────────────────────────────────────
+_ROLES_COTIZA = {"compras", "admin"}
+
+
+def _cotizar_vuelos(event, cl):
+    """Busca vuelos con el proveedor activo (Duffel si hay token; si no, manual)."""
+    if cl["rol"] not in _ROLES_COTIZA:
+        return _err("Solo Compras puede cotizar transporte", 403)
+    q = event.get("queryStringParameters") or {}
+    return _resp(buscar_vuelos(q.get("origen", "GDL"), q.get("destino", ""),
+                               q.get("fecha", ""), q.get("regreso", "")))
+
+
+def _rankear_manual(event, cl):
+    """Ordena opciones capturadas a mano con el mismo criterio del sistema."""
+    if cl["rol"] not in _ROLES_COTIZA:
+        return _err("Solo Compras puede cotizar transporte", 403)
+    ops = _body(event).get("opciones")
+    if not isinstance(ops, list) or not ops:
+        return _err("Manda al menos una opción en 'opciones'")
+    return _resp({"opciones": rankear(ops)})
 
 
 def _notif_estado(rid, estado, cl):

@@ -47,6 +47,7 @@ Globals:
         EMAIL_TESORERIA:     !Ref EmailTesoreria
         URL_FIRMADA_TTL:     '900'
         USER_POOL_ID:        !Ref CognitoUserPool
+        DUFFEL_TOKEN:        !Ref DuffelToken
 
 # ═══════════════════════════════════════════════════════════════════
 # PARÁMETROS
@@ -74,6 +75,14 @@ Parameters:
     Type:    String
     Default: administracion@gpa.com.mx
     Description: Correo que recibe avisos de liberación de anticipos
+
+  DuffelToken:
+    Type:    String
+    Default: ''
+    NoEcho:  true
+    Description: >
+      Token de la API de Duffel (cotización automática de vuelos:
+      Volaris y Aeroméxico). Vacío = captura manual de opciones.
 
 # ═══════════════════════════════════════════════════════════════════
 # CONDICIONES
@@ -113,16 +122,24 @@ Resources:
           Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /solicitudes }
         SolicitudDetalle:
           Type: HttpApi
-          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /solicitudes/{id} }
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: '/solicitudes/{id}' }
         # Avanzar etapa del flujo (aprobar/rechazar, transporte, anticipo,
         # comprobantes, validación IA, revisión, cierre, reembolso)
         SolicitudPaso:
           Type: HttpApi
-          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /solicitudes/{id}/paso }
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: '/solicitudes/{id}/paso' }
         # Cambio de estado simple (aprobar / rechazar)
         SolicitudEstado:
           Type: HttpApi
-          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /solicitudes/{id}/estado }
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: '/solicitudes/{id}/estado' }
+
+        # ── Cotizador de vuelos (compras) ──
+        CotizadorVuelos:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /cotizador/vuelos }
+        CotizadorRankear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /cotizador/rankear }
 
         # ── Evidencias (URL prefirmada de subida: CFDI, ticket, firma) ──
         EvidenciaUpload:
@@ -397,7 +414,7 @@ Resources:
     Properties: { GroupName: direccion, UserPoolId: !Ref CognitoUserPool, Description: Dashboard y autorizaciones DG, Precedence: 3 }
   GrupoFinanzas:
     Type: AWS::Cognito::UserPoolGroup
-    Properties: { GroupName: finanzas, UserPoolId: !Ref CognitoUserPool, Description: Cierre, validación y reembolso, Precedence: 5 }
+    Properties: { GroupName: finanzas, UserPoolId: !Ref CognitoUserPool, Description: 'Cierre, validación y reembolso', Precedence: 5 }
   GrupoTesoreria:
     Type: AWS::Cognito::UserPoolGroup
     Properties: { GroupName: tesoreria, UserPoolId: !Ref CognitoUserPool, Description: Liberación de anticipos, Precedence: 8 }

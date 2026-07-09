@@ -110,6 +110,11 @@ class GpaApi {
   estado(id, estado)       { return this._fetch("POST", `/solicitudes/${id}/estado`, { estado }); }
   paso(id, body)           { return this._fetch("POST", `/solicitudes/${id}/paso`, body); }
 
+  // Cotizador de vuelos (rol compras): buscar con el proveedor activo /
+  // rankear opciones capturadas a mano (directo → precio → horario)
+  cotizarVuelos(q)         { return this._fetch("GET", `/cotizador/vuelos?${new URLSearchParams(q)}`); }
+  rankearVuelos(opciones)  { return this._fetch("POST", "/cotizador/rankear", { opciones }); }
+
   adminEmpleado(e)  { return this._fetch("POST", "/admin/empleado", e); }
   adminArea(a)      { return this._fetch("POST", "/admin/area", a); }
   adminPolitica(p)  { return this._fetch("POST", "/admin/politica", p); }
