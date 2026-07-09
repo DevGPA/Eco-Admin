@@ -26,6 +26,7 @@ PK_USER     = "CAT#USER"
 PK_SUCURSAL = "CAT#SUCURSAL"
 PK_MODULO   = "CAT#MODULO"     # módulos dinámicos (motor de formularios)
 PK_PLANTILLA= "CAT#PLANTILLA"  # plantillas de formularios dinámicos
+PK_RESPONSABLE = "CAT#RESPONSABLE"  # responsables de alertas del Tablero de Seguimiento
 PK_CONFIG   = "CONFIG"
 SK_CONFIG   = "CONFIG"
 
@@ -35,6 +36,7 @@ def sk_user(uid)     -> str: return f"USR#{uid}"
 def sk_sucursal(n)   -> str: return f"SUC#{n}"
 def sk_modulo(clave) -> str: return f"MOD#{clave}"
 def sk_plantilla(clave) -> str: return f"PLT#{clave}"
+def sk_responsable(email) -> str: return f"RESP#{email}"
 
 
 def tipo_formulario(clave) -> str:

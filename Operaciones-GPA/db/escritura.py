@@ -190,10 +190,27 @@ def guardar_plantilla(p: dict) -> dict:
         "secciones": p.get("secciones") or [],
         "requiereFirma": bool(p.get("requiereFirma", True)),
         "requiereAutorizacion": bool(p.get("requiereAutorizacion", False)),
+        # Periodicidad para el Tablero de Seguimiento (mensual por defecto).
+        "periodicidad": p.get("periodicidad") or "mensual",
         "activo": p.get("activo", True),
     }
     _t().put_item(Item={"PK": m.PK_PLANTILLA, "SK": m.sk_plantilla(clave), **m.to_dynamo(item)})
     return {"ok": True, "clave": clave}
+
+
+# ── Responsables de alertas del Tablero de Seguimiento ───────────
+def guardar_responsable_alerta(email: str, tipo) -> None:
+    """Marca (o quita) una cuenta como responsable de alertas de cumplimiento.
+    tipo ∈ {'sucursal','corporativo'}; cualquier otro valor (o vacío) = quitar."""
+    email = (email or "").strip().lower()
+    if not email:
+        return
+    t = _t()
+    if tipo in ("sucursal", "corporativo"):
+        t.put_item(Item={"PK": m.PK_RESPONSABLE, "SK": m.sk_responsable(email),
+                         "email": email, "tipo": tipo})
+    else:
+        t.delete_item(Key={"PK": m.PK_RESPONSABLE, "SK": m.sk_responsable(email)})
 
 
 def actualizar_precio_por_combustible(combustible: str, precio) -> int:

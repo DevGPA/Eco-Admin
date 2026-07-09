@@ -27,7 +27,8 @@ from db.escritura import (crear_registro, cambiar_estado,
                           guardar_vehiculo, guardar_responsable,
                           guardar_sucursal, eliminar_sucursal, guardar_config,
                           actualizar_precio_por_combustible,
-                          guardar_modulo, guardar_plantilla)
+                          guardar_modulo, guardar_plantilla,
+                          guardar_responsable_alerta)
 from db.queries import listar_registros, get_registro, cargar_catalogos, get_plantilla
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
@@ -187,7 +188,14 @@ def lambda_handler(event, context):
             if route == "GET /admin/cuentas":
                 return _resp({"items": listar_cuentas()})
             if route == "POST /admin/cuenta":
-                return _resp(guardar_cuenta(_body(event)))
+                b = _body(event)
+                res = guardar_cuenta(b)
+                # Responsable de alertas (catálogo CAT#RESPONSABLE). Solo se toca si
+                # el panel envía el campo (p. ej. no lo manda el toggle activo/inactivo).
+                if "responsableAlerta" in b:
+                    guardar_responsable_alerta(res.get("email") or b.get("email", ""),
+                                               b.get("responsableAlerta"))
+                return _resp(res)
             return _admin(route, _body(event))
 
         return _err(f"Ruta no encontrada: {route}", 404)

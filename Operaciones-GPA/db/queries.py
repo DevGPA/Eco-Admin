@@ -80,18 +80,20 @@ def cargar_catalogos() -> dict:
     suc = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_SUCURSAL)))
     mod = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_MODULO)))
     plt = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_PLANTILLA)))
+    rsp = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_RESPONSABLE)))
     cfg = t.get_item(Key={"PK": m.PK_CONFIG, "SK": m.SK_CONFIG}).get("Item") or {}
-    for lst in (veh, usr, suc, mod, plt):
+    for lst in (veh, usr, suc, mod, plt, rsp):
         for it in lst:
             _limpiar(it)
     cfg = _limpiar(m.from_dynamo(cfg))
     return {
-        "vehicles":   sorted(veh, key=lambda v: str(v.get("economico", ""))),
-        "users":      sorted(usr, key=lambda u: str(u.get("nombre", ""))),
-        "sucursales": sorted([s["nombre"] for s in suc]),
-        "modulos":    sorted(mod, key=lambda x: (x.get("orden", 100), str(x.get("nombre", "")))),
-        "plantillas": sorted(plt, key=lambda x: str(x.get("nombre", ""))),
-        "config":     cfg,
+        "vehicles":     sorted(veh, key=lambda v: str(v.get("economico", ""))),
+        "users":        sorted(usr, key=lambda u: str(u.get("nombre", ""))),
+        "sucursales":   sorted([s["nombre"] for s in suc]),
+        "modulos":      sorted(mod, key=lambda x: (x.get("orden", 100), str(x.get("nombre", "")))),
+        "plantillas":   sorted(plt, key=lambda x: str(x.get("nombre", ""))),
+        "responsables": [{"email": r.get("email"), "tipo": r.get("tipo")} for r in rsp if r.get("email")],
+        "config":       cfg,
     }
 
 

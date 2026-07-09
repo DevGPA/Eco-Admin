@@ -24,7 +24,7 @@ body{background:#f5f6fa;min-height:100vh}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useRef,useEffect}=React;
+const {useState,useRef,useEffect,useMemo}=React;
 const api=new GpaApi();
 // Dominio de correo permitido (configurable desde Amplify vía GPA_CONFIG.dominio)
 const DOMINIO=((window.GPA_CONFIG&&window.GPA_CONFIG.dominio)||"gpa.com.mx").toLowerCase();
@@ -458,6 +458,7 @@ function App(){
   const[loading,setLoading]=useState(false);
   const[module,setModule]=useState("combustible");
   const[toast,setToast]=useState(null);
+  const[alerta,setAlerta]=useState(null);const[alertaOff,setAlertaOff]=useState(false);const alertaFormRef=useRef(null);
   const showToast=m=>{setToast(m);setTimeout(()=>setToast(null),3000);};
 
   const cargarTodo=async()=>{
@@ -481,9 +482,31 @@ function App(){
 
   const refrescar=async tipo=>{try{const items=await api.listar(tipo);setData(d=>({...d,[tipo]:items}));}catch(e){showToast("⚠️ "+e.message);}};
   const refrescarCat=async()=>{try{setCat(await api.catalogos());}catch(e){showToast("⚠️ "+e.message);}};
-  const login=async(email,pass)=>{const r=await api.login(email,pass);if(r&&r.challenge)return r;setSession(api.session);};
+  const login=async(email,pass)=>{const r=await api.login(email,pass);if(r&&r.challenge)return r;setAlertaOff(false);alertaFormRef.current=null;setSession(api.session);};
   const setNewPassword=async(np)=>{await api.completeNewPassword(np);setSession(api.session);};
-  const logout=()=>{api.logout();setSession(null);setCat(null);};
+  const logout=()=>{api.logout();setSession(null);setCat(null);setAlerta(null);setAlertaOff(false);alertaFormRef.current=null;};
+
+  // Aviso de cumplimiento al iniciar sesión (solo responsables con visibilidad de
+  // sucursal/global: admin, analista, supervisor). Los operadores reciben el aviso
+  // por correo en la Fase 2 (SES), pues su acceso a datos es solo el propio.
+  useEffect(()=>{
+    if(!cat||!session||!["admin","analista","supervisor"].includes(session.rol)){setAlerta(null);return;}
+    const resp=(cat.responsables||[]).find(r=>r.email===session.email);
+    if(!resp){setAlerta(null);return;}
+    const hoy=new Date();
+    const sucU=(session.sucursales&&session.sucursales.length)?session.sucursales:null;
+    // corporativo = todo su acceso; de sucursal = solo sus sucursales
+    const sucScope=sucU||cat.sucursales;
+    // Solo módulos a los que la cuenta tiene acceso (evita falsos por 403→vacío)
+    const puedeMk=k=>{if(!session.modulos||!session.modulos.length)return true;const map={combustible:["combustible"],reparto:["mtto","checklist"],montacargas:["mtto","montacargas"],sucursales:["mtto","sucursales"],seguridad:["seguridad"]};return (map[k]||[k]).some(n=>session.modulos.includes(n));};
+    const formMk=[...new Set((cat.plantillas||[]).map(p=>p.modulo).filter(mk=>mk&&mk!=="responsivas"))];
+    const modKeys=["combustible","reparto","montacargas",...formMk].filter(puedeMk);
+    // El aviso cuenta lo VENCIDO (fuera de plazo); los pendientes aún en tiempo no alarman.
+    const contar=fd=>segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd||{},sucs:sucScope,modKeys,hoy})
+      .reduce((n,m)=>n+((m.cargar||!m.resumen)?0:m.resumen.vencido),0);
+    setAlerta({nombre:session.nombre,tipo:resp.tipo,n:contar(alertaFormRef.current)});
+    if(alertaFormRef.current===null){(async()=>{const fd={};for(const p of (cat.plantillas||[]).filter(x=>x.modulo&&x.modulo!=="responsivas"&&x.activo!==false)){try{fd[p.clave]=await api.listarFormulario(p.clave);}catch(e){fd[p.clave]=[];}}alertaFormRef.current=fd;setAlerta(a=>a?{...a,n:contar(fd)}:a);})();}
+  },[cat,session,data]);
 
   if(!session)return<Login onLogin={login} onSetNewPassword={setNewPassword}/>;
   const rol=session.rol;
@@ -492,7 +515,7 @@ function App(){
 
   // Plantillas activas por clave de módulo (motor de formularios dinámicos)
   const plantillasDe=clave=>(cat?.plantillas||[]).filter(p=>p.modulo===clave&&p.activo!==false);
-  const BUILTIN_IDS=["combustible","mtto","seguridad","admin","sucursales"];
+  const BUILTIN_IDS=["combustible","mtto","seguridad","admin","sucursales","seguimiento"];
   // Módulos dinámicos creados como dato (Admin → Módulos); inertes si no hay ninguno
   const dynMods=(cat?.modulos||[]).filter(mo=>mo.activo!==false&&!BUILTIN_IDS.includes(mo.clave))
     .map(mo=>({id:mo.clave,label:mo.nombre||mo.clave,icon:ICON_DOC,dyn:true}));
@@ -504,6 +527,7 @@ function App(){
   ].filter(mo=>!userMods||userMods.includes(mo.id)||(mo.id==="mtto"&&(userMods.includes("checklist")||userMods.includes("montacargas"))));
   const modules=[
     ...opModules,
+    ...((rol==="admin"||rol==="analista")?[{id:"seguimiento",label:"Seguimiento",icon:CHART_ICON}]:[]),
     ...(rol==="admin"?[{id:"admin",label:"Admin",icon:"M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"}]:[]),
   ];
   const mod=modules.find(x=>x.id===module)?module:(modules[0]&&modules[0].id);
@@ -525,11 +549,16 @@ function App(){
       </div>
       <div className="pg">
         {!cat&&loading&&<div className="spin"/>}
+        {cat&&alerta&&alerta.n>0&&!alertaOff&&<div className="wb" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <span>⚠️ {alerta.nombre?alerta.nombre.split(" ")[0]+", ":""}tu área tiene <b>{alerta.n}</b> formulario(s) vencido(s) (fuera de plazo).{(rol==="admin"||rol==="analista")?" Revísalos en 📊 Seguimiento.":""}</span>
+          <button className="bs" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}} onClick={()=>setAlertaOff(true)}>Entendido</button>
+        </div>}
         {cat&&<>
           {mod==="combustible"&&<ModCombustible cat={cat} items={data.combustible} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("combustible")} showToast={showToast}/>}
           {mod==="mtto"&&<ModMtto cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="seguridad"&&<ModDinamico cat={cat} modulo="seguridad" modLabel="Seguridad Industrial" plantillas={plantillasDe("seguridad")} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
           {dynActivo&&<ModDinamico cat={cat} modulo={dynActivo.id} modLabel={dynActivo.label} plantillas={plantillasDe(dynActivo.id)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
+          {mod==="seguimiento"&&(rol==="admin"||rol==="analista")&&<ModSeguimiento cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} userMods={userMods} session={session} showToast={showToast}/>}
           {mod==="admin"&&rol==="admin"&&<ModAdmin cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
         </>}
       </div>
@@ -1424,7 +1453,9 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const nextVehId=String((cat.vehicles.reduce((mx,v)=>Math.max(mx,Number(v.id)||0),0))+1); // ID consecutivo sugerido
   const blankV={id:nextVehId,economico:"",placas:"",subMarca:"",sucursal:cat.sucursales[0]||"",tanque:60,responsable:"",combustible:"Gasolina",producto:"",precio:26.63,categoria:"reparto",activo:true,_isNew:true};
   const blankU={id:"",nombre:"",mail:"",sucursal:cat.sucursales[0]||"",activo:true,_isNew:true};
-  const blankA={email:"",nombre:"",rol:"operador",sucursales:[],modulos:[],password:"",activo:true,_isNew:true};
+  const blankA={email:"",nombre:"",rol:"operador",sucursales:[],modulos:[],responsableAlerta:"ninguno",password:"",activo:true,_isNew:true};
+  // Tipo de responsable de alertas (catálogo CAT#RESPONSABLE) por correo
+  const respDe=email=>((cat?.responsables||[]).find(r=>r.email===email)?.tipo)||"ninguno";
   const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
   // ── Motor de formularios: módulos y plantillas (Excel + vista previa) ──
@@ -1610,7 +1641,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const toggleA=a=>wrap(async()=>{await api.adminCuenta({email:a.email,nombre:a.nombre,rol:a.rol,sucursales:a.sucursales,modulos:a.modulos,activo:!a.activo});await cargarCuentas();showToast("Estado actualizado");});
   const VForm=({v,onClose})=>{const[d,setD]=useState({...v});const isN=!!v._isNew;const RO=k=>!isN&&["id","placas","subMarca","sucursal","tanque"].includes(k);return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo vehículo":"Editar vehículo"}</div>{!isN&&<div className="wb">El ID interno NO se edita (consecutivo). Editable: número económico, área responsable, combustible, precio, producto, categoría y sucursal (para reasignaciones).</div>}{[["id","ID interno (consecutivo, no se reutiliza)"],["economico","Número económico (GPA)"],["placas","Placas"],["subMarca","Sub-marca"],["responsable","Área responsable"],["producto","Producto"]].map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d[k]||""} disabled={RO(k)} style={RO(k)?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,[k]:e.target.value})}/></div>)}<div className="r2"><div><label>Tanque (L)</label><input type="number" value={d.tanque} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,tanque:e.target.value})}/></div><div><label>Precio/L</label><input type="number" value={d.precio} onChange={e=>setD({...d,precio:e.target.value})}/></div></div><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}><option value="">— Selecciona —</option>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><label>Combustible</label><select value={d.combustible} onChange={e=>setD({...d,combustible:e.target.value})}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select><label>Categoría (módulo)</label><select value={d.categoria||catVeh(d)} onChange={e=>setD({...d,categoria:e.target.value})}>{[["reparto","Reparto"],["montacargas","Montacargas"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveV(d)}>Guardar</button></div></div></div>);};
   const UForm=({u,onClose})=>{const[d,setD]=useState({...u});const isN=!!u._isNew;return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo responsable":"Editar responsable"}</div>{!isN&&<div className="wb">Solo editable: nombre, correo y sucursal.</div>}<label>ID</label><input type="text" value={d.id||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,id:e.target.value})}/><label>Nombre</label><input type="text" value={d.nombre} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Correo</label><input type="text" value={d.mail} onChange={e=>setD({...d,mail:e.target.value})}/><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveU(d)}>Guardar</button></div></div></div>);};
-  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (solo lectura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],...(cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
+  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (solo lectura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],...(cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div><label>Responsable de alertas de cumplimiento</label><select value={d.responsableAlerta||"ninguno"} onChange={e=>setD({...d,responsableAlerta:e.target.value})}>{[["ninguno","Ninguno (no recibe alertas)"],["sucursal","De sucursal (solo sus sucursales)"],["corporativo","Corporativo (todos los módulos y sucursales)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{fontSize:11,color:"#999",marginTop:4}}>Los responsables reciben aviso de los formularios pendientes o vencidos de su alcance (Tablero de Seguimiento).</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
   return(
     <div>
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
@@ -1652,7 +1683,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {sec==="cuentas"&&<>
         <button className="bp" style={{marginBottom:12}} onClick={()=>setEditA(blankA)}>+ Nueva cuenta de acceso</button>
         {accounts===null&&<div className="spin"/>}
-        {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:""})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
+        {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:"",responsableAlerta:respDe(a.email)})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
         <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear la cuenta se le envía una contraseña temporal por correo; al editar puedes fijar una nueva.</div>
       </>}
       {sec==="modulos"&&<>
@@ -1687,7 +1718,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
         </div>
         <div className="card"><div className="ct">Formularios ({(cat?.plantillas||[]).length})</div>
           {(!cat.plantillas||cat.plantillas.length===0)&&<div className="empty">Aún no hay formularios.</div>}
-          {(cat?.plantillas||[]).map(p=><div key={p.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{p.nombre||p.clave}</span><span className={"bdg "+(p.activo!==false?"dok":"drj")}>{p.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">módulo: {p.modulo} · {(p.secciones||[]).length} sección(es){p.requiereAutorizacion?" · autoriza":""}{p.requiereFirma!==false?" · firma":""}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bd" disabled={busy} onClick={()=>togglePlantilla(p)}>{p.activo!==false?"Desactivar":"Activar"}</button></div></div>)}
+          {(cat?.plantillas||[]).map(p=><div key={p.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{p.nombre||p.clave}</span><span className={"bdg "+(p.activo!==false?"dok":"drj")}>{p.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">módulo: {p.modulo} · {(p.secciones||[]).length} sección(es){p.requiereAutorizacion?" · autoriza":""}{p.requiereFirma!==false?" · firma":""}</div><div style={{display:"flex",gap:8,marginTop:6,alignItems:"center",flexWrap:"wrap"}}><label style={{margin:0,fontSize:11,color:"#666"}}>Periodicidad (Seguimiento):</label><select value={p.periodicidad||"mensual"} disabled={busy} onChange={e=>wrap(()=>api.adminPlantilla({...p,periodicidad:e.target.value}))} style={{width:"auto",padding:"4px 8px",fontSize:12}}>{[["semanal","Semanal"],["mensual","Mensual"],["bimestral","Bimestral"],["trimestral","Trimestral"],["semestral","Semestral"],["anual","Anual"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><button className="bd" disabled={busy} onClick={()=>togglePlantilla(p)}>{p.activo!==false?"Desactivar":"Activar"}</button></div></div>)}
         </div>
       </>}
       {sec==="reportes"&&<>
@@ -1718,6 +1749,266 @@ function ModAdmin({cat,refrescarCat,showToast}){
           </table>}
         </div>}
       </>}
+    </div>
+  );
+}
+
+// ═══ TABLERO DE SEGUIMIENTO (CUMPLIMIENTO) — Admin / Analista ═════════
+// Solo lectura. Cruza los registros de cada módulo contra su periodicidad y
+// marca por unidad/sucursal: cumplido (verde) · pendiente (ámbar) · vencido (rojo).
+const CHART_ICON="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z";
+const EST_LBL={cumplido:"Cumplido",pendiente:"Pendiente",vencido:"Vencido"};
+const EST_BDG={cumplido:"dok",pendiente:"dpe",vencido:"drj"};
+const EST_COL={cumplido:C.green,pendiente:C.amber,vencido:C.red};
+const EST_BG={cumplido:C.greenLt,pendiente:C.amberLt,vencido:C.redLt};
+const EST_ICON={cumplido:"✓",pendiente:"•",vencido:"✕"};
+const PERIOD_LBL={semanal:"Semanal",mensual:"Mensual",bimestral:"Bimestral",trimestral:"Trimestral",semestral:"Semestral",anual:"Anual"};
+const SEG_MOD_LBL={combustible:"Combustible",reparto:"Reparto",montacargas:"Montacargas",sucursales:"Sucursales (Mtto)",seguridad:"Seguridad Industrial"};
+// ── fecha (local) ──
+const segAdd=(dt,n)=>{const x=new Date(dt);x.setDate(x.getDate()+n);x.setHours(12,0,0,0);return x;};
+const segLunes=dt=>{const x=new Date(dt);const g=x.getDay();x.setDate(x.getDate()+(g===0?-6:1-g));x.setHours(12,0,0,0);return x;};
+const segHabil=dt=>{const x=new Date(dt);const g=x.getDay();if(g===6)x.setDate(x.getDate()+2);else if(g===0)x.setDate(x.getDate()+1);x.setHours(12,0,0,0);return x;};
+const segCap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const segMesLbl=dt=>segCap(dt.toLocaleDateString("es-MX",{month:"long",year:"numeric"}));
+// estado por plazo (comparación de cadenas Y-M-D, ordenables)
+const segEstado=(hay,limiteStr,hoyStr)=>hay?"cumplido":(hoyStr>limiteStr?"vencido":"pendiente");
+// período vigente de un formulario dinámico según su periodicidad
+const segPeriodoForm=(periodicidad,hoy)=>{
+  if(periodicidad==="semanal"){const lun=segLunes(hoy),dom=segAdd(lun,6);
+    return {ini:ymd(lun),fin:ymd(dom),limite:ymd(lun),label:"Semana "+lun.toLocaleDateString("es-MX",{day:"2-digit",month:"short"})+" – "+dom.toLocaleDateString("es-MX",{day:"2-digit",month:"short"})};}
+  const N={mensual:1,bimestral:2,trimestral:3,semestral:6,anual:12}[periodicidad]||1;
+  const y=hoy.getFullYear(),mIni=Math.floor(hoy.getMonth()/N)*N;
+  const ini=new Date(y,mIni,1,12),fin=new Date(y,mIni+N,0,12),limite=segHabil(new Date(y,mIni,5,12));
+  const label=N===1?segMesLbl(ini):(segCap(ini.toLocaleDateString("es-MX",{month:"short"}))+"–"+segMesLbl(fin));
+  return {ini:ymd(ini),fin:ymd(fin),limite:ymd(limite),label};
+};
+// unidades (vehículos) activas de una categoría, dentro del alcance de sucursales
+const segUnidades=(cat,tipo,sucs)=>(cat.vehicles||[]).filter(v=>{
+  if(!v.activo)return false;
+  if(sucs&&!sucs.includes(v.sucursal))return false;
+  if(tipo==="combustible")return v.combustible!=="Electrico";
+  if(tipo==="reparto")return catVeh(v)==="reparto"&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico";
+  if(tipo==="montacargas")return catVeh(v)==="montacargas";
+  return false;
+});
+// último registro de una unidad en un día (dedup: cuenta 1)
+const segUltDia=(regs,vid,ds)=>{const g=(regs||[]).filter(r=>String(r.vehicleId)===String(vid)&&ymd(r.fecha)===ds);return g.length?g.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]:null;};
+// último registro que cumple pred dentro de un rango [ini,fin] (dedup por período)
+const segUltRango=(regs,pred,ini,fin)=>{const g=(regs||[]).filter(r=>{const d=ymd(r.fecha);return d>=ini&&d<=fin&&pred(r);});return g.length?g.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]:null;};
+
+// Calcula el cumplimiento de todos los módulos seleccionados.
+function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys,hoy}){
+  const hoyStr=ymd(hoy);const out=[];const inc=k=>!modKeys||modKeys.includes(k);
+  // Combustible: L/X/V por unidad
+  if(inc("combustible")){
+    const units=segUnidades(cat,"combustible",sucs),lun=segLunes(hoy);
+    const dias=[0,2,4].map(o=>segAdd(lun,o)).filter(d=>ymd(d)<=hoyStr);
+    const cols=dias.map(d=>({key:ymd(d),label:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][(d.getDay()+6)%7]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
+    let cu=0,pe=0,ve=0;const problemas=[];
+    const filas=units.map(v=>{const celdas=cols.map(c=>{const reg=segUltDia(combustible,v.id,c.key);const est=segEstado(!!reg,c.key,hoyStr);est==="cumplido"?cu++:est==="vencido"?ve++:pe++;if(reg&&reg.status==="Rechazada")problemas.push({titulo:"#"+(v.economico||v.id)+" · "+c.label,sub:"Carga rechazada · "+(v.sucursal||""),reg,tipo:"combustible"});return {estado:est,reg,esHoy:c.esHoy};});return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas};});
+    out.push({key:"combustible",label:"Combustible",grupo:"veh",periodoLbl:"Semana en curso · Lun/Mié/Vie",cols,filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
+  }
+  // Reparto: semanal + mensual por unidad (SIN bloque de problemas)
+  if(inc("reparto")){
+    const units=segUnidades(cat,"reparto",sucs),lun=segLunes(hoy),dom=segAdd(lun,6);
+    const iniW=ymd(lun),finW=ymd(dom),limW=ymd(lun);
+    const y=hoy.getFullYear(),mes=hoy.getMonth();
+    const iniM=ymd(new Date(y,mes,1,12)),finM=ymd(new Date(y,mes+1,0,12)),limM=ymd(segHabil(new Date(y,mes,5,12)));
+    const cols=[{key:"sem",label:"Semanal"},{key:"men",label:"Mensual"}];
+    let cu=0,pe=0,ve=0;
+    const filas=units.map(v=>{const rSem=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="semanal",iniW,finW);const rMen=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="mensual",iniM,finM);const eSem=segEstado(!!rSem,limW,hoyStr),eMen=segEstado(!!rMen,limM,hoyStr);[eSem,eMen].forEach(e=>e==="cumplido"?cu++:e==="vencido"?ve++:pe++);return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas:[{estado:eSem,reg:rSem},{estado:eMen,reg:rMen}]};});
+    out.push({key:"reparto",label:"Reparto",grupo:"veh",periodoLbl:"Semana + mes en curso",cols,filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas:[],conProblemas:false});
+  }
+  // Montacargas: diario por unidad (tira de 7 días; sólo hoy cuenta al %)
+  if(inc("montacargas")){
+    const units=segUnidades(cat,"montacargas",sucs),dias=[];for(let i=6;i>=0;i--)dias.push(segAdd(hoy,-i));
+    const cols=dias.map(d=>({key:ymd(d),label:["Do","Lu","Ma","Mi","Ju","Vi","Sá"][d.getDay()]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
+    let cu=0,pe=0,ve=0;const problemas=[];
+    const filas=units.map(v=>{const celdas=cols.map(c=>{const reg=segUltDia(montacargas,v.id,c.key);const est=segEstado(!!reg,c.key,hoyStr);if(c.esHoy){est==="cumplido"?cu++:est==="vencido"?ve++:pe++;}return {estado:est,reg,esHoy:c.esHoy};});
+      const ult=segUltRango(montacargas,r=>String(r.vehicleId)===String(v.id),ymd(dias[0]),hoyStr);
+      if(ult&&Object.values(ult.resps||{}).some(x=>x==="P")){const np=Object.values(ult.resps||{}).filter(x=>x==="P").length;problemas.push({titulo:"#"+(v.economico||v.id)+" · "+(v.placas||""),sub:np+" punto(s) con problema · "+fdate(ult.fecha)+" · "+(v.sucursal||""),reg:ult,tipo:"montacargas"});}
+      return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas};});
+    out.push({key:"montacargas",label:"Montacargas",grupo:"veh",periodoLbl:"Diario · hoy (+7 días de contexto)",cols,filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true,soloHoyCuenta:true});
+  }
+  // Módulos de formularios dinámicos (sucursales, seguridad, dinámicos) — excepto responsivas
+  const formMods=[];(cat.plantillas||[]).forEach(p=>{if(p.modulo&&p.modulo!=="responsivas"&&!formMods.includes(p.modulo))formMods.push(p.modulo);});
+  const ORD=["sucursales","seguridad"];formMods.sort((a,b)=>{const ia=ORD.indexOf(a),ib=ORD.indexOf(b);return (ia<0?9:ia)-(ib<0?9:ib)||a.localeCompare(b);});
+  formMods.forEach(mk=>{
+    if(!inc(mk))return;
+    const label=SEG_MOD_LBL[mk]||((cat.modulos||[]).find(mo=>mo.clave===mk)||{}).nombre||mk;
+    const plts=(cat.plantillas||[]).filter(p=>p.modulo===mk&&p.activo!==false);
+    const cargado=plts.length===0||plts.every(p=>formData[p.clave]!==undefined);
+    if(!cargado){out.push({key:mk,label,grupo:"form",cargar:true,plantillas:plts,problemas:[],conProblemas:true});return;}
+    let cu=0,pe=0,ve=0;const problemas=[];
+    const filas=plts.map(p=>{const per=segPeriodoForm(p.periodicidad||"mensual",hoy);const regs=formData[p.clave]||[];
+      const celdas=sucs.map(s=>{const reg=segUltRango(regs,r=>(r.sucursal||"")===s,per.ini,per.fin);const est=segEstado(!!reg,per.limite,hoyStr);est==="cumplido"?cu++:est==="vencido"?ve++:pe++;if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg,plantilla:p,tipo:"form"});return {suc:s,estado:est,reg};});
+      return {plantilla:p,periodoLbl:PERIOD_LBL[p.periodicidad||"mensual"]+" · "+per.label,celdas};});
+    out.push({key:mk,label,grupo:"form",periodoLbl:plts.length+" formulario(s) · por sucursal",cols:sucs.map(s=>({key:s,label:s})),filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
+  });
+  return out;
+}
+// Celdas faltantes (pendiente/vencido) de un módulo, para exportar "qué falta"
+function segFaltantes(m){const out=[];if(!m.filas)return out;
+  if(m.grupo==="veh"){m.filas.forEach(f=>f.celdas.forEach((c,i)=>{if(m.soloHoyCuenta&&!c.esHoy)return;if(c.estado!=="cumplido")out.push({q:f.label+" — "+((m.cols[i]||{}).label||""),estado:c.estado});}));}
+  else{m.filas.forEach(f=>f.celdas.forEach(c=>{if(c.estado!=="cumplido")out.push({q:f.plantilla.nombre+" — "+c.suc,estado:c.estado});}));}
+  return out;}
+const segPct=r=>r&&r.total?Math.round(r.cumplido*100/r.total):0;
+
+// ── Exportaciones del tablero (CSV / HTML / PDF con logo) ──
+function segCSV(mods,meta){
+  const filas=[["Tablero de Seguimiento","Fecha",meta.fechaLbl],["","Sucursal",meta.sucursal],[]];
+  mods.forEach(m=>{if(m.cargar)return;const r=m.resumen||{};filas.push(["MÓDULO",m.label,"Cumplimiento "+segPct(r)+"% ("+r.cumplido+"/"+r.total+") · pendientes "+r.pendiente+" · vencidos "+r.vencido]);
+    if(m.grupo==="veh"){filas.push(["Unidad","Columna","Estado"]);m.filas.forEach(f=>f.celdas.forEach((c,i)=>filas.push([f.label+(f.sub?" ("+f.sub+")":""),(m.cols[i]||{}).label||"",EST_LBL[c.estado]])));}
+    else{filas.push(["Formulario","Sucursal","Estado"]);m.filas.forEach(f=>f.celdas.forEach(c=>filas.push([f.plantilla.nombre,c.suc,EST_LBL[c.estado]])));}
+    if(m.conProblemas&&m.problemas.length){filas.push(["","",""]);filas.push(["PROBLEMAS de "+m.label,"",""]);m.problemas.forEach(p=>filas.push([p.titulo,p.sub,""]));}
+    filas.push([]);});
+  csvDownload("tablero_seguimiento_"+meta.fecha,["Sección/Unidad","Detalle","Estado"],filas);
+}
+function segHTML(mods,meta,logo){
+  const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const chip=e=>`<span style="display:inline-block;min-width:74px;text-align:center;padding:2px 6px;border-radius:5px;font-size:11px;font-weight:700;background:${EST_BG[e]};color:${EST_COL[e]};border:1px solid ${EST_COL[e]}">${EST_ICON[e]} ${EST_LBL[e]}</span>`;
+  let body="";
+  mods.forEach(m=>{if(m.cargar)return;const r=m.resumen||{};
+    body+=`<h2>${esc(m.label)} <small>· ${segPct(r)}% (${r.cumplido}/${r.total}) · pendientes ${r.pendiente} · vencidos ${r.vencido}</small></h2>`;
+    body+=`<div class="per">${esc(m.periodoLbl||"")}</div>`;
+    if(m.grupo==="veh"){
+      body+=`<div class="sc"><table><thead><tr><th>Unidad</th>${m.cols.map(c=>`<th>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>`;
+      m.filas.forEach(f=>{body+=`<tr><td><b>${esc(f.label)}</b><br><span class="mut">${esc(f.sub||"")}</span></td>${f.celdas.map(c=>`<td>${chip(c.estado)}</td>`).join("")}</tr>`;});
+      body+=`</tbody></table></div>`;
+    }else{
+      m.filas.forEach(f=>{body+=`<div class="fb"><div class="fh">${esc(f.plantilla.nombre)} <span class="mut">· ${esc(f.periodoLbl)}</span></div><div class="fs">${f.celdas.map(c=>`<span class="fsu">${esc(c.suc)}: ${chip(c.estado)}</span>`).join("")}</div></div>`;});
+    }
+    if(m.conProblemas&&m.problemas.length){body+=`<div class="pr"><div class="prt">⚠️ Qué está mal (${m.problemas.length})</div>${m.problemas.map(p=>`<div class="pri"><b>${esc(p.titulo)}</b><br><span class="mut">${esc(p.sub)}</span></div>`).join("")}</div>`;}
+    else if(m.conProblemas){body+=`<div class="ok">Sin problemas en el período.</div>`;}
+  });
+  const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tablero de Seguimiento — GPA</title><style>
+    *{box-sizing:border-box;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif}body{margin:0;background:#f5f6fa;color:#1a2330;padding:0 0 40px}
+    .hd{background:${C.blue};color:#fff;padding:16px 20px;display:flex;align-items:center;gap:14px}.hd img{height:40px;background:#fff;border-radius:6px;padding:3px}
+    .hd h1{font-size:18px;margin:0}.hd .sub{font-size:12px;opacity:.85;margin-top:2px}
+    .wrap{max-width:900px;margin:0 auto;padding:16px}h2{font-size:15px;color:${C.blue};margin:22px 0 2px;border-bottom:2px solid ${C.blueLt};padding-bottom:5px}h2 small{font-weight:600;color:#666;font-size:12px}
+    .per{font-size:12px;color:#888;margin-bottom:8px}.sc{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:12px;background:#fff;border-radius:8px;overflow:hidden}
+    th,td{border:1px solid #eee;padding:6px 8px;text-align:center}th{background:#f0f4f9;color:#555}td:first-child,th:first-child{text-align:left}.mut{color:#999;font-size:11px}
+    .fb{background:#fff;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px}.fh{font-size:13px;font-weight:700}.fs{margin-top:6px;display:flex;flex-wrap:wrap;gap:8px}.fsu{font-size:11px}
+    .pr{background:${C.redLt};border:1px solid #f0c0c0;border-radius:8px;padding:10px 12px;margin:8px 0 4px}.prt{font-weight:700;color:${C.red};font-size:12px;margin-bottom:6px}.pri{font-size:12px;padding:4px 0;border-bottom:.5px dashed #f0c0c0}
+    .ok{font-size:12px;color:${C.green};margin:6px 0}
+  </style></head><body><div class="hd">${logo?`<img src="${logo}" alt="GPA">`:""}<div><h1>Tablero de Seguimiento</h1><div class="sub">General de Productos para el Agua · ${esc(meta.fechaLbl)} · Sucursal: ${esc(meta.sucursal)}</div></div></div><div class="wrap">${body||"<p>Sin módulos seleccionados.</p>"}</div></body></html>`;
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");
+  a.href=url;a.download="tablero_seguimiento_"+meta.fecha+".html";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function segPDF(mods,meta,logo){
+  const JS=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;if(!JS){window.print();return;}
+  const doc=new JS({unit:"mm",format:"a4"}),PW=210,PH=297,M=12,CW=PW-2*M;let y=M;
+  const ensure=h=>{if(y+h>PH-M){doc.addPage();y=M;}};
+  const line=(t,o)=>{o=o||{};const sz=o.size||10;doc.setFont("helvetica",o.bold?"bold":"normal");doc.setFontSize(sz);doc.setTextColor.apply(doc,o.color||[40,40,40]);const ls=doc.splitTextToSize(t,o.w||CW);for(const l of ls){ensure(sz*0.5+1);doc.text(l,o.x||M,y);y+=sz*0.42+1.8;}};
+  if(logo){try{const lp=doc.getImageProperties(logo);const lh=14,lw=Math.min(lp.width*(lh/lp.height),22);doc.addImage(logo,"PNG",M,y,lw,lh);}catch(e){}}
+  doc.setFont("helvetica","bold");doc.setFontSize(14);doc.setTextColor(24,95,165);doc.text("Tablero de Seguimiento",M+24,y+6);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);doc.text("General de Productos para el Agua · "+meta.fechaLbl+" · Sucursal: "+meta.sucursal,M+24,y+11);
+  y+=18;doc.setDrawColor(24,95,165);doc.setLineWidth(0.6);doc.line(M,y,PW-M,y);y+=6;
+  mods.forEach(m=>{if(m.cargar)return;const r=m.resumen||{};
+    ensure(12);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(24,95,165);doc.text(m.label,M,y);y+=1;doc.setDrawColor(225);doc.setLineWidth(0.2);doc.line(M,y,PW-M,y);y+=4;
+    line("Cumplimiento "+segPct(r)+"%  ("+r.cumplido+"/"+r.total+")   ·   pendientes "+r.pendiente+"   ·   vencidos "+r.vencido,{size:9,color:[80,80,80]});
+    line(m.periodoLbl||"",{size:8,color:[140,140,140]});
+    const falt=segFaltantes(m);
+    if(falt.length){line("Falta capturar ("+falt.length+"):",{size:9,bold:true,color:[133,79,11]});falt.slice(0,40).forEach(f=>line("•  "+f.q+"  ["+EST_LBL[f.estado]+"]",{size:8.5,x:M+3,w:CW-3,color:f.estado==="vencido"?[163,45,45]:[133,79,11]}));if(falt.length>40)line("… y "+(falt.length-40)+" más",{size:8,x:M+3,color:[150,150,150]});}
+    else line("✓ Todo capturado en el período.",{size:9,color:[46,107,48]});
+    if(m.conProblemas&&m.problemas.length){line("Qué está mal ("+m.problemas.length+"):",{size:9,bold:true,color:[163,45,45]});m.problemas.slice(0,40).forEach(p=>line("•  "+p.titulo+" — "+p.sub,{size:8.5,x:M+3,w:CW-3,color:[163,45,45]}));}
+    y+=4;
+  });
+  try{doc.save("tablero_seguimiento_"+meta.fecha+".pdf");}catch(e){try{window.open(doc.output("bloburl"),"_blank");}catch(e2){window.print();}}
+}
+
+// Celda de estado (cuadro con ícono) para las matrices del tablero
+function SegCelda({estado,onClick,dim}){
+  return<span onClick={onClick} title={EST_LBL[estado]} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:22,borderRadius:5,fontSize:12,fontWeight:700,background:EST_BG[estado],color:EST_COL[estado],border:"1px solid "+EST_COL[estado],opacity:dim?0.4:1,cursor:onClick?"pointer":"default"}}>{EST_ICON[estado]}</span>;
+}
+
+function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}){
+  const hoyRef=useRef(new Date());const hoy=hoyRef.current;
+  const sucAll=sucursalesUser||cat.sucursales;
+  const[fSuc,setFSuc]=useState("__todas");
+  const sucs=fSuc==="__todas"?sucAll:[fSuc];
+  const puede=k=>{if(!userMods)return true;const map={combustible:["combustible"],reparto:["mtto","checklist"],montacargas:["mtto","montacargas"],sucursales:["mtto","sucursales"],seguridad:["seguridad"]};return (map[k]||[k]).some(n=>userMods.includes(n));};
+  const formModKeys=[...new Set((cat.plantillas||[]).map(p=>p.modulo).filter(mk=>mk&&mk!=="responsivas"))];
+  const allMods=["combustible","reparto","montacargas",...formModKeys].filter(puede);
+  const[selMods,setSelMods]=useState(allMods);
+  const[formData,setFormData]=useState({});
+  const[cargando,setCargando]=useState({});
+  const[exp,setExp]=useState({combustible:true,reparto:true,montacargas:true});
+  const[detalle,setDetalle]=useState(null);
+  const[bajando,setBajando]=useState(false);
+  const esForm=mk=>formModKeys.includes(mk);
+  const pltsDe=mk=>(cat.plantillas||[]).filter(p=>p.modulo===mk&&p.activo!==false);
+  const cargarModuloUI=async mk=>{setCargando(s=>({...s,[mk]:true}));const res={};for(const p of pltsDe(mk)){if(formData[p.clave]===undefined){try{res[p.clave]=await api.listarFormulario(p.clave);}catch(e){res[p.clave]=[];}}}setFormData(s=>({...s,...res}));setCargando(s=>({...s,[mk]:false}));};
+  const cargarTodos=async()=>{let acc={...formData};for(const mk of formModKeys){if(!puede(mk))continue;for(const p of pltsDe(mk)){if(acc[p.clave]===undefined){try{acc[p.clave]=await api.listarFormulario(p.clave);}catch(e){acc[p.clave]=[];}}}}setFormData(acc);return acc;};
+  const toggleExp=mk=>{const abriendo=!exp[mk];setExp(s=>({...s,[mk]:abriendo}));if(abriendo&&esForm(mk)&&pltsDe(mk).some(p=>formData[p.clave]===undefined))cargarModuloUI(mk);};
+  const toggleMod=mk=>setSelMods(s=>s.includes(mk)?s.filter(x=>x!==mk):[...s,mk]);
+  const mods=useMemo(()=>segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData,sucs,modKeys:selMods,hoy}),[cat,data,formData,fSuc,selMods]);
+  const meta={fecha:ymd(hoy),fechaLbl:hoy.toLocaleDateString("es-MX"),sucursal:fSuc==="__todas"?"Todas":fSuc};
+  const exportar=async fmt=>{if(bajando)return;setBajando(true);showToast("Preparando descarga…");
+    try{const fd=await cargarTodos();const full=segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd,sucs,modKeys:selMods,hoy});
+      if(fmt==="csv")segCSV(full,meta);else if(fmt==="html")segHTML(full,meta,await _logoData());else segPDF(full,meta,await _logoData());showToast("✓ Descarga lista");}
+    catch(e){showToast("⚠️ "+e.message);}setBajando(false);};
+  const totProblemas=mods.reduce((a,m)=>a+(m.conProblemas?(m.problemas||[]).length:0),0);
+
+  if(detalle){const{reg,plantilla,tipo}=detalle;const cerrar=()=>setDetalle(null);const noop=async()=>{};
+    if(tipo==="form")return<FormDinamicoDetail reg={reg} plantilla={plantilla} canAuth={false} reqAut={false} onEstado={noop} onBack={cerrar}/>;
+    if(tipo==="montacargas")return<MCDetail rec={reg} canAuth={false} refrescar={noop} showToast={showToast} onBack={cerrar}/>;
+    if(tipo==="combustible")return<SolDetail sol={reg} rol={rol} refrescar={noop} showToast={showToast} onBack={cerrar}/>;
+    return<div><button className="bs" onClick={cerrar}>← Volver</button><div className="empty">Sin vista de detalle para este registro.</div></div>;
+  }
+  return(
+    <div>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:2}}>📊 Tablero de Seguimiento</div>
+      <div style={{fontSize:11,color:"#888",marginBottom:12}}>Cumplimiento por módulo · Hoy {meta.fechaLbl}</div>
+      <div className="card">
+        <label>Sucursal</label>
+        <select value={fSuc} onChange={e=>setFSuc(e.target.value)}>{(!sucursalesUser||sucursalesUser.length>1)&&<option value="__todas">Todas {sucursalesUser?"(mías)":""}</option>}{sucAll.map(s=><option key={s} value={s}>{s}</option>)}</select>
+        <label style={{marginTop:10}}>Módulos</label>
+        <div className="tr">{allMods.map(mk=><button key={mk} type="button" className={"trb"+(selMods.includes(mk)?" act":"")} onClick={()=>toggleMod(mk)}>{SEG_MOD_LBL[mk]||((cat.modulos||[]).find(mo=>mo.clave===mk)||{}).nombre||mk}</button>)}</div>
+        <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
+          <button className="bs" disabled={bajando} onClick={()=>exportar("html")}>⬇ HTML</button>
+          <button className="bs" disabled={bajando} onClick={()=>exportar("pdf")}>⬇ PDF</button>
+          <button className="bs" disabled={bajando} onClick={()=>exportar("csv")}>⬇ CSV</button>
+        </div>
+        <div style={{fontSize:10,color:"#aaa",marginTop:6}}>Las descargas incluyen todos los formularios (se cargan al exportar).</div>
+      </div>
+      {/* Leyenda */}
+      <div className="card" style={{padding:"8px 12px",display:"flex",gap:14,flexWrap:"wrap",fontSize:11,color:"#666"}}>
+        <span><SegCelda estado="cumplido"/> Cumplido</span><span><SegCelda estado="pendiente"/> Pendiente (dentro del plazo)</span><span><SegCelda estado="vencido"/> Vencido</span>
+      </div>
+      {/* Resumen por módulo */}
+      <div className="card"><div className="ct">Resumen del período</div>
+        {selMods.length===0&&<div className="empty">Selecciona uno o más módulos.</div>}
+        {mods.map(m=>{const r=m.resumen;return<div key={m.key} className="dr" style={{alignItems:"center"}}><span style={{maxWidth:"48%"}}>{m.label}</span><span style={{display:"flex",gap:6,alignItems:"center"}}>{m.cargar?<span style={{fontSize:11,color:"#aaa"}}>sin cargar</span>:<><b style={{color:segPct(r)>=90?C.green:segPct(r)>=60?C.amber:C.red}}>{segPct(r)}%</b><span className="bdg dok" style={{fontSize:10}}>{r.cumplido}</span><span className="bdg dpe" style={{fontSize:10}}>{r.pendiente}</span><span className="bdg drj" style={{fontSize:10}}>{r.vencido}</span></>}</span></div>;})}
+        {totProblemas>0&&<div style={{marginTop:8,fontSize:12,color:C.red,fontWeight:600}}>⚠️ {totProblemas} problema(s) detectado(s) en el período.</div>}
+      </div>
+      {/* Secciones por módulo */}
+      {mods.map(m=>(
+        <div key={m.key} className="card">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>toggleExp(m.key)}>
+            <div><div style={{fontSize:13,fontWeight:700,color:C.blue}}>{m.label}</div><div style={{fontSize:11,color:"#888"}}>{m.cargar?"Toca para cargar":(m.periodoLbl||"")}</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>{!m.cargar&&<b style={{fontSize:13,color:segPct(m.resumen)>=90?C.green:segPct(m.resumen)>=60?C.amber:C.red}}>{segPct(m.resumen)}%</b>}<span style={{fontSize:16,color:"#aaa"}}>{exp[m.key]?"▾":"▸"}</span></div>
+          </div>
+          {exp[m.key]&&<div style={{marginTop:10}}>
+            {cargando[m.key]&&<div className="spin"/>}
+            {m.cargar&&!cargando[m.key]&&<button className="bs" style={{width:"100%"}} onClick={()=>cargarModuloUI(m.key)}>Cargar formularios de {m.label}</button>}
+            {!m.cargar&&m.filas&&m.filas.length===0&&<div className="empty">Sin unidades/formularios en el alcance.</div>}
+            {!m.cargar&&m.grupo==="veh"&&m.filas.length>0&&<div style={{overflowX:"auto"}}>
+              <table style={{borderCollapse:"collapse",fontSize:12,width:"100%",minWidth:m.cols.length*44+120}}>
+                <thead><tr style={{color:"#888"}}><th style={{textAlign:"left",padding:"4px 6px"}}>Unidad</th>{m.cols.map(c=><th key={c.key} style={{padding:"4px 4px",fontWeight:c.esHoy?700:500,color:c.esHoy?C.blue:"#888"}}>{c.label}</th>)}</tr></thead>
+                <tbody>{m.filas.map(f=><tr key={f.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.label}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td>{f.celdas.map((c,i)=>{const verDet=c.reg&&(m.key==="montacargas"||m.key==="combustible");return<td key={i} style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={c.estado} dim={m.soloHoyCuenta&&!c.esHoy} onClick={verDet?()=>setDetalle({reg:c.reg,tipo:m.key}):null}/></td>;})}</tr>)}</tbody>
+              </table>
+            </div>}
+            {!m.cargar&&m.grupo==="form"&&m.filas.length>0&&<div>{m.filas.map(f=><div key={f.plantilla.clave} style={{padding:"8px 0",borderTop:".5px solid #f0f0f0"}}><div style={{fontSize:12,fontWeight:600}}>{f.plantilla.nombre}</div><div style={{fontSize:10,color:"#aaa",marginBottom:4}}>{f.periodoLbl}</div><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{f.celdas.map(c=><span key={c.suc} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}>{c.suc} <SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/></span>)}</div></div>)}</div>}
+            {/* Qué está mal */}
+            {!m.cargar&&m.conProblemas&&<div style={{marginTop:10}}>
+              {m.problemas.length===0?<div style={{fontSize:12,color:C.green}}>✓ Sin problemas en el período.</div>:
+              <div className="prb"><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:6}}>⚠️ Qué está mal ({m.problemas.length})</div>{m.problemas.map((p,i)=><div key={i} onClick={()=>p.reg&&setDetalle({reg:p.reg,plantilla:p.plantilla,tipo:p.tipo})} style={{padding:"6px 0",borderBottom:i<m.problemas.length-1?".5px dashed #f0c0c0":"none",cursor:p.reg?"pointer":"default"}}><div style={{fontSize:12,fontWeight:600,color:C.red}}>{p.titulo}</div><div style={{fontSize:11,color:"#a06"}}>{p.sub}</div></div>)}</div>}
+            </div>}
+            {!m.cargar&&!m.conProblemas&&<div style={{marginTop:8,fontSize:11,color:"#aaa"}}>Los problemas de Reparto se revisan en su propio tablero.</div>}
+          </div>}
+        </div>
+      ))}
     </div>
   );
 }
