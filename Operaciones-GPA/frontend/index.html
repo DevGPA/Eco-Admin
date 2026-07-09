@@ -1495,7 +1495,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const[sec,setSec]=useState("vehicles");
   const[editV,setEditV]=useState(null);const[editU,setEditU]=useState(null);const[editA,setEditA]=useState(null);
   const[newSuc,setNewSuc]=useState("");const[busy,setBusy]=useState(false);
-  const[accounts,setAccounts]=useState(null);
+  const[accounts,setAccounts]=useState(null);const[fRol,setFRol]=useState("Todos");
   const[bulkComb,setBulkComb]=useState("Gasolina");const[bulkPrecio,setBulkPrecio]=useState("");
   const nextVehId=String((cat.vehicles.reduce((mx,v)=>Math.max(mx,Number(v.id)||0),0))+1); // ID consecutivo sugerido
   const blankV={id:nextVehId,economico:"",placas:"",subMarca:"",sucursal:cat.sucursales[0]||"",tanque:60,responsable:"",combustible:"Gasolina",producto:"",precio:26.63,categoria:"reparto",activo:true,_isNew:true};
@@ -1505,6 +1505,49 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const respDe=email=>((cat?.responsables||[]).find(r=>r.email===email)?.tipo)||"ninguno";
   const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
+  // ── Cambios masivos de cuentas por Excel (descargar / subir) ──
+  const ROLES_IMP={operador:"operador",supervisor:"supervisor",analista:"analista",administrador:"admin",admin:"admin"};
+  const ALERTA_IMP={ninguno:"ninguno",desucursal:"sucursal",sucursal:"sucursal",corporativo:"corporativo"};
+  const descargarCuentasExcel=()=>{
+    if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
+    const datos=(accounts||[]).map(a=>({Correo:a.email,Nombre:a.nombre||"",Rol:rolLabel(a.rol),Sucursales:(a.sucursales||[]).join("|"),Modulos:(a.modulos||[]).join("|"),Alertas:respDe(a.email),Activo:a.activo?"Si":"No"}));
+    const ws=XLSX.utils.json_to_sheet(datos.length?datos:[{Correo:"",Nombre:"",Rol:"Operador",Sucursales:"",Modulos:"",Alertas:"ninguno",Activo:"Si"}]);
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Cuentas");XLSX.writeFile(wb,"cuentas_gpa.xlsx");
+  };
+  const importarCuentasExcel=async(file)=>{
+    if(!file)return;if(typeof XLSX==="undefined")return showToast("⚠️ No cargó la librería de Excel");
+    const norm=s=>String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,"");
+    const lista=v=>String(v||"").split(/[|,;]/).map(x=>x.trim()).filter(Boolean);
+    setBusy(true);
+    try{
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+      const filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+      const rows=filas.map(r=>{const o={};for(const k in r){const n=norm(k),v=r[k];
+        if(n.includes("correo")||n==="email"||n==="usuario")o.email=String(v).trim().toLowerCase();
+        else if(n==="nombre")o.nombre=String(v).trim();
+        else if(n==="rol")o.rol=ROLES_IMP[norm(v)]||"operador";
+        else if(n.includes("sucursal"))o.sucursales=lista(v);
+        else if(n.includes("modulo")||n.includes("acceso"))o.modulos=lista(v).map(x=>x.toLowerCase());
+        else if(n.includes("alerta")||n.includes("notif"))o.responsableAlerta=ALERTA_IMP[norm(v)]||"ninguno";
+        else if(n.includes("activ")||n.includes("estatus")||n.includes("estado"))o.activo=/^(s|1|true|activ|verd)/i.test(String(v).trim());}
+        return o;}).filter(r=>r.email&&r.email.includes("@"));
+      if(!rows.length){setBusy(false);return showToast("⚠️ El Excel no tiene columna 'Correo' válida");}
+      let ok=0;const errs=[];
+      for(const r of rows){
+        if(!r.email.endsWith("@"+DOMINIO)){errs.push(r.email+" — no es @"+DOMINIO);continue;}
+        const acc={email:r.email,nombre:r.nombre||r.email,rol:r.rol||"operador"};
+        if("sucursales" in r)acc.sucursales=r.sucursales;
+        if("modulos" in r)acc.modulos=r.modulos;
+        if("responsableAlerta" in r)acc.responsableAlerta=r.responsableAlerta;
+        if("activo" in r)acc.activo=r.activo;
+        try{await api.adminCuenta(acc);ok++;}catch(e){errs.push(r.email+": "+e.message);}
+      }
+      await cargarCuentas();await refrescarCat();
+      showToast("✓ "+ok+" cuenta(s) aplicada(s)"+(errs.length?" · "+errs.length+" con error":""));
+      if(errs.length)alert("Filas con error (no se aplicaron):\n\n"+errs.join("\n"));
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
   // Migración: responsables del catálogo anterior (CAT#USER) que aún NO tienen cuenta.
   const respSinCuenta=()=>{const em=new Set((accounts||[]).map(a=>(a.email||"").toLowerCase()));return (cat.users||[]).filter(u=>u.mail&&!em.has(String(u.mail).toLowerCase()));};
   const importarResponsables=()=>{const pend=respSinCuenta();if(!pend.length)return showToast("No hay responsables por importar");if(!window.confirm("Se crearán "+pend.length+" cuenta(s) con rol Operador a partir de los responsables (podrás editarlas después). ¿Continuar?"))return;wrap(async()=>{let ok=0;const errs=[];for(const u of pend){const email=String(u.mail||"").trim().toLowerCase();if(!email.endsWith("@"+DOMINIO)){errs.push((u.nombre||"—")+" — correo no @"+DOMINIO+": "+(u.mail||"vacío"));continue;}try{await api.adminCuenta({email,nombre:u.nombre||email,rol:"operador",sucursales:u.sucursal?[u.sucursal]:[],modulos:[],activo:true,nuevo:true});ok++;}catch(e){errs.push((u.nombre||email)+": "+e.message);}}await cargarCuentas();showToast("✓ "+ok+" cuenta(s) creada(s)"+(errs.length?" · "+errs.length+" omitida(s)":""));if(errs.length)alert("Omitidos (corrige el correo a @"+DOMINIO+" y créalos manualmente):\n\n"+errs.join("\n"));});};
@@ -1729,8 +1772,16 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {sec==="cuentas"&&<>
         <button className="bp" style={{marginBottom:12}} onClick={()=>setEditA(blankA)}>+ Nueva cuenta de acceso</button>
         {accounts!==null&&respSinCuenta().length>0&&<div className="wb" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}><span>Hay <b>{respSinCuenta().length}</b> responsable(s) del catálogo anterior sin cuenta. Impórtalos como cuentas (rol Operador; edítalos después).</span><button className="bs" disabled={busy} onClick={importarResponsables} style={{whiteSpace:"nowrap"}}>⬇ Importar a Cuentas</button></div>}
+        {accounts!==null&&<div className="card"><div className="ct">Cambios masivos por Excel</div>
+          <button className="bs" style={{width:"100%",marginBottom:8}} disabled={busy} onClick={descargarCuentasExcel}>⬇ Descargar cuentas actuales (Excel)</button>
+          <label className="bp" style={{display:"block",textAlign:"center",cursor:"pointer",position:"relative",overflow:"hidden",marginTop:0}}>{busy?"Procesando…":"📤 Subir Excel para aplicar cambios"}
+            <input type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e=>{const f=e.target.files[0];e.target.value="";importarCuentasExcel(f);}} style={{position:"absolute",inset:0,opacity:0,cursor:"pointer"}}/>
+          </label>
+          <div style={{fontSize:11,color:"#666",marginTop:8,lineHeight:1.5}}>Columnas: <b>Correo</b> (@{DOMINIO}), Nombre, Rol, Sucursales, Modulos, Alertas (ninguno / de sucursal / corporativo), Activo (Sí/No). Los correos existentes se <b>actualizan</b>; los nuevos se <b>crean</b>. Separa varias sucursales o módulos con «|». Usa las claves de módulo tal como aparecen al descargar.</div>
+        </div>}
         {accounts===null&&<div className="spin"/>}
-        {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:"",responsableAlerta:respDe(a.email)})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
+        {accounts!==null&&<><div className="tr" style={{overflowX:"auto"}}>{["Todos","operador","supervisor","analista","admin"].map(r=><button key={r} type="button" className={"trb"+(fRol===r?" act":"")} onClick={()=>setFRol(r)}>{r==="Todos"?"Todos":rolLabel(r)}</button>)}</div>
+        {(()=>{const lista=accounts.filter(a=>fRol==="Todos"||a.rol===fRol).sort((a,b)=>String(a.nombre||a.email).localeCompare(String(b.nombre||b.email),"es"));return<div className="card"><div className="lis" style={{marginBottom:6}}>{lista.length} cuenta(s){fRol!=="Todos"?" · "+rolLabel(fRol):""}</div>{lista.length===0&&<div className="empty">Sin cuentas</div>}{lista.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:"",responsableAlerta:respDe(a.email)})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>;})()}</>}
         <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear la cuenta se le envía una contraseña temporal por correo; al editar puedes fijar una nueva.</div>
       </>}
       {sec==="modulos"&&<>
@@ -1804,11 +1855,11 @@ function ModAdmin({cat,refrescarCat,showToast}){
 // Solo lectura. Cruza los registros de cada módulo contra su periodicidad y
 // marca por unidad/sucursal: cumplido (verde) · pendiente (ámbar) · vencido (rojo).
 const CHART_ICON="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z";
-const EST_LBL={cumplido:"Cumplido",pendiente:"Pendiente",vencido:"Vencido"};
-const EST_BDG={cumplido:"dok",pendiente:"dpe",vencido:"drj"};
-const EST_COL={cumplido:C.green,pendiente:C.amber,vencido:C.red};
-const EST_BG={cumplido:C.greenLt,pendiente:C.amberLt,vencido:C.redLt};
-const EST_ICON={cumplido:"✓",pendiente:"•",vencido:"✕"};
+const EST_LBL={cumplido:"Cumplido",pendiente:"Pendiente",vencido:"Vencido",na:"No aplica (antes del inicio)"};
+const EST_BDG={cumplido:"dok",pendiente:"dpe",vencido:"drj",na:"dop"};
+const EST_COL={cumplido:C.green,pendiente:C.amber,vencido:C.red,na:"#9aa0a6"};
+const EST_BG={cumplido:C.greenLt,pendiente:C.amberLt,vencido:C.redLt,na:C.grayLt};
+const EST_ICON={cumplido:"✓",pendiente:"•",vencido:"✕",na:"—"};
 const PERIOD_LBL={semanal:"Semanal",mensual:"Mensual",bimestral:"Bimestral",trimestral:"Trimestral",semestral:"Semestral",anual:"Anual"};
 const SEG_MOD_LBL={combustible:"Combustible",reparto:"Reparto",montacargas:"Montacargas",sucursales:"Sucursales (Mtto)",seguridad:"Seguridad Industrial"};
 // ── fecha (local) ──
@@ -1846,11 +1897,13 @@ const segUltRango=(regs,pred,ini,fin)=>{const g=(regs||[]).filter(r=>{const d=ym
 // Calcula el cumplimiento de todos los módulos seleccionados.
 function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys,hoy}){
   const hoyStr=ymd(hoy);const out=[];const inc=k=>!modKeys||modKeys.includes(k);const ahora=hoy.getTime();
+  // Fecha de inicio (go-live/reset): no se exige nada cuyo día o plazo sea ANTERIOR a ella.
+  const inicio=(cat.config&&cat.config.fechaInicio)||null;
   // Combustible: (1) Solicitudes L/X/V por unidad, límite 10:00 (hora local/centro de México);
   //             (2) Reportes de carga: cada solicitud APROBADA (asignación) exige un reporte en 18 h.
   if(inc("combustible")){
     const units=segUnidades(cat,"combustible",sucs),lun=segLunes(hoy),dom=segAdd(lun,6);
-    const dias=[0,2,4].map(o=>segAdd(lun,o)).filter(d=>ymd(d)<=hoyStr);
+    const dias=[0,2,4].map(o=>segAdd(lun,o)).filter(d=>ymd(d)<=hoyStr&&(!inicio||ymd(d)>=inicio));
     const cols=dias.map(d=>({key:ymd(d),label:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][(d.getDay()+6)%7]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
     let cu=0,pe=0,ve=0;const problemas=[];
     const esSol=r=>r.formato!=="reporte";
@@ -1894,12 +1947,12 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
     const iniM=ymd(new Date(y,mes,1,12)),finM=ymd(new Date(y,mes+1,0,12)),limM=ymd(segHabil(new Date(y,mes,5,12)));
     const cols=[{key:"sem",label:"Semanal"},{key:"men",label:"Mensual"}];
     let cu=0,pe=0,ve=0;
-    const filas=units.map(v=>{const rSem=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="semanal",iniW,finW);const rMen=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="mensual",iniM,finM);const eSem=segEstado(!!rSem,limW,hoyStr),eMen=segEstado(!!rMen,limM,hoyStr);[eSem,eMen].forEach(e=>e==="cumplido"?cu++:e==="vencido"?ve++:pe++);return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas:[{estado:eSem,reg:rSem},{estado:eMen,reg:rMen}]};});
+    const filas=units.map(v=>{const rSem=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="semanal",iniW,finW);const rMen=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="mensual",iniM,finM);let eSem=segEstado(!!rSem,limW,hoyStr),eMen=segEstado(!!rMen,limM,hoyStr);if(eSem!=="cumplido"&&inicio&&limW<inicio)eSem="na";if(eMen!=="cumplido"&&inicio&&limM<inicio)eMen="na";[eSem,eMen].forEach(e=>{if(e==="cumplido")cu++;else if(e==="vencido")ve++;else if(e==="pendiente")pe++;});return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas:[{estado:eSem,reg:rSem},{estado:eMen,reg:rMen}]};});
     out.push({key:"reparto",label:"Reparto",grupo:"veh",periodoLbl:"Semana + mes en curso",cols,filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas:[],conProblemas:false});
   }
   // Montacargas: diario por unidad (tira de 7 días; sólo hoy cuenta al %)
   if(inc("montacargas")){
-    const units=segUnidades(cat,"montacargas",sucs),dias=[];for(let i=6;i>=0;i--)dias.push(segAdd(hoy,-i));
+    const units=segUnidades(cat,"montacargas",sucs),dias=[];for(let i=6;i>=0;i--){const d=segAdd(hoy,-i);if(!inicio||ymd(d)>=inicio)dias.push(d);}
     const cols=dias.map(d=>({key:ymd(d),label:["Do","Lu","Ma","Mi","Ju","Vi","Sá"][d.getDay()]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
     let cu=0,pe=0,ve=0;const problemas=[];
     const filas=units.map(v=>{const celdas=cols.map(c=>{const reg=segUltDia(montacargas,v.id,c.key);const est=segEstado(!!reg,c.key,hoyStr);if(c.esHoy){est==="cumplido"?cu++:est==="vencido"?ve++:pe++;}return {estado:est,reg,esHoy:c.esHoy};});
@@ -1919,7 +1972,7 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
     if(!cargado){out.push({key:mk,label,grupo:"form",cargar:true,plantillas:plts,problemas:[],conProblemas:true});return;}
     let cu=0,pe=0,ve=0;const problemas=[];
     const filas=plts.map(p=>{const per=segPeriodoForm(p.periodicidad||"mensual",hoy);const regs=formData[p.clave]||[];
-      const celdas=sucs.map(s=>{const reg=segUltRango(regs,r=>(r.sucursal||"")===s,per.ini,per.fin);const est=segEstado(!!reg,per.limite,hoyStr);est==="cumplido"?cu++:est==="vencido"?ve++:pe++;if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg,plantilla:p,tipo:"form"});return {suc:s,estado:est,reg};});
+      const celdas=sucs.map(s=>{const reg=segUltRango(regs,r=>(r.sucursal||"")===s,per.ini,per.fin);let est=segEstado(!!reg,per.limite,hoyStr);if(est!=="cumplido"&&inicio&&per.limite<inicio)est="na";if(est==="cumplido")cu++;else if(est==="vencido")ve++;else if(est==="pendiente")pe++;if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg,plantilla:p,tipo:"form"});return {suc:s,estado:est,reg};});
       return {plantilla:p,periodoLbl:PERIOD_LBL[p.periodicidad||"mensual"]+" · "+per.label,celdas};});
     out.push({key:mk,label,grupo:"form",periodoLbl:plts.length+" formulario(s) · por sucursal",cols:sucs.map(s=>({key:s,label:s})),filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
   });
@@ -1957,14 +2010,14 @@ function segModulosRango({cat,combustible,checklist,montacargas,formData,sucs,mo
   return out;
 }
 // Celdas faltantes (pendiente/vencido) de un módulo, para exportar "qué falta"
-function segFaltantes(m){const out=[];
+function segFaltantes(m){const out=[];const falta=e=>e==="pendiente"||e==="vencido";
   if(m.grupo==="combustible"){
-    (m.sol.filas||[]).forEach(f=>f.celdas.forEach((c,i)=>{if(c.estado!=="cumplido")out.push({q:"Solicitud "+f.label+" — "+((m.sol.cols[i]||{}).label||""),estado:c.estado});}));
-    (m.rep.filas||[]).forEach(f=>{if(f.estado!=="cumplido")out.push({q:"Reporte de carga "+f.unidad+" — asignación "+f.asignLbl,estado:f.estado});});
+    (m.sol.filas||[]).forEach(f=>f.celdas.forEach((c,i)=>{if(falta(c.estado))out.push({q:"Solicitud "+f.label+" — "+((m.sol.cols[i]||{}).label||""),estado:c.estado});}));
+    (m.rep.filas||[]).forEach(f=>{if(falta(f.estado))out.push({q:"Reporte de carga "+f.unidad+" — asignación "+f.asignLbl,estado:f.estado});});
     return out;}
   if(!m.filas)return out;
-  if(m.grupo==="veh"){m.filas.forEach(f=>f.celdas.forEach((c,i)=>{if(m.soloHoyCuenta&&!c.esHoy)return;if(c.estado!=="cumplido")out.push({q:f.label+" — "+((m.cols[i]||{}).label||""),estado:c.estado});}));}
-  else{m.filas.forEach(f=>f.celdas.forEach(c=>{if(c.estado!=="cumplido")out.push({q:f.plantilla.nombre+" — "+c.suc,estado:c.estado});}));}
+  if(m.grupo==="veh"){m.filas.forEach(f=>f.celdas.forEach((c,i)=>{if(m.soloHoyCuenta&&!c.esHoy)return;if(falta(c.estado))out.push({q:f.label+" — "+((m.cols[i]||{}).label||""),estado:c.estado});}));}
+  else{m.filas.forEach(f=>f.celdas.forEach(c=>{if(falta(c.estado))out.push({q:f.plantilla.nombre+" — "+c.suc,estado:c.estado});}));}
   return out;}
 const segPct=r=>r&&r.total?Math.round(r.cumplido*100/r.total):0;
 
@@ -2090,6 +2143,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
   const totProblemas=mods.reduce((a,m)=>a+(m.conProblemas?(m.problemas||[]).length:0),0);
   const totVenc=mods.reduce((a,m)=>a+((m.resumen&&!m.cargar)?m.resumen.vencido:0),0);
   const totPend=mods.reduce((a,m)=>a+((m.resumen&&!m.cargar)?m.resumen.pendiente:0),0);
+  const inicioCfg=(cat.config&&cat.config.fechaInicio)||null;  // día de inicio (reset/go-live)
   const pctCol=p=>p>=90?C.green:p>=60?C.amber:C.red;
   const modNombre=mk=>SEG_MOD_LBL[mk]||((cat.modulos||[]).find(mo=>mo.clave===mk)||{}).nombre||mk;
   // Tabla de una matriz unidad×columnas (reusada por combustible/veh en el dashboard de PC)
@@ -2109,7 +2163,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
   // ═══ LAYOUT PC / LAPTOP (dashboard ancho, estilo mockup) ═══
   if(esPC)return(
     <div className="seg-root">
-      <div className="seg-title">📊 Tablero de Seguimiento <span>· Cumplimiento por módulo · Hoy {meta.fechaLbl}</span></div>
+      <div className="seg-title">📊 Tablero de Seguimiento <span>· Cumplimiento por módulo · Hoy {meta.fechaLbl}{inicioCfg?" · medido desde "+inicioCfg:""}</span></div>
       <div className="seg-tools">
         <div className="seg-alert" style={{background:totVenc?C.redLt:C.greenLt,color:totVenc?C.red:C.green,border:"1px solid "+(totVenc?C.red:C.green)}}>{totVenc?`🔔 ${totVenc} vencido(s)`:"✓ Sin vencidos"}{totPend?` · ${totPend} pendiente(s)`:""}{totProblemas?` · ${totProblemas} problema(s)`:""}</div>
         <div style={{display:"flex",gap:8}}><button className="dlb" disabled={bajando} onClick={()=>exportar("html")}>⬇ HTML</button><button className="dlb" disabled={bajando} onClick={()=>exportar("pdf")}>⬇ PDF</button><button className="dlb" disabled={bajando} onClick={()=>exportar("csv")}>⬇ CSV</button></div>
@@ -2150,7 +2204,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
   return(
     <div className="seg-root">
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:2}}>📊 Tablero de Seguimiento</div>
-      <div style={{fontSize:11,color:"#888",marginBottom:12}}>Cumplimiento por módulo · Hoy {meta.fechaLbl}</div>
+      <div style={{fontSize:11,color:"#888",marginBottom:12}}>Cumplimiento por módulo · Hoy {meta.fechaLbl}{inicioCfg?" · medido desde "+inicioCfg:""}</div>
       <div className="card">
         <label>Sucursal</label>
         <select value={fSuc} onChange={e=>setFSuc(e.target.value)}>{(!sucursalesUser||sucursalesUser.length>1)&&<option value="__todas">Todas {sucursalesUser?"(mías)":""}</option>}{sucAll.map(s=><option key={s} value={s}>{s}</option>)}</select>
