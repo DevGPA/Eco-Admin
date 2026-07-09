@@ -701,7 +701,8 @@ function CampoForm({item,getA,setA,availVeh}){
 
 // Formulario dinámico multipaso (1 sección = 1 paso) construido desde la plantilla
 function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast}){
-  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
+  const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const secs=plantilla.secciones||[];
   const availVeh=cat.vehicles.filter(v=>v.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const sucOpts=(sucursalesUser&&!["admin","analista"].includes(rol))?sucursalesUser:cat.sucursales;
@@ -937,7 +938,8 @@ function ModCombustible({cat,items,rol,sucursalesUser,session,refrescar,showToas
 }
 
 function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDone}){
-  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
+  const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   // Combustible: Gasolina, Diésel y Gas LP cargan combustible; solo se excluyen los eléctricos.
   const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   // El solicitante SIEMPRE es la persona que inició sesión (match por su correo).
@@ -1029,7 +1031,8 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
 
 // ─── REPORTE DE CARGA REALIZADA (formato PDF) ───────────────────────
 function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDone}){
-  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
+  const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const solicitante=yo||{id:null,nombre:session.nombre||session.email,mail:session.email};
   const DKEY="gpa_rep_draft_"+session.email;
@@ -1212,14 +1215,13 @@ function ModChecklist({cat,items,rol,sucursalesUser,session,refrescar,showToast}
 
 function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,onDone}){
   const sections=tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
-  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
+  const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico"&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
-  const availUsr=cat.users.filter(u=>u.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(u.sucursal)));
   const[veh,setVeh]=useState(availVeh[0]?String(availVeh[0].id):"");
-  const[usr,setUsr]=useState(yo?String(yo.id):availUsr[0]?String(availUsr[0].id):"");
   const[km,setKm]=useState("");const[fotoKm,setFotoKm]=useState(null);const[ans,setAns]=useState({});const[sig,setSig]=useState(null);const[obs,setObs]=useState("");const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
-  const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user=cat.users.find(u=>String(u.id)===String(usr));
+  const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user={id:session.email,nombre:session.nombre||session.email};
   const total=sections.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?sections[step-1]:null;
   const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
   const visible=item=>{if(!item.cond)return true;const[cid,cv]=item.cond.split(":");return String(getA(cid))===cv;};
@@ -1248,13 +1250,13 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
       {step===0&&<div>
         <div className="card"><div className="ct">Datos Generales</div>
           <label>Vehículo</label><select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas}</option>)}</select>
-          <label>Responsable que verifica</label><select value={usr} onChange={e=>setUsr(e.target.value)}><option value="">— Selecciona —</option>{availUsr.map(u=><option key={u.id} value={u.id}>{u.nombre}</option>)}</select>
+          <label>Responsable que verifica (tu cuenta)</label><input type="text" value={session.nombre||session.email} disabled style={{background:"#f5f5f5",color:"#888"}}/>
           <label>Kilometraje del día</label><input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="Ej. 97710"/>
           <label>Foto del kilometraje</label>
           <div className="pb">{!fotoKm&&<><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>Toca para capturar</div></>}{fotoKm&&<img src={fotoKm} alt="km"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,setFotoKm)}/></div>
           {fotoKm&&<button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>setFotoKm(null)}>Cambiar foto</button>}
         </div>
-        <button className="bp" disabled={!veh||!usr||!km||!fotoKm} onClick={()=>setStep(1)} style={{background:tipo==="semanal"?C.blue:C.green}}>Siguiente →</button>
+        <button className="bp" disabled={!veh||!km||!fotoKm} onClick={()=>setStep(1)} style={{background:tipo==="semanal"?C.blue:C.green}}>Siguiente →</button>
       </div>}
       {curSec&&<div>
         {marcar&&faltanCLSec(curSec.items).length>0&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {faltanCLSec(curSec.items).length} respuesta(s) por completar (marcadas en rojo).</div>}
@@ -1363,7 +1365,8 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
 
 function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToast,onDone}){
   const items=tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;
-  const yo=cat.users.find(u=>u.mail===session.email)||null;
+  // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
+  const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const availMC=mc.filter(v=>!sucursalesUser||sucursalesUser.includes(v.sucursal));
   const[eq,setEq]=useState(availMC[0]?String(availMC[0].id):"");
   const[estatus,setEstatus]=useState("Activo");const[dia,setDia]=useState(new Date().toISOString().split("T")[0]);
@@ -1501,7 +1504,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   // Tipo de responsable de alertas (catálogo CAT#RESPONSABLE) por correo
   const respDe=email=>((cat?.responsables||[]).find(r=>r.email===email)?.tipo)||"ninguno";
   const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
-  useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
+  useEffect(()=>{if((sec==="cuentas"||sec==="users")&&accounts===null)cargarCuentas();},[sec]);
   // ── Motor de formularios: módulos y plantillas (Excel + vista previa) ──
   const[modDraft,setModDraft]=useState({clave:"",nombre:"",orden:100});
   const slug=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
@@ -1713,8 +1716,10 @@ function ModAdmin({cat,refrescarCat,showToast}){
         <div className="card">{cat.vehicles.length===0&&<div className="empty">Sin vehículos</div>}{cat.vehicles.map(v=><div key={v.id} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">#{v.economico} · {v.placas}</span><span className={"bdg "+(v.activo?"dok":"drj")}>{v.activo?"Activo":"Inactivo"}</span></div><div className="lis">{v.subMarca} · {v.sucursal} · {v.tanque}L · {v.combustible}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditV(v)}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleV(v)}>{v.activo?"Desactivar":"Activar"}</button></div></div>)}</div>
       </>}
       {sec==="users"&&<>
-        <button className="bp" style={{marginBottom:12}} onClick={()=>setEditU(blankU)}>+ Nuevo responsable</button>
-        <div className="card">{cat.users.length===0&&<div className="empty">Sin responsables</div>}{cat.users.map(u=><div key={u.id} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{u.nombre}</span><span className={"bdg "+(u.activo?"dok":"drj")}>{u.activo?"Activo":"Inactivo"}</span></div><div className="lis">{u.mail} · {u.sucursal}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditU(u)}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleU(u)}>{u.activo?"Desactivar":"Activar"}</button></div></div>)}</div>
+        <div className="wb">Los <b>responsables son los titulares de cuenta</b>. Se agregan y editan en la pestaña <b>Cuentas</b>. En cada captura, el responsable es la cuenta que la registró (sin cuenta no se puede ser responsable).</div>
+        <button className="bp" style={{marginBottom:12}} onClick={()=>setSec("cuentas")}>Ir a Cuentas para agregar / editar →</button>
+        {accounts===null&&<div className="spin"/>}
+        {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas registradas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"}</div><div style={{marginTop:6}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span></div></div>)}</div>}
       </>}
       {sec==="sucursales"&&<>
         <div className="card" style={{marginBottom:12}}><label>Nueva sucursal</label><div style={{display:"flex",gap:8}}><input type="text" value={newSuc} onChange={e=>setNewSuc(e.target.value)} placeholder="Nombre"/><button className="bp" style={{width:"auto",padding:"8px 14px",marginTop:0,whiteSpace:"nowrap"}} disabled={busy} onClick={()=>{if(!newSuc.trim())return;wrap(async()=>{await api.adminSucursal({nombre:newSuc.trim()});setNewSuc("");showToast("Sucursal agregada");});}}>+ Agregar</button></div></div>
