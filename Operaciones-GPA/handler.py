@@ -101,6 +101,16 @@ def _modulo_ok(cl, modulo) -> bool:
     return any(x in mods for x in acept)
 
 
+# La sub-pestaña "Sucursales" vive DENTRO de Mtto en la app, así que el acceso a
+# Mtto (o sus claves antiguas) también concede sus formularios. Los demás módulos
+# dinámicos se conceden por su propia clave.
+_MODULO_FORM_ALIAS = {"sucursales": ("sucursales", "mtto", "checklist", "montacargas")}
+
+
+def _acepta_modulo(modulo):
+    return _MODULO_FORM_ALIAS.get(modulo, (modulo,))
+
+
 def _body(event) -> dict:
     try:
         return json.loads(event.get("body") or "{}")
@@ -261,7 +271,7 @@ def _crear_form(body, cl):
     if cl["rol"] == "analista":
         return _err("El analista no captura registros", 403)
     plt = _plantilla_activa(body.get("plantillaClave"))
-    if not _modulo_ok(cl, plt.get("modulo")):
+    if not _modulo_ok(cl, _acepta_modulo(plt.get("modulo"))):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
     datos = dict(body.get("datos") or {})
     datos["plantillaClave"] = plt["clave"]
@@ -277,7 +287,7 @@ def _crear_form(body, cl):
 def _listar_form(event, cl):
     clave = (event.get("queryStringParameters") or {}).get("clave")
     plt = _plantilla_activa(clave)
-    if not _modulo_ok(cl, plt.get("modulo")):
+    if not _modulo_ok(cl, _acepta_modulo(plt.get("modulo"))):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
     regs = listar_registros(m.tipo_formulario(plt["clave"]),
                             cl["rol"], cl["sucursales"], cl["email"])
