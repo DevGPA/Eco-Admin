@@ -102,13 +102,28 @@ El publisher reintenta ante cualquier respuesta ≠ 2xx.
 
 ## Mapeo de campos por tipo
 
-### `SOL` (combustible) — `answers` contiene
+### `SOL` (combustible) — discriminador `answers.formato`
 
+**La solicitud y el reporte de carga se guardan ambos con `tipo="SOL"`**;
+lo único que los distingue es el campo `answers.formato`. El receptor DEBE
+despachar así:
+
+| `answers.formato` | Significado | Destino en Fleet Command |
+|---|---|---|
+| *(ausente)* | Solicitud de combustible | *Solicitud Gasolina* (`economicoId`, litros, monto) |
+| `"reporte"` | Reporte de carga realizada | *Carga Gasolina* (tolerancia monto/km, km/l) |
+
+**Solicitud** — `answers` contiene:
 `km, tankBefore, tankAfter, necesidad, litros, monto, combustible, producto,
-precio, tanque, subMarca, obs, photo (clave S3), status`
+precio, tanque, subMarca, obs, photo (clave S3), status`.
+`photo` = evidencia del odómetro; validación km para km/l.
 
-Equivalencias Fleet Command: *Solicitud Gasolina* (`economicoId`, litros,
-monto) y validación km para km/l. `photo` = evidencia del odómetro.
+**Reporte de carga** (`formato:"reporte"`) — `answers` contiene:
+`km, lleno (bool: tanque quedó lleno — filtro duro para km/l), litros,
+precioLitro, monto (= litros × precioLitro, calculado), combustible,
+producto, precio, tanque, subMarca, areaResponsable, ubicacion {lat,lng},
+mail, obs, status`, y las evidencias de 5 puntos:
+`fotoAntes, fotoDespues (odómetro), fotoBomba, fotoTicket, fotoPersona`.
 
 ### `CL` (checklist de reparto) — `answers` contiene
 

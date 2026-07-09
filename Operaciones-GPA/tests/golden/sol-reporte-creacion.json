@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "contrato": "gpa.ops.v1",
+  "tipo": "SOL",
+  "subtipo": null,
+  "evento": "creacion",
+  "registroId": "b2f4e6a8c0d2",
+  "folio": "OPS-b2f4e6a8c0d2",
+  "fechaISO": "2026-07-08T19:05:47+00:00",
+  "sucursal": "Guadalajara",
+  "unidad": {
+    "vehicleId": "10",
+    "economico": "10",
+    "placas": "JLL5377"
+  },
+  "responsable": {
+    "nombre": "Operador Guadalajara",
+    "userId": "10",
+    "accountId": "operador.gdl@gpa.com.mx"
+  },
+  "status": "Pendiente",
+  "answers": {
+    "formato": "reporte",
+    "subMarca": "Matiz 5 Ptas",
+    "areaResponsable": "MANTENIMIENTO",
+    "mail": "operador.gdl@gpa.com.mx",
+    "km": 77812,
+    "lleno": true,
+    "litros": 25.5,
+    "precioLitro": 26.63,
+    "monto": 679.07,
+    "combustible": "Gasolina",
+    "producto": "TOKA COMBUSTIBLE MAGNA CHIP",
+    "precio": 26.63,
+    "tanque": 35,
+    "ubicacion": {
+      "lat": 20.6597,
+      "lng": -103.3496
+    },
+    "fotoAntes": "SOL/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1.jpg",
+    "fotoDespues": "SOL/a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2.jpg",
+    "fotoBomba": "SOL/a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3.jpg",
+    "fotoTicket": "SOL/a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4.jpg",
+    "fotoPersona": "SOL/a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5.jpg",
+    "obs": "",
+    "status": "Pendiente"
+  },
+  "evidencias": [
+    {
+      "campo": "fotoAntes",
+      "key": "SOL/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1.jpg"
+    },
+    {
+      "campo": "fotoDespues",
+      "key": "SOL/a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2.jpg"
+    },
+    {
+      "campo": "fotoBomba",
+      "key": "SOL/a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3.jpg"
+    },
+    {
+      "campo": "fotoTicket",
+      "key": "SOL/a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4.jpg"
+    },
+    {
+      "campo": "fotoPersona",
+      "key": "SOL/a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5.jpg"
+    }
+  ],
+  "firma": "SOL/a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6a6.png",
+  "bucketOrigen": "gpa-ops-evidencias-ENV-CUENTA",
+  "emitidoEn": "2026-07-09T00:00:00+00:00"
+}

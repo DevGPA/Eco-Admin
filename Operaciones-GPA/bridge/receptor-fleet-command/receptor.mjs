@@ -120,9 +120,16 @@ export async function archivarCrudo(ev, rawBody) {
 // Regla de folio: eventoId = ev.folio ("OPS-<registroId>") y fuente:"ops-gpa".
 async function persistir(ev, unidad, evidenciasCopiadas) {
   if (ev.tipo === 'SOL') {
+    // OJO: solicitud y reporte de carga llegan AMBOS como tipo SOL;
+    // el discriminador es answers.formato (ver CONTRATO-gpa.ops.v1.md).
+    if (ev.answers?.formato === 'reporte') {
+      // Reporte de carga: litros/precioLitro/monto/lleno + 5 evidencias
+      // creacion → processCargaGasolina({...}) — `lleno` es el filtro duro km/l
+      throw new Error('persistir SOL reporte (carga): cablear a process* de Fleet Command');
+    }
     // creacion      → processSolicitudGasolina({...})
     // cambio_estado → actualizar estado de la solicitud (Aprobada/Rechazada)
-    throw new Error('persistir SOL: cablear a process* de Fleet Command');
+    throw new Error('persistir SOL solicitud: cablear a process* de Fleet Command');
   }
   if (ev.tipo === 'CL' && ev.subtipo === 'semanal') {
     // → processInspeccionSemanal: validar insumos EXACTOS de calcEstatusSemanal

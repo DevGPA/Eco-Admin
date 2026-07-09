@@ -89,6 +89,11 @@ Parameters:
 # ═══════════════════════════════════════════════════════════════════
 Conditions:
   IsProd: !Equals [!Ref Env, prod]
+  # El puente está activo (envía de verdad): prod Y con URL de receptor.
+  # En modo espera la alarma de silencio daría señal falsa.
+  BridgeActivo: !And
+    - !Condition IsProd
+    - !Not [!Equals [!Ref FleetBridgeUrl, '']]
 
 # ═══════════════════════════════════════════════════════════════════
 # RECURSOS
@@ -350,8 +355,8 @@ Resources:
     Properties:
       FunctionName: !Sub gpa-ops-bridge-${Env}
       Description:  Puente Operaciones-GPA → Fleet Command (gpa.ops.v1)
-      Handler:      bridge.publisher.lambda_handler
-      CodeUri:      ./
+      Handler:      publisher.lambda_handler
+      CodeUri:      ./bridge/
       Timeout:      60
       Environment:
         Variables:
@@ -383,7 +388,7 @@ Resources:
         Proyecto: GPA-Operaciones
         Env:      !Ref Env
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
 
   BridgeLogGroup:
     Type: AWS::Logs::LogGroup
@@ -391,19 +396,21 @@ Resources:
       LogGroupName:    !Sub /aws/lambda/gpa-ops-bridge-${Env}
       RetentionInDays: !If [IsProd, 90, 14]
 
-  # Alarma "cero envíos": si en 48 h no sale ningún evento del puente en
-  # prod, algo se rompió en silencio (Fase 3 del plan de migración).
+  # Alarma "cero envíos": si en 48 h no hay envíos EXITOSOS al receptor en
+  # prod, algo se rompió en silencio (Fase 3 del plan de migración). Mide la
+  # métrica EMF GPA/Bridge·EnviosExitosos que emite el publisher tras cada
+  # POST 2xx, y solo existe con el puente activo (prod + FleetBridgeUrl).
   BridgeSilencioAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsProd
+    Condition: BridgeActivo
     Properties:
       AlarmName:        !Sub gpa-ops-bridge-silencio-${Env}
-      AlarmDescription: El puente no ha publicado eventos en 48 horas
-      Namespace:  AWS/Lambda
-      MetricName: Invocations
+      AlarmDescription: El puente no ha entregado eventos a Fleet Command en 48 horas
+      Namespace:  GPA/Bridge
+      MetricName: EnviosExitosos
       Dimensions:
-        - Name:  FunctionName
-          Value: !Sub gpa-ops-bridge-${Env}
+        - Name:  Env
+          Value: !Ref Env
       Statistic:          Sum
       Period:             86400
       EvaluationPeriods:  2

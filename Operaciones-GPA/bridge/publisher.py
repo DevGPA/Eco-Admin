@@ -175,6 +175,26 @@ def enviar(evento: dict, url: str, secreto: str, timeout: int = 20) -> None:
             raise RuntimeError(f"Receptor respondió {resp.status}")
 
 
+def metrica_envio(ev: dict) -> None:
+    """Métrica GPA/Bridge·EnviosExitosos en formato EMF (CloudWatch la extrae
+    del log; sin dependencias). Alimenta la alarma de silencio del template."""
+    print(json.dumps({
+        "_aws": {
+            "Timestamp": int(time.time() * 1000),
+            "CloudWatchMetrics": [{
+                "Namespace":  "GPA/Bridge",
+                "Dimensions": [["Env"]],
+                "Metrics":    [{"Name": "EnviosExitosos", "Unit": "Count"}],
+            }],
+        },
+        "Env": _env("ENV", "dev"),
+        "EnviosExitosos": 1,
+        "tipo": ev.get("tipo"),
+        "folio": ev.get("folio"),
+        "evento": ev.get("evento"),
+    }))
+
+
 # ── Handler ──────────────────────────────────────────────────────
 def lambda_handler(event, context):
     url = _env("FLEET_BRIDGE_URL")
@@ -194,6 +214,7 @@ def lambda_handler(event, context):
                             ev["tipo"], ev["folio"], nombre_evento)
                 continue
             enviar(ev, url, secreto)
+            metrica_envio(ev)
             logger.info("Enviado %s %s (%s)", ev["tipo"], ev["folio"], nombre_evento)
         except Exception:
             logger.exception("Falló el envío del record seq=%s; se reintentará", seq)

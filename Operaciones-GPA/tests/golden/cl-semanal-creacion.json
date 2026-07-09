@@ -4,24 +4,25 @@
   "tipo": "CL",
   "subtipo": "semanal",
   "evento": "creacion",
-  "registroId": "f6e5d4c3b2a1",
-  "folio": "OPS-f6e5d4c3b2a1",
-  "fechaISO": "2026-07-09T12:00:00+00:00",
+  "registroId": "88d8c62e3378",
+  "folio": "OPS-88d8c62e3378",
+  "fechaISO": "2026-07-06T13:20:38+00:00",
   "sucursal": "Guadalajara",
   "unidad": {
-    "vehicleId": "V-0007",
-    "economico": "7",
-    "placas": "XYZ987A"
+    "vehicleId": "16",
+    "economico": "16",
+    "placas": "PR3430A"
   },
   "responsable": {
-    "nombre": "Ana López",
-    "userId": "U-22",
-    "accountId": "ana@gpa.com.mx"
+    "nombre": "Chofer Guadalajara",
+    "userId": "16",
+    "accountId": "chofer.gdl@gpa.com.mx"
   },
-  "status": null,
+  "status": "Aprobado",
   "answers": {
     "tipo": "semanal",
-    "km": 98765,
+    "subMarca": "F-350 Chas Cabina Xl",
+    "km": 154302,
     "fotoKm": "CL/77777777777777777777777777777777.jpg",
     "answers": {
       "llantas": "Bien",
@@ -29,7 +30,8 @@
       "nivelAceite": "OK",
       "fotoLlanta": "CL/abababababababababababababababab.webp"
     },
-    "obs": "sin novedades"
+    "obs": "sin novedades",
+    "status": "Aprobado"
   },
   "evidencias": [
     {
