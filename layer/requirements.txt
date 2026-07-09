@@ -1,0 +1,3 @@
+# Dependencias Python — GPA ViaticOS
+# boto3 ya viene en el runtime de Lambda, pero lo fijamos para builds reproducibles.
+boto3==1.34.144

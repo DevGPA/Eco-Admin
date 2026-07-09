@@ -1,0 +1,12 @@
+{
+  "_comentario": "Cuentas iniciales del flujo ViaticOS. La contraseña se pasa por --password (default Gpa2026!). Ajusta correos antes de seedear en prod.",
+  "cuentas": [
+    { "email": "administracion@gpa.com.mx", "nombre": "Administración GPA", "rol": "admin", "area": "Sistemas" },
+    { "email": "direccion@gpa.com.mx", "nombre": "Dirección General", "rol": "direccion", "area": "Dirección General" },
+    { "email": "finanzas@gpa.com.mx", "nombre": "Ana Torres", "rol": "finanzas", "area": "Finanzas" },
+    { "email": "tesoreria@gpa.com.mx", "nombre": "Tesorería GPA", "rol": "tesoreria", "area": "Finanzas" },
+    { "email": "compras@gpa.com.mx", "nombre": "Compras Indirectos", "rol": "compras", "area": "Compras" },
+    { "email": "supervisor@gpa.com.mx", "nombre": "Patricia Ruiz", "rol": "supervisor", "area": "Comercial" },
+    { "email": "empleado@gpa.com.mx", "nombre": "Carlos Mendoza", "rol": "empleado", "area": "Ventas", "jefe": "Patricia Ruiz" }
+  ]
+}

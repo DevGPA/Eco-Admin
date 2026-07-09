@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#1B3A5C"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="icon.svg"/>
+<title>GPA ViaticOS — Sistema Integral de Viáticos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="config.js"></script>
+<script src="gpa-api.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#F2F5F7;color:#1A2533;min-height:100vh}
+#root{min-height:100vh}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Recorrido de diseño (10 pasos) — expone window.ViaticosDemo y window.VIATICOS_THEME -->
+<script type="text/babel" src="viaticos-app.jsx" data-presets="react"></script>
+
+<!-- Módulo operativo real -->
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+const api = new GpaApi();
+
+/* ─── PALETA (reutiliza la del diseño si está cargada) ─────────────────────── */
+const C = (window.VIATICOS_THEME && window.VIATICOS_THEME.C) || {
+  navy:"#1B3A5C", navyMid:"#2A4F7A", blue:"#2E6DA4", blueSoft:"#EBF4FB",
+  teal:"#5BB8C4", tealDark:"#3D9BAA", tealLight:"#A8D8DC", tealXL:"#E6F6F8",
+  bgPage:"#F2F5F7", bgCard:"#FFFFFF", bgSurf:"#F8FAFB", border:"#D4DCE4",
+  ink:"#1A2533", inkMid:"#3D4A5C", inkLight:"#6B7D8E", inkFaint:"#A0ADB8",
+  green:"#1A7A4A", greenBg:"#E8F5EE", amber:"#B45309", amberBg:"#FEF3C7",
+  red:"#C0392B", redBg:"#FEE8E6",
+};
+const F = (window.VIATICOS_THEME && window.VIATICOS_THEME.F) ||
+  { display:"Georgia,serif", body:"'Helvetica Neue',Helvetica,sans-serif", mono:"'Courier New',monospace" };
+
+const fmt = n => `$${Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:0})}`;
+const fdate = s => { try { return new Date(s).toLocaleDateString("es-MX"); } catch { return s; } };
+const fdt   = s => { try { return new Date(s).toLocaleString("es-MX"); } catch { return s; } };
+
+/* ─── FLUJO POL-TE01: estado actual → siguiente acción por rol ─────────────── */
+const ROL_LABEL = { admin:"Administrador", direccion:"Dirección", finanzas:"Finanzas",
+  tesoreria:"Tesorería", compras:"Compras", supervisor:"Supervisor", empleado:"Empleado" };
+const EST_COLOR = {
+  Solicitada:{bg:C.amberBg,c:C.amber}, Aprobada:{bg:C.blueSoft,c:C.blue},
+  Rechazada:{bg:C.redBg,c:C.red}, TransporteCotizado:{bg:C.blueSoft,c:C.blue},
+  AnticipoLiberado:{bg:C.tealXL,c:C.tealDark}, EnComprobacion:{bg:C.amberBg,c:C.amber},
+  Validada:{bg:C.tealXL,c:C.tealDark}, Revisada:{bg:C.blueSoft,c:C.blue},
+  Cerrada:{bg:C.greenBg,c:C.green}, Reembolsada:{bg:C.greenBg,c:C.green},
+};
+const EST_LABEL = {
+  Solicitada:"Solicitada", Aprobada:"Aprobada", Rechazada:"Rechazada",
+  TransporteCotizado:"Transporte cotizado", AnticipoLiberado:"Anticipo liberado",
+  EnComprobacion:"En comprobación", Validada:"Validada", Revisada:"Revisada",
+  Cerrada:"Cerrada", Reembolsada:"Reembolsada",
+};
+// Acciones disponibles desde cada estado: { target, label, roles, captura }
+const ACCIONES = {
+  Solicitada:[
+    {target:"Aprobada",  label:"✓ Aprobar solicitud", roles:["supervisor","admin"]},
+    {target:"Rechazada", label:"✗ Rechazar", roles:["supervisor","admin"], danger:true},
+  ],
+  Aprobada:[
+    {target:"TransporteCotizado", label:"Registrar transporte", roles:["compras","admin"], captura:"transporte"},
+  ],
+  TransporteCotizado:[
+    {target:"AnticipoLiberado", label:"Liberar anticipo", roles:["tesoreria","admin"], captura:"anticipo"},
+  ],
+  AnticipoLiberado:[
+    {target:"EnComprobacion", label:"Iniciar comprobación", roles:["empleado","admin"], captura:"comprobante"},
+  ],
+  EnComprobacion:[
+    {target:"EnComprobacion", label:"+ Agregar comprobante", roles:["empleado","admin"], captura:"comprobante"},
+    {target:"Validada", label:"Validar comprobación", roles:["finanzas","admin"]},
+  ],
+  Validada:[
+    {target:"Revisada", label:"Revisar (visto bueno)", roles:["supervisor","admin"]},
+  ],
+  Revisada:[
+    {target:"Cerrada", label:"Cerrar viaje", roles:["finanzas","admin"]},
+  ],
+  Cerrada:[
+    {target:"Reembolsada", label:"Marcar reembolsado", roles:["finanzas","admin"], captura:"anticipo"},
+  ],
+  Reembolsada:[],
+};
+
+/* ─── COMPONENTES BASE ─────────────────────────────────────────────────────── */
+function Badge({estado}){
+  const s = EST_COLOR[estado] || {bg:C.bgSurf,c:C.inkMid};
+  return <span style={{display:"inline-block",padding:"3px 10px",borderRadius:99,fontSize:11,
+    fontWeight:700,background:s.bg,color:s.c}}>{EST_LABEL[estado]||estado}</span>;
+}
+function Card({children,style={}}){return <div style={{background:C.bgCard,border:`1px solid ${C.border}`,
+  borderRadius:10,padding:"16px 18px",marginBottom:14,...style}}>{children}</div>;}
+function Row({k,v}){return <div style={{display:"flex",justifyContent:"space-between",gap:12,padding:"7px 0",
+  borderBottom:`1px solid ${C.bgSurf}`}}><span style={{fontSize:12,color:C.inkLight}}>{k}</span>
+  <span style={{fontSize:12,color:C.ink,fontWeight:600,textAlign:"right"}}>{v}</span></div>;}
+function Field({label,children}){return <label style={{display:"block",marginBottom:10}}>
+  <span style={{fontSize:12,color:C.inkMid,display:"block",marginBottom:4}}>{label}</span>{children}</label>;}
+const inputStyle = {width:"100%",padding:"9px 11px",border:`1px solid ${C.border}`,borderRadius:7,
+  fontSize:13,background:"#fff",color:C.ink,fontFamily:F.body};
+function Btn({children,onClick,disabled,danger,ghost}){
+  return <button onClick={disabled?undefined:onClick} disabled={disabled} style={{
+    padding:"10px 18px",borderRadius:8,fontSize:13,fontWeight:700,cursor:disabled?"default":"pointer",
+    border:ghost?`1px solid ${danger?C.red:C.border}`:"none",
+    background:disabled?C.bgSurf:ghost?"#fff":danger?C.red:C.navy,
+    color:disabled?C.inkFaint:ghost?(danger?C.red:C.inkMid):"#fff",fontFamily:F.body,marginRight:8,marginTop:4,
+  }}>{children}</button>;
+}
+
+/* ─── LOGIN ────────────────────────────────────────────────────────────────── */
+function Login({onLogin}){
+  const[u,setU]=useState(""); const[p,setP]=useState(""); const[err,setErr]=useState(""); const[busy,setBusy]=useState(false);
+  const go=async()=>{ setErr(""); setBusy(true);
+    try{ await onLogin(u.trim(),p); }catch(e){ setErr(e.message||"No se pudo iniciar sesión"); } setBusy(false); };
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",
+      justifyContent:"center",padding:24,background:C.bgPage}}>
+    <div style={{width:56,height:56,borderRadius:"50%",background:`${C.teal}25`,border:`2px solid ${C.teal}60`,
+      display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+      <span style={{color:C.tealDark,fontWeight:900,fontSize:15}}>GPA</span></div>
+    <div style={{fontFamily:F.display,fontSize:22,color:C.navy}}>ViaticOS</div>
+    <div style={{fontSize:12,color:C.inkLight,marginBottom:22,letterSpacing:".06em"}}>SISTEMA INTEGRAL DE VIÁTICOS · POL-TE01</div>
+    <div style={{width:"100%",maxWidth:360}}>
+      <Card>
+        <Field label="Correo"><input style={inputStyle} type="text" value={u} autoCapitalize="off"
+          onChange={e=>setU(e.target.value)} placeholder="usuario@gpa.com.mx"/></Field>
+        <Field label="Contraseña"><input style={inputStyle} type="password" value={p}
+          onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="••••••"/></Field>
+        {err&&<div style={{background:C.redBg,color:C.red,padding:"8px 10px",borderRadius:6,fontSize:12,marginBottom:8}}>{err}</div>}
+        <Btn onClick={go} disabled={busy||!u||!p}>{busy?"Entrando…":"Iniciar sesión"}</Btn>
+      </Card>
+      <div style={{fontSize:11,color:C.inkFaint,textAlign:"center"}}>Credenciales asignadas por administrador</div>
+    </div>
+  </div>;
+}
+
+/* ─── NUEVA SOLICITUD ──────────────────────────────────────────────────────── */
+function NuevaSolicitud({session,onDone,onCancel,showToast}){
+  const[f,setF]=useState({destino:"",destCode:"",motivo:"",ida:"",ret:"",dias:1,
+    tipo:"Nacional",transporte:"Avión",presupuesto:"",anticipo:""});
+  const[busy,setBusy]=useState(false);
+  const set=(k,v)=>setF(s=>({...s,[k]:v}));
+  const submit=async()=>{
+    if(!f.destino||!f.motivo||!f.ida){ showToast("⚠️ Completa destino, motivo y fecha de salida"); return; }
+    setBusy(true);
+    try{
+      const r=await api.crear({...f,
+        dias:Number(f.dias)||1, presupuesto:Number(f.presupuesto)||0, anticipo:Number(f.anticipo)||0,
+        area:session.area||"SIN_AREA"});
+      showToast(`✓ Solicitud ${r.folio} creada`);
+      onDone();
+    }catch(e){ showToast("⚠️ "+e.message); }
+    setBusy(false);
+  };
+  return <div>
+    <Btn ghost onClick={onCancel}>← Cancelar</Btn>
+    <h2 style={{fontFamily:F.display,fontSize:22,fontWeight:400,margin:"12px 0 14px"}}>Nueva solicitud de viaje</h2>
+    <Card>
+      <Field label="Destino"><input style={inputStyle} value={f.destino} onChange={e=>set("destino",e.target.value)} placeholder="Monterrey, N.L."/></Field>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Clave aeropuerto (opc.)"><input style={inputStyle} value={f.destCode} onChange={e=>set("destCode",e.target.value.toUpperCase())} placeholder="MTY"/></Field></div>
+        <div style={{flex:1}}><Field label="Tipo"><select style={inputStyle} value={f.tipo} onChange={e=>set("tipo",e.target.value)}><option>Nacional</option><option>Internacional</option></select></Field></div>
+      </div>
+      <Field label="Propósito / motivo"><textarea style={{...inputStyle,minHeight:60}} value={f.motivo} onChange={e=>set("motivo",e.target.value)} placeholder="Cierre contrato Q2 · Grupo Alfa"/></Field>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Salida"><input style={inputStyle} type="date" value={f.ida} onChange={e=>set("ida",e.target.value)}/></Field></div>
+        <div style={{flex:1}}><Field label="Retorno"><input style={inputStyle} type="date" value={f.ret} onChange={e=>set("ret",e.target.value)}/></Field></div>
+        <div style={{width:90}}><Field label="Días"><input style={inputStyle} type="number" min="1" value={f.dias} onChange={e=>set("dias",e.target.value)}/></Field></div>
+      </div>
+      <Field label="Transporte preferido"><select style={inputStyle} value={f.transporte} onChange={e=>set("transporte",e.target.value)}><option>Avión</option><option>Autobús</option><option>Vehículo propio</option><option>Vehículo empresa</option></select></Field>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Presupuesto estimado"><input style={inputStyle} type="number" value={f.presupuesto} onChange={e=>set("presupuesto",e.target.value)} placeholder="9200"/></Field></div>
+        <div style={{flex:1}}><Field label="Anticipo solicitado"><input style={inputStyle} type="number" value={f.anticipo} onChange={e=>set("anticipo",e.target.value)} placeholder="8500"/></Field></div>
+      </div>
+      <Btn onClick={submit} disabled={busy}>{busy?"Enviando…":"Enviar solicitud →"}</Btn>
+    </Card>
+  </div>;
+}
+
+/* ─── MODAL DE CAPTURA (transporte / anticipo / comprobante) ───────────────── */
+function CapturaModal({tipo,onSubmit,onCancel}){
+  const[d,setD]=useState({});
+  const set=(k,v)=>setD(s=>({...s,[k]:v}));
+  const campos = {
+    transporte:[["modo","Modo (Avión/Autobús/Terrestre)","text"],["proveedor","Proveedor / aerolínea","text"],["monto","Monto cotizado","number"],["nota","Nota","text"]],
+    anticipo:[["monto","Monto liberado","number"],["referencia","Referencia / folio pago","text"],["nota","Nota","text"]],
+    comprobante:[["concepto","Concepto","text"],["tipo","Tipo (Hospedaje/Alimentos/Transporte/Representación)","text"],["monto","Monto","number"],["cfdi","¿Tiene CFDI? (si/no)","text"]],
+  }[tipo]||[];
+  const titulo = {transporte:"Registrar transporte",anticipo:"Datos del anticipo",comprobante:"Agregar comprobante"}[tipo];
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",display:"flex",alignItems:"center",
+      justifyContent:"center",padding:16,zIndex:100}}>
+    <div style={{background:"#fff",borderRadius:12,padding:20,width:"100%",maxWidth:420}}>
+      <h3 style={{fontFamily:F.display,fontSize:18,fontWeight:400,marginBottom:14}}>{titulo}</h3>
+      {campos.map(([k,lbl,t])=><Field key={k} label={lbl}>
+        <input style={inputStyle} type={t} value={d[k]||""} onChange={e=>set(k,e.target.value)}/></Field>)}
+      <div style={{marginTop:8}}>
+        <Btn onClick={()=>onSubmit(d)}>Guardar</Btn>
+        <Btn ghost onClick={onCancel}>Cancelar</Btn>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── DETALLE + ACCIONES ───────────────────────────────────────────────────── */
+function Detalle({id,session,onBack,showToast}){
+  const[sol,setSol]=useState(null); const[busy,setBusy]=useState(false); const[captura,setCaptura]=useState(null);
+  const cargar=async()=>{ try{ setSol(await api.detalle(id)); }catch(e){ showToast("⚠️ "+e.message); } };
+  useEffect(()=>{ cargar(); },[id]);
+  if(!sol) return <div style={{padding:30,color:C.inkLight}}>Cargando…</div>;
+
+  const acciones=(ACCIONES[sol.estado]||[]).filter(a=>a.roles.includes(session.rol));
+  const ejecutar=async(accion,datos)=>{
+    setBusy(true);
+    try{
+      if(accion.captura){
+        // Comprobante se acumula como lista; transporte/anticipo van en claves propias
+        // (distintas de los campos de la solicitud para no sobrescribirlos).
+        if(accion.captura==="comprobante"){
+          const comps=[...(sol.comprobantes||[]),{...datos,fecha:new Date().toISOString().slice(0,10)}];
+          await api.paso(id,{estado:accion.target,datos:{comprobantes:comps}});
+        }else{
+          const CAP_KEY={transporte:"transporteCotizado",anticipo:"anticipoData"};
+          await api.paso(id,{estado:accion.target,datos:{[CAP_KEY[accion.captura]||accion.captura]:datos}});
+        }
+      }else{
+        await api.estado(id,accion.target);
+      }
+      showToast(`✓ ${EST_LABEL[accion.target]||accion.target}`);
+      setCaptura(null);
+      await cargar();
+    }catch(e){ showToast("⚠️ "+e.message); }
+    setBusy(false);
+  };
+  const onAccion=a=> a.captura ? setCaptura({accion:a}) : ejecutar(a);
+
+  return <div>
+    {captura && <CapturaModal tipo={captura.accion.captura}
+       onCancel={()=>setCaptura(null)} onSubmit={d=>ejecutar(captura.accion,d)}/>}
+    <Btn ghost onClick={onBack}>← Volver</Btn>
+    <div style={{display:"flex",alignItems:"center",gap:10,margin:"12px 0 14px"}}>
+      <h2 style={{fontFamily:F.display,fontSize:22,fontWeight:400,margin:0}}>{sol.folio}</h2><Badge estado={sol.estado}/>
+    </div>
+    <Card>
+      <Row k="Solicitante" v={sol.solicitante}/>
+      <Row k="Área" v={sol.area}/>
+      <Row k="Destino" v={`${sol.destino||"—"}${sol.destCode?" ("+sol.destCode+")":""}`}/>
+      <Row k="Motivo" v={sol.motivo||"—"}/>
+      <Row k="Fechas" v={`${sol.ida||"—"} → ${sol.ret||"—"} (${sol.dias||"—"} días)`}/>
+      <Row k="Tipo / Transporte" v={`${sol.tipo||"—"} · ${sol.transporte||"—"}`}/>
+      <Row k="Presupuesto" v={fmt(sol.presupuesto)}/>
+      <Row k="Anticipo" v={fmt(sol.anticipo)}/>
+    </Card>
+
+    {sol.transporteCotizado && <Card>
+      <div style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Transporte cotizado</div>
+      {Object.entries(sol.transporteCotizado).map(([k,v])=><Row key={k} k={k} v={String(v)}/>)}
+    </Card>}
+    {sol.anticipoData && <Card>
+      <div style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Anticipo</div>
+      {Object.entries(sol.anticipoData).map(([k,v])=><Row key={k} k={k} v={String(v)}/>)}
+    </Card>}
+    {Array.isArray(sol.comprobantes)&&sol.comprobantes.length>0 && <Card>
+      <div style={{fontSize:11,fontWeight:700,color:C.tealDark,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Comprobantes ({sol.comprobantes.length})</div>
+      {sol.comprobantes.map((c,i)=><Row key={i} k={`${c.concepto||c.tipo||"Comprobante"} · ${c.fecha||""}`} v={`${fmt(c.monto)}${c.cfdi?" · CFDI":""}`}/>)}
+      <Row k="Total comprobado" v={fmt(sol.comprobantes.reduce((s,c)=>s+Number(c.monto||0),0))}/>
+    </Card>}
+
+    {Array.isArray(sol.historial)&&<Card>
+      <div style={{fontSize:11,fontWeight:700,color:C.inkLight,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Historial</div>
+      {sol.historial.map((h,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"4px 0",color:C.inkMid}}>
+        <span>{EST_LABEL[h.estado]||h.estado} · {h.por}</span><span style={{color:C.inkFaint}}>{fdt(h.fecha)}</span></div>)}
+    </Card>}
+
+    {acciones.length>0 ? <Card style={{background:C.bgSurf}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.inkLight,textTransform:"uppercase",letterSpacing:".06em",marginBottom:8}}>Acciones ({ROL_LABEL[session.rol]})</div>
+      {acciones.map(a=><Btn key={a.target+a.label} danger={a.danger} disabled={busy} onClick={()=>onAccion(a)}>{a.label}</Btn>)}
+    </Card> : <div style={{fontSize:12,color:C.inkFaint,padding:"8px 2px"}}>Sin acciones disponibles para tu rol en este estado.</div>}
+  </div>;
+}
+
+/* ─── BANDEJA ──────────────────────────────────────────────────────────────── */
+function Bandeja({session,onOpen,onNueva,showToast,reload}){
+  const[items,setItems]=useState(null); const[filtro,setFiltro]=useState("Todos");
+  useEffect(()=>{ (async()=>{ try{ setItems(await api.listar()); }catch(e){ showToast("⚠️ "+e.message); setItems([]);} })(); },[reload]);
+  if(!items) return <div style={{padding:30,color:C.inkLight}}>Cargando…</div>;
+  const estados=["Todos",...Object.keys(EST_LABEL)];
+  const list=items.filter(s=>filtro==="Todos"||s.estado===filtro);
+  const puedeCrear=["empleado","supervisor","admin"].includes(session.rol);
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <h2 style={{fontFamily:F.display,fontSize:22,fontWeight:400,margin:0}}>Solicitudes</h2>
+      {puedeCrear&&<Btn onClick={onNueva}>+ Nueva</Btn>}
+    </div>
+    <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:10,marginBottom:6}}>
+      {estados.map(e=><button key={e} onClick={()=>setFiltro(e)} style={{whiteSpace:"nowrap",padding:"5px 12px",
+        borderRadius:99,border:`1px solid ${filtro===e?C.navy:C.border}`,background:filtro===e?C.navy:"#fff",
+        color:filtro===e?"#fff":C.inkMid,fontSize:12,cursor:"pointer"}}>{e==="Todos"?"Todos":(EST_LABEL[e]||e)}</button>)}
+    </div>
+    {list.length===0 && <div style={{textAlign:"center",color:C.inkFaint,padding:40}}>No hay solicitudes</div>}
+    {list.map(s=><div key={s.id} onClick={()=>onOpen(s.id)} style={{cursor:"pointer"}}>
+      <Card style={{marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+          <span style={{fontWeight:700,fontSize:14}}>{s.destino||"—"}</span><Badge estado={s.estado}/></div>
+        <div style={{fontSize:12,color:C.inkLight}}>{s.folio} · {s.solicitante} · {s.area}</div>
+        <div style={{fontSize:12,color:C.inkMid,marginTop:3}}>{fdate(s.fecha)} · {s.dias||"—"} días · {fmt(s.presupuesto)}</div>
+      </Card>
+    </div>)}
+  </div>;
+}
+
+/* ─── ADMIN (cuentas) ──────────────────────────────────────────────────────── */
+function Admin({showToast}){
+  const[cuentas,setCuentas]=useState(null); const[nueva,setNueva]=useState(null);
+  const cargar=async()=>{ try{ setCuentas(await api.adminCuentas()); }catch(e){ showToast("⚠️ "+e.message); } };
+  useEffect(()=>{ cargar(); },[]);
+  const guardar=async()=>{ try{ await api.adminCuenta(nueva); showToast("✓ Cuenta guardada"); setNueva(null); await cargar(); }
+    catch(e){ showToast("⚠️ "+e.message); } };
+  const roles=["empleado","supervisor","compras","tesoreria","finanzas","direccion","admin"];
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <h2 style={{fontFamily:F.display,fontSize:22,fontWeight:400,margin:0}}>Cuentas</h2>
+      <Btn onClick={()=>setNueva({email:"",nombre:"",rol:"empleado",area:"",password:""})}>+ Cuenta</Btn>
+    </div>
+    {nueva&&<Card>
+      <Field label="Correo"><input style={inputStyle} value={nueva.email} onChange={e=>setNueva({...nueva,email:e.target.value})}/></Field>
+      <Field label="Nombre"><input style={inputStyle} value={nueva.nombre} onChange={e=>setNueva({...nueva,nombre:e.target.value})}/></Field>
+      <div style={{display:"flex",gap:10}}>
+        <div style={{flex:1}}><Field label="Rol"><select style={inputStyle} value={nueva.rol} onChange={e=>setNueva({...nueva,rol:e.target.value})}>{roles.map(r=><option key={r} value={r}>{ROL_LABEL[r]}</option>)}</select></Field></div>
+        <div style={{flex:1}}><Field label="Área"><input style={inputStyle} value={nueva.area} onChange={e=>setNueva({...nueva,area:e.target.value})}/></Field></div>
+      </div>
+      <Field label="Contraseña (al crear)"><input style={inputStyle} type="text" value={nueva.password} onChange={e=>setNueva({...nueva,password:e.target.value})} placeholder="Gpa2026!"/></Field>
+      <Btn onClick={guardar}>Guardar</Btn><Btn ghost onClick={()=>setNueva(null)}>Cancelar</Btn>
+    </Card>}
+    {!cuentas?<div style={{color:C.inkLight}}>Cargando…</div>:cuentas.map(c=><Card key={c.email} style={{marginBottom:8}}>
+      <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,fontSize:13}}>{c.nombre||c.email}</span>
+        <span style={{fontSize:11,color:c.activo?C.green:C.red}}>{c.activo?"Activo":"Inactivo"}</span></div>
+      <div style={{fontSize:12,color:C.inkLight}}>{c.email} · {ROL_LABEL[c.rol]||c.rol}{c.area?" · "+c.area:""}</div>
+    </Card>)}
+  </div>;
+}
+
+/* ─── APP ──────────────────────────────────────────────────────────────────── */
+function App(){
+  const[session,setSession]=useState(api.isAuth?api.session:null);
+  const[vista,setVista]=useState("bandeja");   // bandeja | nueva | detalle | admin | diseno
+  const[detId,setDetId]=useState(null);
+  const[reload,setReload]=useState(0);
+  const[toast,setToast]=useState(null);
+  const showToast=m=>{ setToast(m); setTimeout(()=>setToast(null),3200); };
+  const login=async(e,p)=>{ await api.login(e,p); setSession(api.session); setVista("bandeja"); };
+  const logout=()=>{ api.logout(); setSession(null); };
+
+  if(!session) return <Login onLogin={login}/>;
+
+  const tabs=[["bandeja","Solicitudes"],["diseno","Diseño (demo)"]];
+  if(session.rol==="admin") tabs.splice(1,0,["admin","Cuentas"]);
+
+  return <div style={{minHeight:"100vh",display:"flex",flexDirection:"column"}}>
+    {toast&&<div style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",background:C.navy,
+      color:"#fff",padding:"10px 18px",borderRadius:8,fontSize:13,zIndex:300,maxWidth:"92%",textAlign:"center"}}>{toast}</div>}
+    {/* Header */}
+    <div style={{background:C.navy,color:"#fff",padding:"10px 18px",display:"flex",alignItems:"center",
+        justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:34,height:34,borderRadius:"50%",background:`${C.teal}30`,border:`2px solid ${C.teal}60`,
+          display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:C.tealLight,fontSize:11,fontWeight:900}}>GPA</span></div>
+        <div><div style={{fontFamily:F.display,fontSize:15}}>ViaticOS</div>
+          <div style={{fontSize:10,color:C.tealLight,opacity:.85}}>{session.nombre} · {ROL_LABEL[session.rol]||session.rol}</div></div>
+      </div>
+      <button onClick={logout} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",
+        borderRadius:6,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Salir</button>
+    </div>
+    {/* Tabs */}
+    <div style={{display:"flex",gap:0,background:C.bgCard,borderBottom:`1px solid ${C.border}`,padding:"0 10px",
+        position:"sticky",top:54,zIndex:40}}>
+      {tabs.map(([id,lbl])=><button key={id} onClick={()=>{setVista(id);setDetId(null);}} style={{
+        padding:"12px 14px",background:"transparent",border:"none",cursor:"pointer",fontSize:13,
+        fontWeight:vista===id?700:400,color:vista===id?C.tealDark:C.inkLight,
+        borderBottom:`2.5px solid ${vista===id?C.teal:"transparent"}`}}>{lbl}</button>)}
+    </div>
+    {/* Contenido */}
+    <div style={{flex:1,maxWidth:760,width:"100%",margin:"0 auto",padding:"18px 16px"}}>
+      {vista==="bandeja" && <Bandeja session={session} reload={reload} showToast={showToast}
+         onOpen={id=>{setDetId(id);setVista("detalle");}} onNueva={()=>setVista("nueva")}/>}
+      {vista==="nueva" && <NuevaSolicitud session={session} showToast={showToast}
+         onCancel={()=>setVista("bandeja")} onDone={()=>{setReload(r=>r+1);setVista("bandeja");}}/>}
+      {vista==="detalle" && detId && <Detalle id={detId} session={session} showToast={showToast}
+         onBack={()=>{setReload(r=>r+1);setVista("bandeja");}}/>}
+      {vista==="admin" && session.rol==="admin" && <Admin showToast={showToast}/>}
+      {vista==="diseno" && (window.ViaticosDemo
+         ? React.createElement(window.ViaticosDemo)
+         : <div style={{color:C.inkLight}}>El recorrido de diseño no está disponible.</div>)}
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+
+/* Service worker (PWA). Silencioso si falla. */
+if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+</script>
+</body>
+</html>

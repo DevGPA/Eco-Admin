@@ -1,0 +1,54 @@
+{
+  "areas": [
+    "Dirección General",
+    "Ventas",
+    "Comercial",
+    "Finanzas",
+    "Compras",
+    "Operaciones",
+    "Logística",
+    "Sistemas"
+  ],
+  "empleados": [
+    { "id": "emp-001", "nombre": "Carlos Mendoza", "area": "Ventas", "puesto": "Ejecutivo Sr.", "mail": "", "jefe": "Patricia Ruiz" },
+    { "id": "emp-002", "nombre": "Patricia Ruiz", "area": "Comercial", "puesto": "Dir. Comercial", "mail": "", "jefe": "Dirección General" },
+    { "id": "emp-003", "nombre": "Ana Torres", "area": "Finanzas", "puesto": "Gte. Finanzas (CPC)", "mail": "administracion@gpa.com.mx", "jefe": "Dirección General" }
+  ],
+  "politica": {
+    "clave": "POL-TE01",
+    "version": "v.01",
+    "vigencia": "15-Oct-25 — 15-Oct-28",
+    "max_traslado_min": 240,
+    "hospedaje": { "cancun": 1270, "mexico": 1300, "guadalajara": 994, "cabos": 1300, "monterrey": 1249, "vallarta": 1597 },
+    "alimentos": { "nacional_1p": 300, "largo": 200, "grupo": 175, "sin_cfdi": 100, "extj_usd": 30 },
+    "representacion": { "max_p": 1250, "max_total": 5000 },
+    "comprobacion": { "dias": 6, "penalizaciones": [ { "s": 1, "p": 25 }, { "s": 2, "p": 50 }, { "s": 3, "p": 75 }, { "s": 4, "p": 100 } ] },
+    "anticip_dias": { "avion_nac": 15, "avion_ext": 60, "bus_nac": 7 },
+    "aprobacion_dg": 10000
+  },
+  "tarifas": {
+    "vuelos": {
+      "GDL-MEX": { "r": 3500, "s": 1750 },
+      "GDL-MTY": { "r": 3100, "s": 1550 },
+      "GDL-CUN": { "r": 5100, "s": 2550 },
+      "GDL-SJD": { "r": 3700, "s": 1850 },
+      "GDL-PVR": { "r": 1400, "s": 700 }
+    },
+    "autobus": {
+      "GDL-PVR": { "r": 1400, "s": 700 },
+      "GDL-AGS": { "r": 480, "s": 240 },
+      "GDL-COL": { "r": 380, "s": 190 },
+      "GDL-MOR": { "r": 520, "s": 260 },
+      "GDL-SLP": { "r": 700, "s": 350 },
+      "GDL-QRO": { "r": 860, "s": 430 },
+      "GDL-TEP": { "r": 380, "s": 190 },
+      "GDL-ZMO": { "r": 560, "s": 280 }
+    }
+  },
+  "config": {
+    "emailFinanzas": "administracion@gpa.com.mx",
+    "emailTesoreria": "administracion@gpa.com.mx",
+    "empresa": "General de Productos para el Agua S.A. de C.V.",
+    "domicilio": "Calzada del Águila #985-A, Guadalajara, Jalisco"
+  }
+}

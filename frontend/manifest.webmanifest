@@ -1,0 +1,12 @@
+{
+  "name": "GPA ViaticOS — Sistema Integral de Viáticos",
+  "short_name": "ViaticOS",
+  "description": "Flujo integral de viáticos GPA (POL-TE01): solicitud, aprobación, anticipo, comprobación y reembolso.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1B3A5C",
+  "theme_color": "#1B3A5C",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

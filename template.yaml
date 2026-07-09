@@ -1,0 +1,455 @@
+# template.yaml
+# AWS SAM — GPA ViaticOS (Sistema Integral de Viáticos · POL-TE01)
+# ─────────────────────────────────────────────────────────────────
+# Recursos desplegados:
+#   - Lambda          gpa-viaticos-{env}
+#   - API Gateway     HTTP API v2 + JWT Authorizer (Cognito)
+#   - DynamoDB        gpa_viaticos_{env}  (single-table, 3 GSIs)
+#   - S3 (evidencias) CFDIs, comprobantes y firmas — subida con URL prefirmada
+#   - Cognito         UserPool + Client + 7 grupos (roles del flujo)
+#   (El frontend/PWA se hospeda en AWS Amplify — ver amplify.yml)
+#   - SNS             Notificaciones por correo (aprobaciones / reembolsos)
+#   - CloudWatch      Log Groups
+#
+# Flujo POL-TE01 (10 pasos):
+#   Empleado → Supervisor → Compras → Tesorería → Empleado →
+#   Sistema(IA) → Supervisor → Finanzas → Finanzas → Dirección
+#
+# Deploy:
+#   sam build
+#   sam deploy --guided --config-env dev     (primera vez)
+#   sam deploy --config-env dev              (siguientes)
+# ─────────────────────────────────────────────────────────────────
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GPA ViaticOS · Sistema Integral de Viáticos (POL-TE01)
+  Infraestructura: Lambda · API Gateway HTTP API · DynamoDB · S3 · Cognito · SNS
+
+# ═══════════════════════════════════════════════════════════════════
+# GLOBALS
+# ═══════════════════════════════════════════════════════════════════
+Globals:
+  Function:
+    Runtime:       python3.12
+    Architectures: [arm64]
+    MemorySize:    512
+    Timeout:       30
+    Environment:
+      Variables:
+        DYNAMO_TABLE:        !Ref ViaticosTable
+        EVIDENCIAS_BUCKET:   !Sub gpa-via-evidencias-${Env}-${AWS::AccountId}
+        SNS_NOTIF_ARN:       !Ref NotificacionesTopic
+        ALLOWED_ORIGIN:      !Ref AllowedOrigin
+        ENV:                 !Ref Env
+        EMAIL_FINANZAS:      !Ref EmailFinanzas
+        EMAIL_TESORERIA:     !Ref EmailTesoreria
+        URL_FIRMADA_TTL:     '900'
+        USER_POOL_ID:        !Ref CognitoUserPool
+
+# ═══════════════════════════════════════════════════════════════════
+# PARÁMETROS
+# ═══════════════════════════════════════════════════════════════════
+Parameters:
+
+  Env:
+    Type:          String
+    AllowedValues: [dev, staging, prod]
+    Default:       dev
+    Description:   Ambiente de despliegue
+
+  AllowedOrigin:
+    Type:    String
+    Default: '*'
+    Description: >
+      Origen CORS. En prod usar el dominio de Amplify (o uno propio).
+
+  EmailFinanzas:
+    Type:    String
+    Default: administracion@gpa.com.mx
+    Description: Correo que recibe avisos de comprobación / cierre / reembolso
+
+  EmailTesoreria:
+    Type:    String
+    Default: administracion@gpa.com.mx
+    Description: Correo que recibe avisos de liberación de anticipos
+
+# ═══════════════════════════════════════════════════════════════════
+# CONDICIONES
+# ═══════════════════════════════════════════════════════════════════
+Conditions:
+  IsProd: !Equals [!Ref Env, prod]
+
+# ═══════════════════════════════════════════════════════════════════
+# RECURSOS
+# ═══════════════════════════════════════════════════════════════════
+Resources:
+
+  # ═══════════════════════════════════════════════════════════════
+  # 1. LAMBDA — función principal
+  # ═══════════════════════════════════════════════════════════════
+  ViaticosFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub gpa-viaticos-${Env}
+      Description:  GPA ViaticOS — solicitudes, aprobaciones, comprobación, reembolso
+      Handler:      handler.lambda_handler
+      CodeUri:      ./
+      Layers:
+        - !Ref DependenciasLayer
+      Events:
+        # Catálogos (empleados, áreas, política POL-TE01, tarifas, config)
+        Catalogos:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /catalogos }
+
+        # ── Solicitudes de viáticos ──
+        SolicitudCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /solicitudes }
+        SolicitudListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /solicitudes }
+        SolicitudDetalle:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /solicitudes/{id} }
+        # Avanzar etapa del flujo (aprobar/rechazar, transporte, anticipo,
+        # comprobantes, validación IA, revisión, cierre, reembolso)
+        SolicitudPaso:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /solicitudes/{id}/paso }
+        # Cambio de estado simple (aprobar / rechazar)
+        SolicitudEstado:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /solicitudes/{id}/estado }
+
+        # ── Evidencias (URL prefirmada de subida: CFDI, ticket, firma) ──
+        EvidenciaUpload:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /evidencias/url-subida }
+
+        # ── Admin (CRUD de catálogos + cuentas) ──
+        AdminEmpleado:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /admin/empleado }
+        AdminArea:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /admin/area }
+        AdminPolitica:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /admin/politica }
+        AdminTarifas:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /admin/tarifas }
+        AdminConfig:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /admin/config }
+        AdminCuentasListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /admin/cuentas }
+        AdminCuenta:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: POST, Path: /admin/cuenta }
+
+        # Health (sin auth)
+        Health:
+          Type: HttpApi
+          Properties: { ApiId: !Ref ViaHttpApi, Method: GET, Path: /health, Auth: { Authorizer: NONE } }
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ViaticosTable
+        - S3CrudPolicy:
+            BucketName: !Sub gpa-via-evidencias-${Env}-${AWS::AccountId}
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt NotificacionesTopic.TopicName
+        # Administración de cuentas (Cognito) desde el panel admin
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt CognitoUserPool.Arn
+
+      Tags:
+        Proyecto: GPA-ViaticOS
+        Env:      !Ref Env
+
+    Metadata:
+      BuildMethod: python3.12
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. LAYER — dependencias Python
+  # ═══════════════════════════════════════════════════════════════
+  DependenciasLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:   !Sub gpa-via-deps-${Env}
+      Description: Dependencias Python — GPA ViaticOS
+      ContentUri:  ./layer/
+      CompatibleRuntimes: [python3.12]
+      CompatibleArchitectures: [arm64]
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. API GATEWAY — HTTP API v2 + Cognito JWT
+  # ═══════════════════════════════════════════════════════════════
+  ViaHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Env
+      Description: GPA ViaticOS — HTTP API
+      Auth:
+        DefaultAuthorizer: CognitoJWT
+        Authorizers:
+          CognitoJWT:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              audience:
+                - !Ref CognitoUserPoolClient
+              issuer: !Sub
+                - https://cognito-idp.${AWS::Region}.amazonaws.com/${PoolId}
+                - PoolId: !Ref CognitoUserPool
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowHeaders: [Content-Type, Authorization]
+        AllowMethods: [GET, POST, OPTIONS]
+        MaxAge: 300
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: !If [IsProd, 100, 20]
+        ThrottlingRateLimit:  !If [IsProd, 50, 10]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. DYNAMODB — single-table
+  # ═══════════════════════════════════════════════════════════════
+  # Modelo de claves:
+  #   Catálogos:  PK=CAT#EMPLEADO SK=EMP#{id}
+  #               PK=CAT#AREA     SK=AREA#{nombre}
+  #               PK=CONFIG       SK=POLITICA   (límites POL-TE01)
+  #               PK=CONFIG       SK=TARIFAS    (vuelos/autobús/hospedaje)
+  #               PK=CONFIG       SK=CONFIG     (correos / banderas)
+  #   Solicitudes: PK=VIA#{id}  SK=META
+  #     GSI1 (todas por fecha):    GSI1PK=VIA              GSI1SK=fecha
+  #     GSI2 (por solicitante):    GSI2PK=VIA#{email}      GSI2SK=fecha
+  #     GSI3 (por área):           GSI3PK=VIA#{area}       GSI3SK=fecha
+  # ═══════════════════════════════════════════════════════════════
+  ViaticosTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy:      !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:   !Sub gpa_viaticos_${Env}
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      DeletionProtectionEnabled: !If [IsProd, true, false]
+      AttributeDefinitions:
+        - { AttributeName: PK,     AttributeType: S }
+        - { AttributeName: SK,     AttributeType: S }
+        - { AttributeName: GSI1PK, AttributeType: S }
+        - { AttributeName: GSI1SK, AttributeType: S }
+        - { AttributeName: GSI2PK, AttributeType: S }
+        - { AttributeName: GSI2SK, AttributeType: S }
+        - { AttributeName: GSI3PK, AttributeType: S }
+        - { AttributeName: GSI3SK, AttributeType: S }
+      KeySchema:
+        - { AttributeName: PK, KeyType: HASH }
+        - { AttributeName: SK, KeyType: RANGE }
+      GlobalSecondaryIndexes:
+        - IndexName: tipo-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI1PK, KeyType: HASH }
+            - { AttributeName: GSI1SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: solicitante-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI2PK, KeyType: HASH }
+            - { AttributeName: GSI2SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: area-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI3PK, KeyType: HASH }
+            - { AttributeName: GSI3SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+      Tags:
+        - { Key: Proyecto, Value: GPA-ViaticOS }
+        - { Key: Env,      Value: !Ref Env }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 5. S3 — evidencias (CFDIs, comprobantes, firmas)
+  # ═══════════════════════════════════════════════════════════════
+  EvidenciasBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy:      !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      BucketName: !Sub gpa-via-evidencias-${Env}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:       true
+        BlockPublicPolicy:     true
+        IgnorePublicAcls:      true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT]
+            AllowedOrigins: [!Ref AllowedOrigin]
+            MaxAge:         3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchivarEvidencias
+            Status: Enabled
+            Transitions:
+              - { TransitionInDays: 180, StorageClass: STANDARD_IA }
+      Tags:
+        - { Key: Proyecto, Value: GPA-ViaticOS }
+        - { Key: Env,      Value: !Ref Env }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 6. HOSTING DEL FRONTEND
+  # ═══════════════════════════════════════════════════════════════
+  # La PWA se hospeda en AWS Amplify, conectado a la branch de GitHub
+  # (ver amplify.yml y la guía del README). Amplify no se define en este
+  # template porque se administra desde la consola de Amplify / GitHub.
+
+  # ═══════════════════════════════════════════════════════════════
+  # 7. COGNITO — usuarios y roles del flujo
+  # ═══════════════════════════════════════════════════════════════
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub gpa-via-users-${Env}
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength:    8
+          RequireUppercase: false
+          RequireLowercase: true
+          RequireNumbers:   true
+          RequireSymbols:   false
+          TemporaryPasswordValidityDays: 30
+      MfaConfiguration: 'OFF'
+      Schema:
+        - { Name: email,    Required: true, Mutable: true }
+        - Name: rol
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '1', MaxLength: '20' }
+        - Name: area
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '40' }
+        - Name: nombre
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '80' }
+        - Name: jefe
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '80' }
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - { Name: verified_email, Priority: 1 }
+      UserPoolTags:
+        Proyecto: GPA-ViaticOS
+        Env:      !Ref Env
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName:     !Sub gpa-via-client-${Env}
+      UserPoolId:     !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AccessTokenValidity:  12
+      IdTokenValidity:      12
+      RefreshTokenValidity: 30
+      TokenValidityUnits: { AccessToken: hours, IdToken: hours, RefreshToken: days }
+      PreventUserExistenceErrors: ENABLED
+
+  # Roles del flujo POL-TE01
+  GrupoAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: admin, UserPoolId: !Ref CognitoUserPool, Description: Acceso total + panel admin, Precedence: 1 }
+  GrupoDireccion:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: direccion, UserPoolId: !Ref CognitoUserPool, Description: Dashboard y autorizaciones DG, Precedence: 3 }
+  GrupoFinanzas:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: finanzas, UserPoolId: !Ref CognitoUserPool, Description: Cierre, validación y reembolso, Precedence: 5 }
+  GrupoTesoreria:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: tesoreria, UserPoolId: !Ref CognitoUserPool, Description: Liberación de anticipos, Precedence: 8 }
+  GrupoCompras:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: compras, UserPoolId: !Ref CognitoUserPool, Description: Cotización de transporte, Precedence: 10 }
+  GrupoSupervisor:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: supervisor, UserPoolId: !Ref CognitoUserPool, Description: Aprueba solicitudes de su área, Precedence: 12 }
+  GrupoEmpleado:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: empleado, UserPoolId: !Ref CognitoUserPool, Description: Solicita viáticos y comprueba, Precedence: 20 }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 8. SNS — notificaciones por correo
+  # ═══════════════════════════════════════════════════════════════
+  NotificacionesTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:   !Sub gpa-via-notif-${Env}
+      DisplayName: GPA ViaticOS
+
+  NotifFinanzasSub:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificacionesTopic
+      Protocol: email
+      Endpoint: !Ref EmailFinanzas
+
+  # ═══════════════════════════════════════════════════════════════
+  # 9. CLOUDWATCH — logs
+  # ═══════════════════════════════════════════════════════════════
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:    !Sub /aws/lambda/gpa-viaticos-${Env}
+      RetentionInDays: !If [IsProd, 90, 14]
+
+# ═══════════════════════════════════════════════════════════════════
+# OUTPUTS
+# ═══════════════════════════════════════════════════════════════════
+Outputs:
+  ApiUrl:
+    Description: URL base de la API (ponla en Amplify como variable API_URL)
+    Value: !Sub https://${ViaHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
+  EvidenciasBucketName:
+    Value: !Ref EvidenciasBucket
+  TableName:
+    Value: !Ref ViaticosTable
+  UserPoolId:
+    Value: !Ref CognitoUserPool
+  UserPoolClientId:
+    Value: !Ref CognitoUserPoolClient
+  Region:
+    Value: !Ref AWS::Region

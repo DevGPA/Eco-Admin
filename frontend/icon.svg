@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="40" fill="#1B3A5C"/>
+  <circle cx="96" cy="96" r="58" fill="none" stroke="#5BB8C4" stroke-width="6" opacity="0.5"/>
+  <text x="96" y="112" font-family="Georgia, serif" font-size="52" font-weight="700"
+        fill="#A8D8DC" text-anchor="middle">GPA</text>
+</svg>
