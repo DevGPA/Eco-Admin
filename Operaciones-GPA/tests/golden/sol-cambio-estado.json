@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "contrato": "gpa.ops.v1",
+  "tipo": "SOL",
+  "subtipo": null,
+  "evento": "cambio_estado",
+  "registroId": "a1b2c3d4e5f6",
+  "folio": "OPS-a1b2c3d4e5f6",
+  "fechaISO": "2026-07-09T18:30:00+00:00",
+  "sucursal": "Culiacán",
+  "unidad": {
+    "vehicleId": "V-0042",
+    "economico": "42",
+    "placas": "ABC123D"
+  },
+  "responsable": {
+    "nombre": "Juan Pérez",
+    "userId": "U-17",
+    "accountId": "juan@gpa.com.mx"
+  },
+  "status": "Aprobada",
+  "answers": {
+    "subMarca": "NP300",
+    "km": 123456,
+    "tankBefore": 0.25,
+    "tankAfter": 1,
+    "necesidad": "Ruta foránea",
+    "litros": 48.3,
+    "monto": 1286.31,
+    "combustible": "Gasolina",
+    "producto": "Magna",
+    "precio": 26.63,
+    "tanque": 60,
+    "obs": "",
+    "status": "Aprobada",
+    "photo": "SOL/3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f.jpg"
+  },
+  "evidencias": [
+    {
+      "campo": "photo",
+      "key": "SOL/3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f.jpg"
+    }
+  ],
+  "firma": "SOL/9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e.png",
+  "bucketOrigen": "gpa-ops-evidencias-ENV-CUENTA",
+  "emitidoEn": "2026-07-09T00:00:00+00:00"
+}

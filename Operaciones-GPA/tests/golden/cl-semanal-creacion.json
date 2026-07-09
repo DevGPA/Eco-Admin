@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "contrato": "gpa.ops.v1",
+  "tipo": "CL",
+  "subtipo": "semanal",
+  "evento": "creacion",
+  "registroId": "f6e5d4c3b2a1",
+  "folio": "OPS-f6e5d4c3b2a1",
+  "fechaISO": "2026-07-09T12:00:00+00:00",
+  "sucursal": "Guadalajara",
+  "unidad": {
+    "vehicleId": "V-0007",
+    "economico": "7",
+    "placas": "XYZ987A"
+  },
+  "responsable": {
+    "nombre": "Ana López",
+    "userId": "U-22",
+    "accountId": "ana@gpa.com.mx"
+  },
+  "status": null,
+  "answers": {
+    "tipo": "semanal",
+    "km": 98765,
+    "fotoKm": "CL/77777777777777777777777777777777.jpg",
+    "answers": {
+      "llantas": "Bien",
+      "carroceria": "Con Raspaduras/Golpes",
+      "nivelAceite": "OK",
+      "fotoLlanta": "CL/abababababababababababababababab.webp"
+    },
+    "obs": "sin novedades"
+  },
+  "evidencias": [
+    {
+      "campo": "fotoKm",
+      "key": "CL/77777777777777777777777777777777.jpg"
+    },
+    {
+      "campo": "answers.fotoLlanta",
+      "key": "CL/abababababababababababababababab.webp"
+    }
+  ],
+  "firma": "CL/cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd.png",
+  "bucketOrigen": "gpa-ops-evidencias-ENV-CUENTA",
+  "emitidoEn": "2026-07-09T00:00:00+00:00"
+}

@@ -101,7 +101,25 @@ Operaciones-GPA/
 ├── s3/                    # URLs prefirmadas de evidencias
 ├── layer/                 # dependencias Python
 ├── seed/                  # catalogos.json, cuentas.json, seed.py
+├── bridge/                # puente → Fleet Command (contrato gpa.ops.v1)
+│   ├── publisher.py       #   Lambda: DynamoDB Streams → POST firmado
+│   ├── CONTRATO-gpa.ops.v1.md
+│   └── receptor-fleet-command/  # pieza portable para el stack de Fleet Command
+├── tests/                 # pruebas del puente + payloads golden (tests/golden/)
 └── frontend/              # PWA: index.html, gpa-api.js, sw.js, manifest, icon
+```
+
+## Puente → Fleet Command
+
+Cada captura `SOL` (combustible) o `CL` (checklist) se publica a Fleet
+Command vía DynamoDB Streams → `bridge/publisher.py` → POST firmado
+(HMAC-SHA256) con el contrato `gpa.ops.v1`. Sin `FleetBridgeUrl`
+configurada el publisher queda en modo espera (no envía). Detalles y
+plan de integración: [bridge/CONTRATO-gpa.ops.v1.md](bridge/CONTRATO-gpa.ops.v1.md)
+y [bridge/receptor-fleet-command/README.md](bridge/receptor-fleet-command/README.md).
+
+```bash
+python -m unittest tests.test_puente -v   # pruebas + regenerar golden
 ```
 
 ## Probar el frontend en local (sin desplegar la app)
