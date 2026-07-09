@@ -890,8 +890,38 @@ function FormHistory({plantilla,items,loading,onSelect}){
   );
 }
 
+// Descarga de TODO un módulo (varios formularios) en un rango: CSV combinado y ZIP de PDFs.
+function csvModulo(nombre,grupos){
+  const filas=[];
+  grupos.forEach(g=>(g.registros||[]).forEach(r=>filas.push([g.plantilla.nombre||g.plantilla.clave,fdt(r.fecha),r.sucursal||"",r.responsable||r.solicitante||"",r.status||"",r.resultado||r.resultadoNivel||"",r.proximoServicio||""])));
+  csvDownload(nombre,["Formulario","Fecha","Sucursal","Responsable","Estado","Resultado","Próximo servicio"],filas);
+}
+async function zipPdfsModulo(nombreZip,grupos,onProg){
+  const JSZip=window.JSZip;if(!JSZip){alert("No cargó la librería de ZIP. Reintenta en unos segundos.");return;}
+  const zip=new JSZip();const usados={};let ok=0;const total=grupos.reduce((a,g)=>a+(g.registros||[]).length,0);let hecho=0;
+  for(const g of grupos){for(const reg of (g.registros||[])){hecho++;onProg&&onProg(hecho,total);
+    try{
+      const {area,cleanup}=await _areaDeDetalle(()=>React.createElement(FormDinamicoDetail,{reg,plantilla:g.plantilla,onBack:()=>{},onEstado:()=>{}}));
+      const doc=await pdfDeArea(area);cleanup();if(!doc)continue;
+      let base=((g.plantilla&&g.plantilla.clave)||"reg")+"_"+ymd(reg.fecha)+"_"+(reg.sucursal||"").replace(/[^a-zA-Z0-9]+/g,"")+"_"+(reg.id||hecho);
+      base=base.replace(/[^a-zA-Z0-9_\-]+/g,"_");
+      if(usados[base])base+="_"+(++usados[base]);else usados[base]=1;
+      zip.file(base+".pdf",doc.output("arraybuffer"));ok++;
+    }catch(e){}
+  }}
+  if(!ok){alert("No se pudo generar ningún PDF.");return;}
+  const blob=await zip.generateAsync({type:"blob"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");
+  a.href=url;a.download="Historial_"+nombreZip+".zip";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+
 // Pestaña de un módulo (integrado «seguridad» o dinámico): lista sus plantillas
 function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,showToast}){
+  const[mDesde,setMDesde]=useState("");const[mHasta,setMHasta]=useState("");const[mProg,setMProg]=useState(null);
+  const cargarModuloRegs=async()=>Promise.all((plantillas||[]).map(p=>api.listarFormulario(p.clave).then(rs=>({plantilla:p,registros:(rs||[]).filter(r=>(!mDesde||ymd(r.fecha)>=mDesde)&&(!mHasta||ymd(r.fecha)<=mHasta))})).catch(()=>({plantilla:p,registros:[]}))));
+  const sufMod=()=>modLabel.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+(mDesde||"inicio")+"_a_"+(mHasta||"hoy");
+  const descargarCSVMod=async()=>{if(mProg)return;setMProg({t:"csv"});try{const gs=await cargarModuloRegs();const n=gs.reduce((a,g)=>a+g.registros.length,0);if(!n)showToast("No hay registros en el rango");else{csvModulo(sufMod(),gs);showToast("✓ CSV listo ("+n+" registros)");}}catch(e){showToast("⚠️ "+e.message);}setMProg(null);};
+  const descargarZIPMod=async()=>{if(mProg)return;setMProg({t:"zip",i:0,total:0});try{const gs=await cargarModuloRegs();const n=gs.reduce((a,g)=>a+g.registros.length,0);if(!n){showToast("No hay registros en el rango");setMProg(null);return;}await zipPdfsModulo(sufMod(),gs,(i,total)=>setMProg({t:"zip",i,total}));showToast("✓ ZIP listo");}catch(e){showToast("⚠️ "+e.message);}setMProg(null);};
   const[selP,setSelP]=useState(null);const[view,setView]=useState("home");
   const[regs,setRegs]=useState([]);const[loading,setLoading]=useState(false);const[sel,setSel]=useState(null);const[busy,setBusy]=useState(false);
   const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
@@ -914,6 +944,14 @@ function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,
   return(
     <div>
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>{modLabel}</div>
+      {(plantillas&&plantillas.length>0)&&<div className="card"><div className="ct">⬇ Descargar historial del módulo</div>
+        <div className="r2"><div><label>Desde</label><input type="date" value={mDesde} onChange={e=>setMDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={mHasta} onChange={e=>setMHasta(e.target.value)}/></div></div>
+        <div style={{display:"flex",gap:8,marginTop:8}}>
+          <button className="bs" style={{flex:1}} disabled={!!mProg} onClick={descargarCSVMod}>{mProg&&mProg.t==="csv"?"Generando…":"CSV de todos"}</button>
+          <button className="bs" style={{flex:1}} disabled={!!mProg} onClick={descargarZIPMod}>{mProg&&mProg.t==="zip"?`PDFs… ${mProg.i}/${mProg.total}`:"Todos en PDF (ZIP)"}</button>
+        </div>
+        <div style={{fontSize:11,color:"#999",marginTop:6}}>Baja <b>todos</b> los formularios de «{modLabel}» en el rango (déjalo vacío para todo el histórico).</div>
+      </div>}
       {(!plantillas||plantillas.length===0)&&<div className="card"><div className="empty">Aún no hay formularios en este módulo.<br/>Se cargan desde Admin → Formularios.</div></div>}
       {(plantillas||[]).map(p=><div key={p.clave} className="card" style={{cursor:"pointer"}} onClick={()=>{setSelP(p);setView("plantilla");}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:14}}>{p.nombre}</div><div style={{fontSize:12,color:"#888",marginTop:3}}>{(p.secciones||[]).length} sección(es){p.requiereAutorizacion?" · requiere autorización":""}</div></div><div style={{fontSize:22,color:"#888"}}>→</div></div></div>)}
     </div>
