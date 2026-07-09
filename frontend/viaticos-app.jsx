@@ -1,7 +1,11 @@
 /* viaticos-app.jsx — Recorrido de DISEÑO (10 pasos POL-TE01).
    Cargado por index.html vía Babel standalone. Es la "maqueta maestra"
    del flujo; el módulo operativo (login, bandeja, alta y aprobación contra
-   AWS) vive en index.html. Aquí se expone window.ViaticosDemo. */
+   AWS) vive en index.html. Aquí se expone window.ViaticosDemo.
+   IMPORTANTE: todo va dentro de una IIFE para no chocar con las constantes
+   globales del módulo operativo (C, F, fmt, useState…) — sin ella el
+   navegador truena con "Identifier already declared" y deja pantalla blanca. */
+(() => {
 const { useState, useEffect, useRef } = React;
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -746,3 +750,4 @@ function ViaticosDemo(){
 window.ViaticosDemo = ViaticosDemo;
 window.VIATICOS_THEME = { C, F, POL };
 window.ViaticosUI = { Avatar, Chip, Cd, Info, Bar, Head, Btn, Ghost };
+})();

@@ -1,7 +1,7 @@
 // sw.js — Service Worker mínimo (app shell) para GPA ViaticOS
 // Cachea los archivos estáticos para arranque offline. NUNCA cachea config.js
 // ni llamadas a la API/Cognito (deben ir siempre a la red).
-const CACHE = "viaticos-v1";
+const CACHE = "viaticos-v2";
 const SHELL = [
   "./index.html",
   "./gpa-api.js",
@@ -28,6 +28,18 @@ self.addEventListener("fetch", e => {
       url.pathname.endsWith("config.js") ||
       url.hostname.includes("amazonaws.com") ||
       url.hostname.includes("execute-api")) {
+    return;
+  }
+  // Navegaciones (index.html): red primero, caché solo si no hay conexión.
+  // Evita quedarse con un shell viejo tras publicar una actualización.
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
     return;
   }
   e.respondWith(
