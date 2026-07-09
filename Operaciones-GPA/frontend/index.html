@@ -1504,7 +1504,10 @@ function ModAdmin({cat,refrescarCat,showToast}){
   // Tipo de responsable de alertas (catálogo CAT#RESPONSABLE) por correo
   const respDe=email=>((cat?.responsables||[]).find(r=>r.email===email)?.tipo)||"ninguno";
   const cargarCuentas=async()=>{try{setAccounts(await api.adminCuentas());}catch(e){showToast("⚠️ "+e.message);}};
-  useEffect(()=>{if((sec==="cuentas"||sec==="users")&&accounts===null)cargarCuentas();},[sec]);
+  useEffect(()=>{if(sec==="cuentas"&&accounts===null)cargarCuentas();},[sec]);
+  // Migración: responsables del catálogo anterior (CAT#USER) que aún NO tienen cuenta.
+  const respSinCuenta=()=>{const em=new Set((accounts||[]).map(a=>(a.email||"").toLowerCase()));return (cat.users||[]).filter(u=>u.mail&&!em.has(String(u.mail).toLowerCase()));};
+  const importarResponsables=()=>{const pend=respSinCuenta();if(!pend.length)return showToast("No hay responsables por importar");if(!window.confirm("Se crearán "+pend.length+" cuenta(s) con rol Operador a partir de los responsables (podrás editarlas después). ¿Continuar?"))return;wrap(async()=>{let ok=0;const errs=[];for(const u of pend){const email=String(u.mail||"").trim().toLowerCase();if(!email.endsWith("@"+DOMINIO)){errs.push((u.nombre||"—")+" — correo no @"+DOMINIO+": "+(u.mail||"vacío"));continue;}try{await api.adminCuenta({email,nombre:u.nombre||email,rol:"operador",sucursales:u.sucursal?[u.sucursal]:[],modulos:[],activo:true,nuevo:true});ok++;}catch(e){errs.push((u.nombre||email)+": "+e.message);}}await cargarCuentas();showToast("✓ "+ok+" cuenta(s) creada(s)"+(errs.length?" · "+errs.length+" omitida(s)":""));if(errs.length)alert("Omitidos (corrige el correo a @"+DOMINIO+" y créalos manualmente):\n\n"+errs.join("\n"));});};
   // ── Motor de formularios: módulos y plantillas (Excel + vista previa) ──
   const[modDraft,setModDraft]=useState({clave:"",nombre:"",orden:100});
   const slug=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
@@ -1694,7 +1697,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
       {editU&&<UForm u={editU} onClose={()=>setEditU(null)}/>}
       {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
-      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["users","Responsables"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
       {sec==="vehicles"&&<>
         <div className="card"><div className="ct">Actualizar tabla desde Excel</div>
           <button className="bs" style={{width:"100%",marginBottom:8}} disabled={busy} onClick={descargarPlantilla}>⬇ Descargar Excel actual</button>
@@ -1715,12 +1718,6 @@ function ModAdmin({cat,refrescarCat,showToast}){
         <button className="bp" style={{marginBottom:12}} onClick={()=>setEditV(blankV)}>+ Nuevo vehículo</button>
         <div className="card">{cat.vehicles.length===0&&<div className="empty">Sin vehículos</div>}{cat.vehicles.map(v=><div key={v.id} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">#{v.economico} · {v.placas}</span><span className={"bdg "+(v.activo?"dok":"drj")}>{v.activo?"Activo":"Inactivo"}</span></div><div className="lis">{v.subMarca} · {v.sucursal} · {v.tanque}L · {v.combustible}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditV(v)}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleV(v)}>{v.activo?"Desactivar":"Activar"}</button></div></div>)}</div>
       </>}
-      {sec==="users"&&<>
-        <div className="wb">Los <b>responsables son los titulares de cuenta</b>. Se agregan y editan en la pestaña <b>Cuentas</b>. En cada captura, el responsable es la cuenta que la registró (sin cuenta no se puede ser responsable).</div>
-        <button className="bp" style={{marginBottom:12}} onClick={()=>setSec("cuentas")}>Ir a Cuentas para agregar / editar →</button>
-        {accounts===null&&<div className="spin"/>}
-        {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas registradas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"}</div><div style={{marginTop:6}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span></div></div>)}</div>}
-      </>}
       {sec==="sucursales"&&<>
         <div className="card" style={{marginBottom:12}}><label>Nueva sucursal</label><div style={{display:"flex",gap:8}}><input type="text" value={newSuc} onChange={e=>setNewSuc(e.target.value)} placeholder="Nombre"/><button className="bp" style={{width:"auto",padding:"8px 14px",marginTop:0,whiteSpace:"nowrap"}} disabled={busy} onClick={()=>{if(!newSuc.trim())return;wrap(async()=>{await api.adminSucursal({nombre:newSuc.trim()});setNewSuc("");showToast("Sucursal agregada");});}}>+ Agregar</button></div></div>
         <div className="card">{cat.sucursales.map(s=><div key={s} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{s}</span><button className="bd" disabled={busy} onClick={()=>wrap(async()=>{await api.adminSucursal({nombre:s,eliminar:true});showToast("Eliminada");})}>Eliminar</button></div>{DOMICILIOS[s]&&<div className="lis">{DOMICILIOS[s]}</div>}</div>)}</div>
@@ -1731,6 +1728,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
       </>}
       {sec==="cuentas"&&<>
         <button className="bp" style={{marginBottom:12}} onClick={()=>setEditA(blankA)}>+ Nueva cuenta de acceso</button>
+        {accounts!==null&&respSinCuenta().length>0&&<div className="wb" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}><span>Hay <b>{respSinCuenta().length}</b> responsable(s) del catálogo anterior sin cuenta. Impórtalos como cuentas (rol Operador; edítalos después).</span><button className="bs" disabled={busy} onClick={importarResponsables} style={{whiteSpace:"nowrap"}}>⬇ Importar a Cuentas</button></div>}
         {accounts===null&&<div className="spin"/>}
         {accounts!==null&&<div className="card">{accounts.length===0&&<div className="empty">Sin cuentas</div>}{accounts.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:"",responsableAlerta:respDe(a.email)})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>}
         <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear la cuenta se le envía una contraseña temporal por correo; al editar puedes fijar una nueva.</div>
