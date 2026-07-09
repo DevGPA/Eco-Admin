@@ -597,7 +597,7 @@ function App(){
           {mod==="mtto"&&<ModMtto cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="seguridad"&&<ModDinamico cat={cat} modulo="seguridad" modLabel="Seguridad Industrial" plantillas={plantillasDe("seguridad")} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
           {dynActivo&&<ModDinamico cat={cat} modulo={dynActivo.id} modLabel={dynActivo.label} plantillas={plantillasDe(dynActivo.id)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
-          {mod==="seguimiento"&&(rol==="admin"||rol==="analista")&&<ModSeguimiento cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} userMods={userMods} session={session} showToast={showToast}/>}
+          {mod==="seguimiento"&&(rol==="admin"||rol==="analista")&&<ModSeguimiento cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} userMods={userMods} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="admin"&&rol==="admin"&&<ModAdmin cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
         </>}
       </div>
@@ -1852,9 +1852,12 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
       const regsDia=(combustible||[]).filter(r=>esSol(r)&&String(r.vehicleId)===String(v.id)&&ymd(r.fecha)===c.key).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
       const onTime=regsDia.find(r=>new Date(r.fecha).getTime()<=lim10);
       const reg=onTime||regsDia[0]||null;
-      const est=onTime?"cumplido":(ahora>lim10?"vencido":"pendiente");
+      // Registrada tarde (después de 10:00) SÍ cuenta como cumplida; se marca "tarde" y es
+      // clic-able para autorizar. Solo vence si no hay ninguna solicitud y ya pasaron las 10:00.
+      let est="pendiente",tarde=false;
+      if(onTime)est="cumplido";else if(reg){est="cumplido";tarde=true;}else if(ahora>lim10)est="vencido";
       est==="cumplido"?cu++:est==="vencido"?ve++:pe++;
-      return {estado:est,reg,esHoy:c.esHoy,tarde:!!(reg&&!onTime)};
+      return {estado:est,reg,esHoy:c.esHoy,tarde};
     });return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas};});
     // (2) Reportes de carga por asignación (solicitud aprobada) — límite 18 h desde la aprobación
     const H18=18*3600*1000;const tAp=r=>new Date(r.fechaAut||r.fecha).getTime();
@@ -1948,7 +1951,7 @@ function segHTML(mods,meta,logo){
     body+=`<div class="per">${esc(m.periodoLbl||"")}</div>`;
     if(m.grupo==="combustible"){
       body+=`<h3>Solicitudes (límite 10:00)</h3><div class="sc"><table><thead><tr><th>Unidad</th>${m.sol.cols.map(c=>`<th>${esc(c.label)}</th>`).join("")}</tr></thead><tbody>`;
-      m.sol.filas.forEach(f=>{body+=`<tr><td><b>${esc(f.label)}</b><br><span class="mut">${esc(f.sub||"")}</span></td>${f.celdas.map(c=>`<td>${chip(c.estado)}${c.tarde?" <span class=mut>(tarde)</span>":""}</td>`).join("")}</tr>`;});
+      m.sol.filas.forEach(f=>{body+=`<tr><td><b>${esc(f.label)}</b><br><span class="mut">${esc(f.sub||"")}</span></td>${f.celdas.map(c=>`<td>${chip(c.estado)}${c.tarde?` <span style="color:${C.red};font-weight:700;font-size:10px">tarde</span>`:""}</td>`).join("")}</tr>`;});
       body+=`</tbody></table></div>`;
       body+=`<h3>Reportes de carga por asignación (límite 18 h)</h3>`;
       if(m.rep.filas.length){body+=`<div class="sc"><table><thead><tr><th>Unidad</th><th>Asignación aprobada</th><th>Reporte</th></tr></thead><tbody>`;
@@ -2007,8 +2010,9 @@ function SegCelda({estado,onClick,dim}){
   return<span onClick={onClick} title={EST_LBL[estado]} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:22,borderRadius:5,fontSize:12,fontWeight:700,background:EST_BG[estado],color:EST_COL[estado],border:"1px solid "+EST_COL[estado],opacity:dim?0.4:1,cursor:onClick?"pointer":"default"}}>{EST_ICON[estado]}</span>;
 }
 
-function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}){
+function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,showToast}){
   const hoyRef=useRef(new Date());const hoy=hoyRef.current;
+  const refrescarTipo=t=>refrescar?refrescar(t):Promise.resolve();
   const sucAll=sucursalesUser||cat.sucursales;
   const[fSuc,setFSuc]=useState("__todas");
   const sucs=fSuc==="__todas"?sucAll:[fSuc];
@@ -2045,13 +2049,13 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}
   const pctCol=p=>p>=90?C.green:p>=60?C.amber:C.red;
   const modNombre=mk=>SEG_MOD_LBL[mk]||((cat.modulos||[]).find(mo=>mo.clave===mk)||{}).nombre||mk;
   // Tabla de una matriz unidad×columnas (reusada por combustible/veh en el dashboard de PC)
-  const TablaVehPC=({cols,filas,soloHoy,tipoKey})=>(<div className="seg-tbl"><table><thead><tr><th className="u">Unidad</th>{cols.map(c=><th key={c.key} style={c.esHoy?{color:C.blue}:null}>{c.label}</th>)}</tr></thead><tbody>{filas.map(f=><tr key={f.id}><td className="u"><b>{f.label}</b>{f.sub&&<div className="sub2">{f.sub}</div>}</td>{f.celdas.map((c,i)=><td key={i}><SegCelda estado={c.estado} dim={soloHoy&&!c.esHoy} onClick={c.reg&&tipoKey?()=>setDetalle({reg:c.reg,tipo:tipoKey}):null}/>{c.tarde&&<div style={{fontSize:9,color:C.amber}}>tarde</div>}</td>)}</tr>)}</tbody></table></div>);
+  const TablaVehPC=({cols,filas,soloHoy,tipoKey})=>(<div className="seg-tbl"><table><thead><tr><th className="u">Unidad</th>{cols.map(c=><th key={c.key} style={c.esHoy?{color:C.blue}:null}>{c.label}</th>)}</tr></thead><tbody>{filas.map(f=><tr key={f.id}><td className="u"><b>{f.label}</b>{f.sub&&<div className="sub2">{f.sub}</div>}</td>{f.celdas.map((c,i)=><td key={i}><SegCelda estado={c.estado} dim={soloHoy&&!c.esHoy} onClick={c.reg&&tipoKey?()=>setDetalle({reg:c.reg,tipo:tipoKey}):null}/>{c.tarde&&<div style={{fontSize:9,color:C.red,fontWeight:700}}>tarde</div>}</td>)}</tr>)}</tbody></table></div>);
   const ProblemasPC=({m})=>(m.conProblemas?(m.problemas.length===0?<div style={{fontSize:12,color:C.green,marginTop:10}}>✓ Sin problemas en el período.</div>:<div className="prb" style={{marginTop:12}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:6}}>🚩 Qué está mal ({m.problemas.length})</div>{m.problemas.map((p,i)=><div key={i} onClick={()=>p.reg&&setDetalle({reg:p.reg,plantilla:p.plantilla,tipo:p.tipo})} style={{padding:"6px 0",borderTop:i?".5px dashed #f0c0c0":"none",cursor:p.reg?"pointer":"default",display:"flex",justifyContent:"space-between",gap:8}}><span><b style={{color:C.red}}>{p.titulo}</b> <span style={{fontSize:11,color:"#a06"}}>{p.sub}</span></span>{p.reg&&<span style={{fontSize:11,color:C.blue}}>Ver ›</span>}</div>)}</div>):<div style={{marginTop:10,fontSize:12,color:"#888",background:"#f7f9fc",border:"1px dashed #e2e8f0",borderRadius:8,padding:"8px 12px"}}>ℹ️ Los problemas de Reparto se consultan en su tablero dedicado.</div>);
 
   if(detalle){const{reg,plantilla,tipo}=detalle;const cerrar=()=>setDetalle(null);const noop=async()=>{};
     if(tipo==="form")return<FormDinamicoDetail reg={reg} plantilla={plantilla} canAuth={false} reqAut={false} onEstado={noop} onBack={cerrar}/>;
-    if(tipo==="montacargas")return<MCDetail rec={reg} canAuth={false} refrescar={noop} showToast={showToast} onBack={cerrar}/>;
-    if(tipo==="combustible")return<SolDetail sol={reg} rol={rol} refrescar={noop} showToast={showToast} onBack={cerrar}/>;
+    if(tipo==="montacargas")return<MCDetail rec={reg} canAuth={false} refrescar={()=>refrescarTipo("montacargas")} showToast={showToast} onBack={cerrar}/>;
+    if(tipo==="combustible")return<SolDetail sol={reg} rol={rol} refrescar={()=>refrescarTipo("combustible")} showToast={showToast} onBack={cerrar}/>;
     return<div><button className="bs" onClick={cerrar}>← Volver</button><div className="empty">Sin vista de detalle para este registro.</div></div>;
   }
   // ── Filtros y chips de módulos (compartidos) ──
@@ -2146,7 +2150,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,showToast}
               {m.sol.filas.length===0?<div style={{fontSize:11,color:"#aaa"}}>Sin unidades en el alcance.</div>:
               <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",fontSize:12,width:"100%",minWidth:m.sol.cols.length*44+120}}>
                 <thead><tr style={{color:"#888"}}><th style={{textAlign:"left",padding:"4px 6px"}}>Unidad</th>{m.sol.cols.map(c=><th key={c.key} style={{padding:"4px 4px",fontWeight:c.esHoy?700:500,color:c.esHoy?C.blue:"#888"}}>{c.label}</th>)}</tr></thead>
-                <tbody>{m.sol.filas.map(f=><tr key={f.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.label}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td>{f.celdas.map((c,i)=><td key={i} style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,tipo:"combustible"}):null}/>{c.tarde&&<div style={{fontSize:8,color:C.amber}}>tarde</div>}</td>)}</tr>)}</tbody>
+                <tbody>{m.sol.filas.map(f=><tr key={f.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.label}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td>{f.celdas.map((c,i)=><td key={i} style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,tipo:"combustible"}):null}/>{c.tarde&&<div style={{fontSize:8,color:C.red,fontWeight:700}}>tarde</div>}</td>)}</tr>)}</tbody>
               </table></div>}
               <div style={{fontSize:11,fontWeight:700,color:C.blue,margin:"12px 0 4px"}}>Reportes de carga · por asignación (18 h)</div>
               {m.rep.filas.length===0?<div style={{fontSize:11,color:"#aaa"}}>Sin asignaciones (solicitudes aprobadas) esta semana — no se pide reporte.</div>:
