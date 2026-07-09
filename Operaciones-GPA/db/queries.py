@@ -48,6 +48,14 @@ def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
                        ScanIndexForward=False)
         return [_limpiar(i) for i in _items(resp)]
 
+    # supervisor SIN sucursal asignada = ve todas (convención "vacío = todas",
+    # igual que en la app). Así el supervisor siempre puede ver el historial.
+    if rol == "supervisor" and not sucursales:
+        resp = t.query(IndexName="tipo-fecha-idx",
+                       KeyConditionExpression=Key("GSI1PK").eq(tipo),
+                       ScanIndexForward=False)
+        return [_limpiar(i) for i in _items(resp)]
+
     # supervisor: registros de las sucursales asignadas
     out = []
     for suc in (sucursales or []):
