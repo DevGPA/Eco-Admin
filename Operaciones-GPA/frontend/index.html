@@ -1114,7 +1114,10 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
       {step===3&&<>
         <div className="card"><div className="ct">Quien realizó la carga</div>
           <div className="dr"><span>Responsable</span><span>{solicitante.nombre}</span></div><div className="dr"><span>Correo</span><span>{solicitante.mail}</span></div>
-          <FotoCampo val={fotoPersona} set={setFotoPersona} label="Foto de quien realiza la carga en la bomba" capture="user"/>
+        </div>
+        <div className="card"><div className="ct">Persona que realiza la carga</div>
+          <FotoCampo val={fotoPersona} set={setFotoPersona} label="Foto de la persona que realiza la carga (en la bomba)" capture="user"/>
+          {!fotoPersona&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Obligatoria para enviar el reporte.</div>}
         </div>
         <div className="card"><div className="ct">Firma de quien realizó la carga</div>
           <canvas ref={sigRef} className="sig" width={340} height={130} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
