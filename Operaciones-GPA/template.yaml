@@ -269,9 +269,12 @@ Resources:
         AllowHeaders: [Content-Type, Authorization]
         AllowMethods: [GET, POST, OPTIONS]
         MaxAge: 300
+      # Límite de tráfico: dimensionado para picos de inicio de turno (varios envíos
+      # con fotos a la vez). DynamoDB on-demand y Lambda lo soportan de sobra; el
+      # cliente además reintenta con backoff si llegara a tocar el límite.
       DefaultRouteSettings:
-        ThrottlingBurstLimit: !If [IsProd, 100, 20]
-        ThrottlingRateLimit:  !If [IsProd, 50, 10]
+        ThrottlingBurstLimit: !If [IsProd, 400, 20]
+        ThrottlingRateLimit:  !If [IsProd, 200, 10]
 
   # ═══════════════════════════════════════════════════════════════
   # 4. DYNAMODB — single-table

@@ -14,12 +14,38 @@
 const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas" };
 const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM" };
 const SES_KEY = "gpa_ops_session";
+const MAX_SUBIDAS = 4;   // evidencias subiendo a la vez (cola; evita ráfagas → throttle)
 
 class GpaApi {
   constructor() {
     this.cfg = window.GPA_CONFIG || {};
     this._sess = this._load();
     this._pendingChallenge = null;
+    // Cola de subidas: máximo N evidencias a la vez (evita ráfagas que disparen el throttle)
+    this._subiendo = 0; this._espera = [];
+  }
+
+  // ── Resiliencia ante picos: reintento con backoff + límite de concurrencia ──
+  // Reintenta (hasta 3 intentos) SOLO errores transitorios: red caída, 429 (throttle)
+  // y 5xx. Espera creciente con jitter para desincronizar a los clientes.
+  async _retry(fn, intentos = 4) {
+    let espera = 400;
+    for (let i = 0; ; i++) {
+      try { return await fn(); }
+      catch (e) {
+        if (!e || !e._reintentable || i >= intentos - 1) throw e;
+        await new Promise(r => setTimeout(r, espera + Math.random() * 300));
+        espera *= 3;
+      }
+    }
+  }
+  async _turno() {
+    while (this._subiendo >= MAX_SUBIDAS) await new Promise(r => this._espera.push(r));
+    this._subiendo++;
+  }
+  _libera() {
+    this._subiendo--;
+    const sig = this._espera.shift(); if (sig) sig();
   }
 
   get region()   { return this.cfg.region   || "us-east-1"; }
@@ -169,10 +195,20 @@ class GpaApi {
   // ── HTTP ───────────────────────────────────────────────────────
   async _fetch(method, path, body) {
     if (this._sess && this._sess.exp <= Date.now()) await this._refresh();
-    const res = await fetch(this.apiUrl + path, {
-      method,
-      headers: { "Content-Type": "application/json", "Authorization": this._sess?.token ? `Bearer ${this._sess.token}` : "" },
-      body: body ? JSON.stringify(body) : undefined,
+    const res = await this._retry(async () => {
+      let r;
+      try {
+        r = await fetch(this.apiUrl + path, {
+          method,
+          headers: { "Content-Type": "application/json", "Authorization": this._sess?.token ? `Bearer ${this._sess.token}` : "" },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      } catch (e) { e._reintentable = true; throw e; }        // red intermitente
+      if (r.status === 429 || r.status >= 500) {              // throttle o error del servidor
+        const err = new Error("El servidor está ocupado, intenta de nuevo en un momento.");
+        err._reintentable = true; throw err;
+      }
+      return r;
     });
     if (res.status === 401) { this.logout(); throw new Error("Sesión expirada, vuelve a entrar"); }
     const data = await res.json().catch(() => ({}));
@@ -208,15 +244,25 @@ class GpaApi {
   }
 
   // ── Evidencias: sube un data-URL a S3 y devuelve la clave ──────
+  // Pasa por la cola (máx 4 a la vez) y reintenta el PUT si S3/red fallan temporalmente.
   async subirEvidencia(tipo, dataUrl) {
     if (!dataUrl || !dataUrl.startsWith("data:")) return dataUrl;
-    const contentType = dataUrl.substring(5, dataUrl.indexOf(";"));
-    const { key, uploadUrl } = await this._fetch("POST", "/evidencias/url-subida",
-      { tipo: TIPO_EVID[tipo], contentType });
-    const blob = await (await fetch(dataUrl)).blob();
-    const put = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
-    if (!put.ok) throw new Error("No se pudo subir la evidencia");
-    return key;
+    await this._turno();
+    try {
+      const contentType = dataUrl.substring(5, dataUrl.indexOf(";"));
+      const { key, uploadUrl } = await this._fetch("POST", "/evidencias/url-subida",
+        { tipo: TIPO_EVID[tipo], contentType });
+      const blob = await (await fetch(dataUrl)).blob();
+      const put = await this._retry(async () => {
+        let r;
+        try { r = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: blob }); }
+        catch (e) { e._reintentable = true; throw e; }
+        if (r.status === 429 || r.status >= 500) { const err = new Error("S3 ocupado"); err._reintentable = true; throw err; }
+        return r;
+      });
+      if (!put.ok) throw new Error("No se pudo subir la evidencia");
+      return key;
+    } finally { this._libera(); }
   }
 
   // Recorre un objeto y sube todas las imágenes base64, reemplazándolas por su clave S3.
