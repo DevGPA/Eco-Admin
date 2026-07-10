@@ -7,9 +7,13 @@ import os
 import uuid
 import boto3
 from boto3.dynamodb.conditions import Key
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from db import modelos as m
+
+# Ciudad de México = UTC-6 fijo (sin horario de verano desde 2023). Todos los
+# registros se marcan con la hora del centro de México.
+_MX_TZ = timezone(timedelta(hours=-6))
 
 TABLE_NAME = os.environ.get("DYNAMO_TABLE", "gpa_operaciones_dev")
 _table = None
@@ -23,7 +27,7 @@ def _t():
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(_MX_TZ).isoformat()
 
 
 # ── Registros de operación ───────────────────────────────────────

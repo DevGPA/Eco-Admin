@@ -191,8 +191,9 @@ const rolLabel=r=>r==="admin"?"Administrador":r==="analista"?"Analista":r==="sup
 const rolBadge=r=>r==="admin"?"dad":r==="analista"?"dan":r==="supervisor"?"dsu":"dop";
 const bcSol=s=>s==="Aprobada"?"dok":s==="Rechazada"?"drj":"dpe";
 const bcMC=s=>s==="Aprobado"?"dok":s==="Rechazado"?"drj":"dpe";
-const fdate=s=>{try{return new Date(s).toLocaleDateString("es-MX")}catch{return s}};
-const fdt=s=>{try{return new Date(s).toLocaleString("es-MX")}catch{return s}};
+const MX_TZ="America/Mexico_City";const MX_MS=21600000; // UTC-6 fijo (México, sin horario de verano)
+const fdate=s=>{try{return new Date(s).toLocaleDateString("es-MX",{timeZone:MX_TZ})}catch{return s}};
+const fdt=s=>{try{return new Date(s).toLocaleString("es-MX",{timeZone:MX_TZ})}catch{return s}};
 
 function useSig(ref){
   const drawing=useRef(false);
@@ -278,7 +279,7 @@ async function pdfDeArea(area){
   doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(80);doc.text(titulo+(suc?" — "+suc:""),M+24,y+10);
   let hb=18;
   if(domicilio){doc.setFontSize(7.5);doc.setTextColor(120);const dl=doc.splitTextToSize(domicilio,CW-26);doc.text(dl,M+24,y+14);hb=14+dl.length*3;}
-  doc.setFontSize(8);doc.setTextColor(150);doc.text(new Date().toLocaleString("es-MX"),PW-M,y+4,{align:"right"});
+  doc.setFontSize(8);doc.setTextColor(150);doc.text(new Date().toLocaleString("es-MX",{timeZone:MX_TZ}),PW-M,y+4,{align:"right"});
   y+=hb;doc.setDrawColor(24,95,165);doc.setLineWidth(0.6);doc.line(M,y,PW-M,y);y+=5;
 
   // Chequeo de montacargas: ~30 puntos en DOS columnas (texto + resultado) para ahorrar hojas
@@ -374,7 +375,12 @@ async function zipPdfsFormularios(plantilla,registros,onProg){
 }
 
 // Fecha local YYYY-MM-DD (para filtros por día) y descarga de CSV genérica
-const ymd=f=>{if(!f)return"";const d=new Date(f);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+// Día calendario de CIUDAD DE MÉXICO (YYYY-MM-DD) de cualquier instante/fecha, sin depender
+// de la zona del dispositivo (UTC-6 fijo). Se usa para filtros, historial y cumplimiento.
+const ymd=f=>{if(!f)return"";const d=new Date(new Date(f).getTime()-MX_MS);return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");};
+const mxDow=f=>new Date(new Date(f).getTime()-MX_MS).getUTCDay(); // 0=Dom..6=Sáb (hora de México)
+const mxDia=(Y,M,d)=>new Date(Date.UTC(Y,M-1,d,18,0,0)); // instante ~mediodía de México del día Y-M-d
+const mxHora=(ds,H)=>{const[y,m,d]=String(ds).split("-").map(Number);return new Date(Date.UTC(y,m-1,d,H+6,0,0));}; // instante de las H:00 (México) del día ds
 // Categoría del vehículo: usa v.categoria si está definida; si no, la infiere
 // (responsable ALMACEN o combustible Gas LP = montacargas; el resto = reparto). Editable en Admin/Excel.
 const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMACEN")||v.combustible==="Gas LP")?"montacargas":"reparto");
@@ -1679,7 +1685,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const[rModo,setRModo]=useState("dia");const[rDia,setRDia]=useState("");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
   const cargarReporte=async()=>{try{setReporte(await api.listar("combustible"));}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="reportes"&&reporte===null)cargarReporte();},[sec]);
-  const fechaLocal=f=>{const d=new Date(f);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};  /* fecha local, no UTC, para coincidir con lo mostrado */
+  const fechaLocal=ymd;  /* día calendario de México (coincide con lo mostrado) */
   const repSufijo=rModo==="dia"?(rDia||"dia"):((rDesde||"inicio")+"_a_"+(rHasta||"hoy"));
   const repFiltrado=(reporte||[]).filter(s=>{const d=s.fecha?fechaLocal(s.fecha):"";const okFecha=rModo==="dia"?(!rDia||d===rDia):((!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta));return okFecha&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const repMonto=repFiltrado.reduce((a,s)=>a+(s.monto||0),0);
@@ -1687,7 +1693,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const descargarReporteCSV=()=>{
     const cols=["Fecha","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Monto","Estado"];
     const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
-    const filas=repFiltrado.map(s=>[new Date(s.fecha).toLocaleString("es-MX"),s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.monto,s.status]);
+    const filas=repFiltrado.map(s=>[new Date(s.fecha).toLocaleString("es-MX",{timeZone:MX_TZ}),s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.monto,s.status]);
     const total=["","","","","","","TOTAL "+repLitros.toFixed(2)+" L","TOTAL $"+repMonto.toFixed(2),""];
     const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(",")),total.map(esc).join(",")].join("\r\n");
     const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});  /* BOM para Excel */
@@ -1881,7 +1887,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
           {repFiltrado.length===0?<div className="empty">Sin cargas en el rango/estado</div>:
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead><tr style={{textAlign:"left",color:"#888"}}><th style={{padding:"4px 0"}}>#Unidad</th><th>Monto</th><th>Estado</th><th style={{textAlign:"right"}}>Fecha</th></tr></thead>
-            <tbody>{repFiltrado.map(s=><tr key={s.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 0",fontWeight:600}}>#{s.economico}</td><td style={{color:C.blue,fontWeight:600}}>${(s.monto||0).toLocaleString()}</td><td><span className={"bdg "+bcSol(s.status)} style={{fontSize:10}}>{s.status}</span></td><td style={{textAlign:"right",color:"#888"}}>{new Date(s.fecha).toLocaleDateString("es-MX")}</td></tr>)}</tbody>
+            <tbody>{repFiltrado.map(s=><tr key={s.id} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 0",fontWeight:600}}>#{s.economico}</td><td style={{color:C.blue,fontWeight:600}}>${(s.monto||0).toLocaleString()}</td><td><span className={"bdg "+bcSol(s.status)} style={{fontSize:10}}>{s.status}</span></td><td style={{textAlign:"right",color:"#888"}}>{new Date(s.fecha).toLocaleDateString("es-MX",{timeZone:MX_TZ})}</td></tr>)}</tbody>
           </table>}
         </div>}
       </>}
@@ -1901,21 +1907,21 @@ const EST_ICON={cumplido:"✓",pendiente:"•",vencido:"✕",na:"—"};
 const PERIOD_LBL={semanal:"Semanal",mensual:"Mensual",bimestral:"Bimestral",trimestral:"Trimestral",semestral:"Semestral",anual:"Anual"};
 const SEG_MOD_LBL={combustible:"Combustible",reparto:"Reparto",montacargas:"Montacargas",sucursales:"Sucursales (Mtto)",seguridad:"Seguridad Industrial"};
 // ── fecha (local) ──
-const segAdd=(dt,n)=>{const x=new Date(dt);x.setDate(x.getDate()+n);x.setHours(12,0,0,0);return x;};
-const segLunes=dt=>{const x=new Date(dt);const g=x.getDay();x.setDate(x.getDate()+(g===0?-6:1-g));x.setHours(12,0,0,0);return x;};
-const segHabil=dt=>{const x=new Date(dt);const g=x.getDay();if(g===6)x.setDate(x.getDate()+2);else if(g===0)x.setDate(x.getDate()+1);x.setHours(12,0,0,0);return x;};
+const segAdd=(dt,n)=>new Date(new Date(dt).getTime()+n*86400000);
+const segLunes=dt=>{const g=mxDow(dt);return segAdd(dt,g===0?-6:1-g);};
+const segHabil=dt=>{const g=mxDow(dt);return g===6?segAdd(dt,2):g===0?segAdd(dt,1):new Date(dt);};
 const segCap=s=>s.charAt(0).toUpperCase()+s.slice(1);
-const segMesLbl=dt=>segCap(dt.toLocaleDateString("es-MX",{month:"long",year:"numeric"}));
+const segMesLbl=dt=>segCap(dt.toLocaleDateString("es-MX",{month:"long",year:"numeric",timeZone:MX_TZ}));
 // estado por plazo (comparación de cadenas Y-M-D, ordenables)
 const segEstado=(hay,limiteStr,hoyStr)=>hay?"cumplido":(hoyStr>limiteStr?"vencido":"pendiente");
 // período vigente de un formulario dinámico según su periodicidad
 const segPeriodoForm=(periodicidad,hoy)=>{
   if(periodicidad==="semanal"){const lun=segLunes(hoy),dom=segAdd(lun,6);
-    return {ini:ymd(lun),fin:ymd(dom),limite:ymd(lun),label:"Semana "+lun.toLocaleDateString("es-MX",{day:"2-digit",month:"short"})+" – "+dom.toLocaleDateString("es-MX",{day:"2-digit",month:"short"})};}
+    return {ini:ymd(lun),fin:ymd(dom),limite:ymd(lun),label:"Semana "+lun.toLocaleDateString("es-MX",{day:"2-digit",month:"short",timeZone:MX_TZ})+" – "+dom.toLocaleDateString("es-MX",{day:"2-digit",month:"short",timeZone:MX_TZ})};}
   const N={mensual:1,bimestral:2,trimestral:3,semestral:6,anual:12}[periodicidad]||1;
-  const y=hoy.getFullYear(),mIni=Math.floor(hoy.getMonth()/N)*N;
-  const ini=new Date(y,mIni,1,12),fin=new Date(y,mIni+N,0,12),limite=segHabil(new Date(y,mIni,5,12));
-  const label=N===1?segMesLbl(ini):(segCap(ini.toLocaleDateString("es-MX",{month:"short"}))+"–"+segMesLbl(fin));
+  const [Y,Mh]=ymd(hoy).split("-").map(Number);const mIni=Math.floor((Mh-1)/N)*N; // mes inicial del bloque (0-based)
+  const ini=mxDia(Y,mIni+1,1),fin=mxDia(Y,mIni+N+1,0),limite=segHabil(mxDia(Y,mIni+1,5));
+  const label=N===1?segMesLbl(ini):(segCap(ini.toLocaleDateString("es-MX",{month:"short",timeZone:MX_TZ}))+"–"+segMesLbl(fin));
   return {ini:ymd(ini),fin:ymd(fin),limite:ymd(limite),label};
 };
 // unidades (vehículos) activas de una categoría, dentro del alcance de sucursales
@@ -1942,12 +1948,12 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
   if(inc("combustible")){
     const units=segUnidades(cat,"combustible",sucs),lun=segLunes(hoy),dom=segAdd(lun,6);
     const dias=[0,2,4].map(o=>segAdd(lun,o)).filter(d=>ymd(d)<=hoyStr&&(!inicio||ymd(d)>=inicio));
-    const cols=dias.map(d=>({key:ymd(d),label:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][(d.getDay()+6)%7]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
+    const cols=dias.map(d=>{const ds=ymd(d);return {key:ds,label:["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][(mxDow(d)+6)%7]+" "+Number(ds.slice(8,10)),esHoy:ds===hoyStr};});
     let cu=0,pe=0,ve=0;const problemas=[];
     const esSol=r=>r.formato!=="reporte";
-    // (1) Solicitudes — límite 10:00 del día esperado
+    // (1) Solicitudes — límite 10:00 (hora de México) del día esperado
     const filasSol=units.map(v=>{const celdas=cols.map(c=>{
-      const lim10=new Date(c.key+"T10:00:00").getTime();
+      const lim10=mxHora(c.key,10).getTime();
       const regsDia=(combustible||[]).filter(r=>esSol(r)&&String(r.vehicleId)===String(v.id)&&ymd(r.fecha)===c.key).sort((a,b)=>new Date(a.fecha)-new Date(b.fecha));
       const onTime=regsDia.find(r=>new Date(r.fecha).getTime()<=lim10);
       const reg=onTime||regsDia[0]||null;
@@ -1981,8 +1987,8 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
   if(inc("reparto")){
     const units=segUnidades(cat,"reparto",sucs),lun=segLunes(hoy),dom=segAdd(lun,6);
     const iniW=ymd(lun),finW=ymd(dom),limW=ymd(lun);
-    const y=hoy.getFullYear(),mes=hoy.getMonth();
-    const iniM=ymd(new Date(y,mes,1,12)),finM=ymd(new Date(y,mes+1,0,12)),limM=ymd(segHabil(new Date(y,mes,5,12)));
+    const [Y,Mh]=ymd(hoy).split("-").map(Number);
+    const iniM=ymd(mxDia(Y,Mh,1)),finM=ymd(mxDia(Y,Mh+1,0)),limM=ymd(segHabil(mxDia(Y,Mh,5)));
     const cols=[{key:"sem",label:"Semanal"},{key:"men",label:"Mensual"}];
     let cu=0,pe=0,ve=0;
     const filas=units.map(v=>{const rSem=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="semanal",iniW,finW);const rMen=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="mensual",iniM,finM);let eSem=segEstado(!!rSem,limW,hoyStr),eMen=segEstado(!!rMen,limM,hoyStr);if(eSem!=="cumplido"&&inicio&&limW<inicio)eSem="na";if(eMen!=="cumplido"&&inicio&&limM<inicio)eMen="na";[eSem,eMen].forEach(e=>{if(e==="cumplido")cu++;else if(e==="vencido")ve++;else if(e==="pendiente")pe++;});return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas:[{estado:eSem,reg:rSem},{estado:eMen,reg:rMen}]};});
@@ -1991,7 +1997,7 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
   // Montacargas: diario por unidad (tira de 7 días; sólo hoy cuenta al %)
   if(inc("montacargas")){
     const units=segUnidades(cat,"montacargas",sucs),dias=[];for(let i=6;i>=0;i--){const d=segAdd(hoy,-i);if(!inicio||ymd(d)>=inicio)dias.push(d);}
-    const cols=dias.map(d=>({key:ymd(d),label:["Do","Lu","Ma","Mi","Ju","Vi","Sá"][d.getDay()]+" "+d.getDate(),esHoy:ymd(d)===hoyStr}));
+    const cols=dias.map(d=>{const ds=ymd(d);return {key:ds,label:["Do","Lu","Ma","Mi","Ju","Vi","Sá"][mxDow(d)]+" "+Number(ds.slice(8,10)),esHoy:ds===hoyStr};});
     let cu=0,pe=0,ve=0;const problemas=[];
     const filas=units.map(v=>{const celdas=cols.map(c=>{const reg=segUltDia(montacargas,v.id,c.key);const est=segEstado(!!reg,c.key,hoyStr);if(c.esHoy){est==="cumplido"?cu++:est==="vencido"?ve++:pe++;}return {estado:est,reg,esHoy:c.esHoy};});
       const ult=segUltRango(montacargas,r=>String(r.vehicleId)===String(v.id),ymd(dias[0]),hoyStr);
@@ -2173,7 +2179,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
     ?segModulosRango({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd,sucs,modKeys:selMods,rango})
     :segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd,sucs,modKeys:selMods,hoy});
   const mods=useMemo(()=>calcMods(formData),[cat,data,formData,fSuc,selMods,desde,hasta]);
-  const meta={fecha:ymd(hoy),fechaLbl:hoy.toLocaleDateString("es-MX"),sucursal:fSuc==="__todas"?"Todas":fSuc,rango:rango?((desde||"inicio")+" a "+(hasta||"hoy")):null};
+  const meta={fecha:ymd(hoy),fechaLbl:hoy.toLocaleDateString("es-MX",{timeZone:MX_TZ}),sucursal:fSuc==="__todas"?"Todas":fSuc,rango:rango?((desde||"inicio")+" a "+(hasta||"hoy")):null};
   const exportar=async fmt=>{if(bajando)return;setBajando(true);showToast("Preparando descarga…");
     try{const fd=await cargarTodos();const full=calcMods(fd);
       if(fmt==="csv")segCSV(full,meta);else if(fmt==="html")segHTML(full,meta,await _logoData());else segPDF(full,meta,await _logoData());showToast("✓ Descarga lista");}
