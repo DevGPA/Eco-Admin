@@ -203,9 +203,11 @@ function useSig(ref){
   const clear=cb=>{ref.current?.getContext("2d").clearRect(0,0,400,150);cb&&cb(null);};
   return{start,move,end,clear};
 }
-// Lee la foto y la comprime a calidad ESTÁNDAR (máx 1280px lado mayor, JPEG ~60%)
-// para reducir el uso de datos al subir. No-imágenes o errores: usa el original.
-const IMG_MAX=1280, IMG_Q=0.6;
+// "FastLoad": redimensiona (máx IMG_MAX px por lado) y codifica en WebP —mucho más
+// ligero que JPEG a igual calidad— con respaldo a JPEG si el navegador no puede
+// exportar WebP. Así las fotos suben más rápido y pesan menos. No-imágenes: original.
+const IMG_MAX=1152, IMG_Q=0.55;
+let _webpOK; const soportaWebp=()=>{if(_webpOK===undefined){try{const c=document.createElement("canvas");c.width=c.height=1;_webpOK=c.toDataURL("image/webp").indexOf("data:image/webp")===0;}catch{_webpOK=false;}}return _webpOK;};
 const readFile=(e,cb)=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
@@ -217,7 +219,7 @@ const readFile=(e,cb)=>{
       let w=img.width,h=img.height;
       if(w>=h&&w>IMG_MAX){h=Math.round(h*IMG_MAX/w);w=IMG_MAX;}
       else if(h>w&&h>IMG_MAX){w=Math.round(w*IMG_MAX/h);h=IMG_MAX;}
-      try{const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL("image/jpeg",IMG_Q));}
+      try{const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL(soportaWebp()?"image/webp":"image/jpeg",IMG_Q));}
       catch{cb(src);}
     };
     img.onerror=()=>cb(src);
@@ -245,6 +247,11 @@ async function _aDataURL(url){
   try{const r=await fetch(url);const b=await r.blob();return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}
   catch(e){return null;}
 }
+// jsPDF 2.5.1 no embebe WebP: convierte un dataURL WebP a JPEG para el PDF (otros formatos se dejan igual).
+async function _jpegDataURL(dataURL){
+  if(!dataURL||dataURL.indexOf("data:image/webp")!==0)return dataURL;
+  return await new Promise(res=>{const img=new Image();img.onload=()=>{try{const c=document.createElement("canvas");c.width=img.width;c.height=img.height;c.getContext("2d").drawImage(img,0,0);res(c.toDataURL("image/jpeg",0.85));}catch(e){res(dataURL);}};img.onerror=()=>res(dataURL);img.src=dataURL;});
+}
 // Logo cacheado (para no re-descargarlo en exportaciones masivas)
 let _logoCache;
 async function _logoData(){ if(_logoCache===undefined)_logoCache=await _aDataURL("logo.png"); return _logoCache; }
@@ -262,7 +269,7 @@ async function pdfDeArea(area){
   const clone=area.cloneNode(true);
   clone.querySelectorAll(".no-print").forEach(n=>n.remove());
   // Imágenes → dataURL (las que no se puedan, se omiten)
-  for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");const d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);if(d)img.setAttribute("src",d);else img.remove();}
+  for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else img.remove();}
   const logoData=await _logoData();
 
   const doc=new JS({unit:"mm",format:"a4"});

@@ -219,11 +219,15 @@ class GpaApi {
     return key;
   }
 
-  // Recorre un objeto y sube todas las imágenes base64, reemplazándolas por su clave S3
+  // Recorre un objeto y sube todas las imágenes base64, reemplazándolas por su clave S3.
+  // Las subidas se hacen EN PARALELO (varias fotos a la vez) para que sea más rápido.
   async subirEvidencias(tipo, obj) {
     if (typeof obj === "string") return obj.startsWith("data:image") ? this.subirEvidencia(tipo, obj) : obj;
-    if (Array.isArray(obj)) { const r = []; for (const v of obj) r.push(await this.subirEvidencias(tipo, v)); return r; }
-    if (obj && typeof obj === "object") { const r = {}; for (const k in obj) r[k] = await this.subirEvidencias(tipo, obj[k]); return r; }
+    if (Array.isArray(obj)) return Promise.all(obj.map(v => this.subirEvidencias(tipo, v)));
+    if (obj && typeof obj === "object") {
+      const entries = await Promise.all(Object.keys(obj).map(async k => [k, await this.subirEvidencias(tipo, obj[k])]));
+      return Object.fromEntries(entries);
+    }
     return obj;
   }
 }
