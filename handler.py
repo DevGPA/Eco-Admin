@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.4"   # OCR de páginas en paralelo (4 hilos) + reintentos adaptativos Bedrock
+VERSION = "2.5.5"   # Folio serie-F solo en FV (el CP 119524726 aterrizaba como FD408735)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

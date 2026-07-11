@@ -973,10 +973,13 @@ def test_folio_fv_serie_sucursal():
     # el regex solo cubría FA/FC/FM/FV/FLC → folio vacío → las 3 facturas del
     # PDF se fundían como una multipágina y el %flete salía contra 1 sola.
     from s3.ocr_extractor import _folio_no_fiscal
-    assert _folio_no_fiscal([{"text": "FMTY 70088749", "top": 0.05, "left": 0.76}]) == "FMTY70088749"
-    assert _folio_no_fiscal([{"text": "Factura FGDL 20109707", "top": 0.02, "left": 0.6}]) == "FGDL20109707"
+    assert _folio_no_fiscal([{"text": "FMTY 70088749", "top": 0.05, "left": 0.76}], serie_f=True) == "FMTY70088749"
+    assert _folio_no_fiscal([{"text": "Factura FGDL 20109707", "top": 0.02, "left": 0.6}], serie_f=True) == "FGDL20109707"
     # "FAX + número" no es una serie de factura.
-    assert _folio_no_fiscal([{"text": "FAX 8183722126", "top": 0.05, "left": 0.1}]) is None
+    assert _folio_no_fiscal([{"text": "FAX 8183722126", "top": 0.05, "left": 0.1}], serie_f=True) is None
+    # El respaldo serie-F es SOLO para FV: en una carta porte secuestraba
+    # referencias ajenas ("FD 408735" en el CP 119524726 → folio equivocado).
+    assert _folio_no_fiscal([{"text": "REMISION FD 408735", "top": 0.4, "left": 0.2}]) is None
 
 
 def test_consolidar_fvs_sin_folio_con_subtotales_distintos():

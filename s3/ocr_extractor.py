@@ -294,14 +294,21 @@ def _fecha_iso(valor) -> Optional[str]:
     return None
 
 
-def _folio_no_fiscal(lineas) -> Optional[str]:
-    """Folio (serie-número) cerca de 'Folio', excluyendo 'Folio Fiscal'/UUID."""
+def _folio_no_fiscal(lineas, serie_f: bool = False) -> Optional[str]:
+    """Folio (serie-número) cerca de 'Folio', excluyendo 'Folio Fiscal'/UUID.
+
+    serie_f: activa el respaldo serie-F ("Factura FMTY 70088749") — SOLO para
+    páginas FV. En una carta porte ese patrón secuestra referencias ajenas
+    (119524726: el CP menciona 'FD 408735' y el caso aterrizaba con ese folio
+    en vez del suyo; la tarjeta quedaba imposible de encontrar en el tablero)."""
     for ln in lineas:
         u = ln["text"].upper()
         if "FOLIO" in u and "FISCAL" not in u and not _UUID_RE.search(ln["text"]):
             m = re.search(r"FOLIO\W*([A-Z]{0,3}[-\s]?\d{3,})", u)
             if m:
                 return m.group(1).replace(" ", "")
+    if not serie_f:
+        return None
     # Serie-folio de las facturas GPA sin la palabra "Folio" en la línea:
     # el encabezado dice "Factura  FC 20109707" (o FA/FM/FLC/FMTY + dígitos —
     # la serie es F + sucursal, hasta 3 letras más). Sin esto el folio de la FV
@@ -372,7 +379,7 @@ def _parse_textract(resp: dict) -> dict:
     folio = campos.get("folio")
     if folio and _UUID_RE.search(str(folio)):
         folio = None
-    folio = folio or _folio_no_fiscal(lineas)
+    folio = folio or _folio_no_fiscal(lineas, serie_f=(tipo_doc == "FV"))
 
     # Subtotal: por geometría (etiqueta → valor en la misma fila, aunque estén en
     # líneas separadas, que es lo común en la factura GPA), luego misma-línea, y
@@ -1389,7 +1396,7 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
         "subtotal":       subtotal,
         "moneda":         (moneda or "").upper() or None,
         "tipoCambio":     tc,
-        "folio":          _folio_no_fiscal(lineas),
+        "folio":          _folio_no_fiscal(lineas, serie_f=(clase == "FV")),
         "fecha":          _fecha_iso(full),
         "comentarios":    coment,
         "origenEstado":   oE,
