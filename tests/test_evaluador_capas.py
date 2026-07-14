@@ -148,3 +148,13 @@ def test_sin_exencion_r101_sigue_vivo(run_eval, make_fv):
     fv = make_fv(partidas=[], subtotal=100.0)
     res = run_eval(fv=fv)
     assert res.codigo_motor == "R-101"
+
+
+def test_gs0242_dispersion_no_autorizada(run_eval, make_fv, make_cp):
+    # GS0242 con monto chico daba R-101 "monto insuficiente" (confuso: no es
+    # venta). Ahora concepto propio y revisión obligatoria (R-811).
+    fv = make_fv(partidas=[], subtotal=50.0)
+    cp = make_cp(codigo_sap="GS0242")
+    res = run_eval(fv=fv, cp=cp)
+    assert res.codigo_motor == "R-811"
+    assert res.estado == "EN_REVISION"

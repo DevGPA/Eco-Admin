@@ -13,7 +13,7 @@ from .catalogos import (
     UMBRAL_CARGO_ENVIO, UMBRAL_TARIFA_DISP, BACKORDER_ENABLED,
     CARGO_ENVIO_POR_SAP, TIPO_CAMBIO_DEFAULT,
     SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER, SAP_COM_PED,
-    SAP_REQUIERE_AUTORIZACION,
+    SAP_REQUIERE_AUTORIZACION, SAP_DISPERSION_NO_AUT,
     SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
     evaluar_destino, categoria_partida, es_cargo_envio,
@@ -208,6 +208,16 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             "GS0245 requiere autorización: revisión obligatoria"
         ))
         return _res("R-810")
+
+    # ── CAPA 1a-ter — GS0242: dispersión NO autorizada (regla GPA) ──
+    # No es venta: evaluarla contra mínimos daba R-101 "monto insuficiente",
+    # que confundía al revisor. Concepto propio y a revisión.
+    if cp.codigo_sap == SAP_DISPERSION_NO_AUT:
+        criterios.append(CriterioDetalle(
+            "Sello presupuestal", "WARN", cp.codigo_sap,
+            "GS0242 dispersión no autorizada: revisión obligatoria"
+        ))
+        return _res("R-811")
 
     # ── CAPA 1b — GS0248 CARGO POR ENVÍO (legacy, off por defecto) ──
     # La clasificación oficial evalúa GS0248 como VENTA; esta capa solo corre

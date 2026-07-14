@@ -93,6 +93,11 @@ SAP_COM_PED = "GS0247"
 # nunca auto-aprobar; el caso va a revisión (R-810).
 SAP_REQUIERE_AUTORIZACION = "GS0245"
 
+# GS0242 — dispersión NO autorizada (regla GPA 2026-07-14): no es venta, así
+# que evaluarla contra mínimos daba R-101 "monto insuficiente" (confuso).
+# Va a revisión con su propio concepto (R-811).
+SAP_DISPERSION_NO_AUT = "GS0242"
+
 # RFCs internos GPA que disparan DISPERSIÓN_INTERNA (Capa 1a) por igualdad exacta.
 # Configurable vía env RECEPTORES_INTERNOS_GPA="RFC1,RFC2". Default: el propio
 # RFC de GPA — una carta porte cuyo DESTINATARIO es GPA (GPA se envía a sí
@@ -387,6 +392,7 @@ R_CONCEPTOS: dict[str, str] = {
     "R-801": "Dispersión sin tarifa",
     "R-802": "Dispersión excede tarifa",
     "R-810": "Sello GS0245: requiere autorización",
+    "R-811": "Dispersión no autorizada (GS0242)",
     "R-901": "Escalado por aprobador",
     "R-902": "Escalado por SLA",
 }
@@ -425,4 +431,5 @@ ESTADO_POR_CODIGO: dict[str, str] = {
     "R-801": "EN_REVISION",
     "R-802": "EN_REVISION",
     "R-810": "EN_REVISION",
+    "R-811": "EN_REVISION",
 }
