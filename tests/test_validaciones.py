@@ -54,6 +54,16 @@ def test_auto_rechazada_permite_reevaluar_y_reemplaza(monkeypatch):
     assert res["reemplaza"] == ["viejo1"]
 
 
+def test_rechazo_aceptado_permite_reevaluar(monkeypatch):
+    # El humano ACEPTÓ el rechazo del motor (RECHAZO_ACEPTADO, fuera del
+    # tablero). Es un acuse, no un sello: re-subir el PDF corregido debe
+    # re-evaluar y reemplazar, igual que un AUTO_RECHAZADA.
+    _con_tabla(monkeypatch, {"CP#CP1": [{"SK": "SOL#v1", "estado": "RECHAZO_ACEPTADO"}]})
+    res = validaciones.verificar_unicidad("CP1", ["FV1"])
+    assert res["valido"] is True
+    assert res["reemplaza"] == ["v1"]
+
+
 def test_mezcla_rechazada_y_activa_bloquea(monkeypatch):
     # Si además del rechazo viejo hay una solicitud ACTIVA → sigue bloqueado.
     _con_tabla(monkeypatch, {"CP#CP1": [

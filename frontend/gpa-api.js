@@ -248,6 +248,13 @@ class GpaApi {
     return this._post('/escalar', { id, comentario });
   }
 
+  /**
+   * POST /confirmar-rechazo — aceptar el rechazo del motor (sale del Kanban)
+   */
+  async confirmarRechazo(id, comentario = '') {
+    return this._post('/confirmar-rechazo', { id, comentario });
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // ENDPOINTS — Monitor y consultas
   // ═══════════════════════════════════════════════════════════════
@@ -708,9 +715,11 @@ class GpaMonitorBridge {
       btns = `<button class="btn btnd" onclick="gpaRechazar('${solId}')">✕</button>` +
              `<button class="btn btnp" onclick="gpaAprobar('${solId}')">✓ Aprobar</button>`;
     } else if (estado === 'AUTO_RECHAZADA') {
-      // El aprobador puede ANULAR un rechazo del motor (autorizar con motivo).
+      // Dos caminos: ACEPTAR el rechazo (se archiva y sale del tablero) o
+      // ANULARLO autorizando con motivo (lo aprueba pese al rechazo).
       btns = `<button class="btn" onclick="gpaVerDetalle('${solId}')">Ver</button>` +
-             `<button class="btn btnp" onclick="gpaAutorizar('${solId}')">✓ Autorizar</button>`;
+             `<button class="btn" onclick="gpaConfirmarRechazo('${solId}')">✓ Aceptar</button>` +
+             `<button class="btn btnp" onclick="gpaAutorizar('${solId}')">↑ Autorizar</button>`;
     }
 
     return `
@@ -900,6 +909,21 @@ window.gpaAutorizar = async function(solId) {
   }
 };
 
+window.gpaConfirmarRechazo = async function(solId) {
+  // Aceptar el rechazo del motor: se archiva (RECHAZO_ACEPTADO) y sale del
+  // tablero. Comentario opcional. Sigue siendo reevaluable si luego se
+  // re-sube el PDF corregido.
+  if (!confirm('¿Aceptar el rechazo del motor?\n' +
+               'La tarjeta se archivará y saldrá del tablero.')) return;
+  const comentario = prompt('Comentario (opcional):') || '';
+  try {
+    await gpaApi.confirmarRechazo(solId, comentario);
+    await gpaBridge.refreshKanban();
+  } catch (e) {
+    alert('Error al aceptar el rechazo: ' + e.message);
+  }
+};
+
 window.gpaBulk = async function(accion) {
   // Acción en LOTE desde la barra de selección: un solo comentario que se
   // replica en todas las tarjetas seleccionadas (los botones existían pero
@@ -908,12 +932,19 @@ window.gpaBulk = async function(accion) {
   const cards = Array.from(document.querySelectorAll('.chk.on'))
     .map(c => c.closest('.card')).filter(el => el && el.dataset.id);
   if (!cards.length) return;
-  const nombres = { aprobar: 'Aprobar', rechazar: 'Rechazar', escalar: 'Escalar' };
+  const nombres = { aprobar: 'Aprobar', rechazar: 'Rechazar',
+                    escalar: 'Escalar', aceptar: 'Aceptar el rechazo de' };
+  // "Aceptar rechazo" es un acuse: el comentario es opcional (estar de acuerdo
+  // con el motor no exige justificar). El resto de acciones sí lo exigen.
+  const opcional = accion === 'aceptar';
   const comentario = prompt(
     nombres[accion] + ' ' + cards.length + ' solicitud(es) seleccionada(s).\n' +
-    'Comentario (se registrará en TODAS):');
+    'Comentario (se registrará en TODAS' + (opcional ? '; opcional' : '') + '):');
   if (comentario === null) return;                 // canceló
-  if (!comentario.trim()) { alert('El comentario es obligatorio en acciones por lote.'); return; }
+  if (!opcional && !comentario.trim()) {
+    alert('El comentario es obligatorio en acciones por lote.'); return;
+  }
+  const c = comentario.trim();
   const errores = [];
   for (const el of cards) {
     const id = el.dataset.id;
@@ -922,12 +953,14 @@ window.gpaBulk = async function(accion) {
         // Tarjeta auto-rechazada (chip rojo .cu.s) → autorización de rechazo.
         const esRechazada = el.querySelector('.cu.s') != null;
         await gpaApi.aprobar(id, esRechazada
-          ? 'AUTORIZACIÓN DE RECHAZO AUTOMÁTICO: ' + comentario.trim()
-          : comentario.trim());
+          ? 'AUTORIZACIÓN DE RECHAZO AUTOMÁTICO: ' + c
+          : c);
       } else if (accion === 'rechazar') {
-        await gpaApi.rechazar(id, comentario.trim());
-      } else {
-        await gpaApi.escalar(id, comentario.trim());
+        await gpaApi.rechazar(id, c);
+      } else if (accion === 'escalar') {
+        await gpaApi.escalar(id, c);
+      } else if (accion === 'aceptar') {
+        await gpaApi.confirmarRechazo(id, c);
       }
     } catch (e) {
       errores.push((el.querySelector('.cn') || {}).textContent || id);

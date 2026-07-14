@@ -6,6 +6,7 @@
 #   POST  /aprobar              aprobador 1 aprueba
 #   POST  /rechazar             aprobador 1 rechaza
 #   POST  /escalar              escalar a aprobador 2
+#   POST  /confirmar-rechazo    aceptar el rechazo del motor (sale del Kanban)
 #   GET   /monitor              kanban + filtro fecha
 #   GET   /kpis                 KPIs del mes
 #   GET   /solicitud/{id}       detalle + historial
@@ -32,7 +33,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.9"   # Origen/destino desde la tabla del complemento Carta Porte (HORMIK) — complementa, no sustituye
+VERSION = "2.6.0"   # Aceptar rechazo del motor (RECHAZO_ACEPTADO, sale del Kanban) + acciones en lote
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
@@ -91,6 +92,7 @@ def _router(event):
         ("POST","/aprobar"):          _route_aprobar,
         ("POST","/rechazar"):         _route_rechazar,
         ("POST","/escalar"):          _route_escalar,
+        ("POST","/confirmar-rechazo"): _route_confirmar_rechazo,
         ("GET","/monitor"):           _route_monitor,
         ("GET","/kpis"):              _route_kpis,
         ("GET","/solicitudes"):       _route_solicitudes,
@@ -313,6 +315,18 @@ def _route_escalar(event):
     if "id" not in b: return _err("'id' requerido",400)
     uid=_uid(event); res=cambiar_estado(b["id"],"ESCALADA",uid,b.get("comentario",""))
     return _ok(res)
+
+def _route_confirmar_rechazo(event):
+    # El aprobador ACEPTA el rechazo del motor: la tarjeta pasa a un estado
+    # terminal (RECHAZO_ACEPTADO) que el tablero ya no muestra, para que las
+    # rechazadas revisadas no se acumulen en el Kanban. Sigue siendo
+    # reemplazable: re-subir el PDF corregido la reevalúa (no queda sellada).
+    b=_body(event)
+    if "id" not in b: return _err("'id' requerido",400)
+    uid=_uid(event)
+    res=cambiar_estado(b["id"],"RECHAZO_ACEPTADO",uid,
+                       b.get("comentario","") or "Rechazo del motor aceptado")
+    logger.info("CONFIRMAR-RECHAZO %s por %s",b["id"],uid); return _ok(res)
 
 # ── GET /monitor ──────────────────────────────────────────────────
 def _route_monitor(event):

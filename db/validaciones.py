@@ -25,7 +25,7 @@ ESTADOS_APROBADOS = {"AUTO_APROBADA", "APROBADA_MANUAL"}
 # el PDF debe re-evaluar y REEMPLAZAR ese registro, no quedar sellado por R-092.
 # Los estados con intervención humana o riesgo de doble pago (aprobadas, en
 # revisión/escaladas, rechazo manual) sí bloquean.
-ESTADOS_REEMPLAZABLES = {"AUTO_RECHAZADA", "REEMPLAZADA"}
+ESTADOS_REEMPLAZABLES = {"AUTO_RECHAZADA", "REEMPLAZADA", "RECHAZO_ACEPTADO"}
 
 
 def verificar_unicidad(folio_cp: str, folios_fv: list[str]) -> dict:
