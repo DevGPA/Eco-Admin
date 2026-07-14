@@ -84,8 +84,8 @@ PROMPT_OCR = (
     '  "fleteraNombre": string|null (razón social de la fletera/transportista, aunque '
     "su RFC solo esté en el logo del membrete)\n"
     '  "esNotaCredito": boolean     (true si es nota de crédito / CFDI tipo E-Egreso)\n'
-    '  "esPreguia": boolean         (true si la página es el formato interno '
-    '"Pre Guía Almacén Origen" de GPA)\n'
+    '  "esPreguia": boolean         (true si la página es un formato interno de '
+    'GPA: "Pre Guía Almacén Origen" o "Solicitud de Traslado")\n'
     '  "destinatarioGPA": boolean   (true si el bloque DESTINATARIO del comprobante es '
     "General de Productos para el Agua — GPA se envía a sí misma)\n"
     "SELLO de Control Presupuestal: estampa rectangular de GPA (encabezado 'Formato de "
@@ -645,7 +645,9 @@ def _sin_acentos(s: str) -> str:
 
 
 _RE_NOTA_CREDITO = re.compile(r"NOTA\s+(?:DE\s+)?CREDITO|\bE\s*-\s*EGRESO\b")
-_RE_PREGUIA = re.compile(r"PRE\s*GUIA\s+ALMACEN\s+ORIGEN")
+# Anexos que marcan DISPERSIÓN interna: "Pre Guía Almacén Origen" y
+# "Solicitud de Traslado" (regla GPA 2026-07-14, caso 119748001 y los JC7xxxxx).
+_RE_PREGUIA = re.compile(r"PRE\s*GUIA\s+ALMACEN\s+ORIGEN|SOLICITUD\s+DE\s+TRASLADO")
 # Envío de MUESTRAS (partidas "MUESTRA Mosaico ..."): exento de mínimos y
 # % de flete (regla GPA, caso 119518759). Solo se marca en páginas FV.
 _RE_MUESTRA = re.compile(r"\bMUESTRAS?\b")

@@ -18,10 +18,12 @@ def test_es_receptor_gpa_lista_vacia_por_defecto():
 
 
 def test_receptor_interno_configurable_si_dispara(run_eval, make_cp, monkeypatch):
-    # Si se configura el RFC como receptor interno, sí enruta a dispersión.
+    # Si se configura el RFC como receptor interno, sí enruta a dispersión —
+    # PERO solo sin sello explícito de venta: la regla GPA 2026-07-14
+    # (caso 119687019, GS0230) hace que el sello mande sobre la heurística.
     monkeypatch.setattr(ev, "RECEPTORES_INTERNOS_GPA", {"GPA010101AAA"})
     assert ev._es_receptor_gpa("GPA010101AAA") is True
-    cp = make_cp(codigo_sap="GS0230", destinatario_rfc="GPA010101AAA",
+    cp = make_cp(codigo_sap="", destinatario_rfc="GPA010101AAA",
                  origen_sucursal="CDMX")   # dispersión fuera de GDL → R-401-D
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-401-D"

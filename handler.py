@@ -33,7 +33,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.6.0"   # Aceptar rechazo del motor (RECHAZO_ACEPTADO, sale del Kanban) + acciones en lote
+VERSION = "2.6.1"   # Reglas del reporte: GS0248 exento, sello venta manda sobre GPA→GPA, Solicitud de Traslado = dispersión
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

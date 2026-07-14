@@ -187,7 +187,12 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
         )
 
     # ── CAPA 1a — DISPERSIÓN INTERNA (GS0231 semanal / GS0232 express) ──
-    if cp.codigo_sap in SAPS_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
+    # Un sello EXPLÍCITO de venta (GS0230, GS0229…) manda sobre la heurística
+    # destinatario-GPA: 119687019 traía GS0230 y caía a R-401-D "dispersión
+    # desde no-GDL" por tener a GPA como destinatario (regla GPA 2026-07-14).
+    _sello_venta = bool(cp.codigo_sap) and cp.codigo_sap not in SAPS_DISPERSION
+    if cp.codigo_sap in SAPS_DISPERSION \
+            or (_es_receptor_gpa(cp.destinatario_rfc) and not _sello_venta):
         criterios.append(CriterioDetalle(
             "Capa 1a · GS0231", "INFO", cp.codigo_sap,
             "DISPERSION_INTERNA detectada"
@@ -388,6 +393,10 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
         exencion = "Envío de MUESTRAS"
     elif cp.codigo_sap == SAP_COM_PED:
         exencion = "GS0247 · com. ped. pagado (sello)"
+    elif cp.codigo_sap == SAP_CARGO_ENVIO:
+        # GS0248: el flete lo paga el CLIENTE (regla GPA 2026-07-14, caso
+        # 119696433) → el mínimo de venta no aplica.
+        exencion = "GS0248 · cargo por envío al cliente (sello)"
     if exencion:
         criterios.append(CriterioDetalle(
             "C1 Monto", "INFO", "EXENTO",
@@ -611,7 +620,10 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
 def _detectar_tipo(cp: CartaPorte, fvs: list[FacturaVenta]) -> str:
     # Tabla oficial: solo GS0231/GS0232 son dispersión; el resto es VENTA.
     # Los tipos legacy (cargo envío / back order) solo si su capa está activa.
-    if cp.codigo_sap in SAPS_DISPERSION or _es_receptor_gpa(cp.destinatario_rfc):
+    # El sello explícito de venta manda sobre la heurística destinatario-GPA.
+    sello_venta = bool(cp.codigo_sap) and cp.codigo_sap not in SAPS_DISPERSION
+    if cp.codigo_sap in SAPS_DISPERSION \
+            or (_es_receptor_gpa(cp.destinatario_rfc) and not sello_venta):
         return "DISPERSION_INTERNA"
     if CARGO_ENVIO_POR_SAP and cp.codigo_sap == SAP_CARGO_ENVIO:
         return "CARGO_POR_ENVIO"

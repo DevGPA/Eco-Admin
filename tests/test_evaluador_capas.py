@@ -158,3 +158,32 @@ def test_gs0242_dispersion_no_autorizada(run_eval, make_fv, make_cp):
     res = run_eval(fv=fv, cp=cp)
     assert res.codigo_motor == "R-811"
     assert res.estado == "EN_REVISION"
+
+
+# ── Reglas del reporte de comentarios (2026-07-14) ────────────────
+def test_gs0248_exento_flete_lo_paga_cliente(run_eval, make_fv, make_cp):
+    # 119696433: GS0248 = cargo por envío AL CLIENTE → sin mínimo de venta.
+    fv = make_fv(partidas=[], subtotal=99.56)
+    cp = make_cp(codigo_sap="GS0248")
+    res = run_eval(fv=fv, cp=cp)
+    assert res.codigo_motor == "R-000"
+
+
+def test_sello_venta_manda_sobre_destinatario_gpa(run_eval, make_fv, make_cp):
+    # 119687019: sello GS0230 (venta) pero destinatario GPA → caía a
+    # R-401-D "dispersión desde no-GDL". El sello explícito manda: es VENTA.
+    fv = make_fv(partidas=[], subtotal=552.24)
+    cp = make_cp(codigo_sap="GS0230", destinatario_rfc="GPA8402219Y1",
+                 origen_sucursal="CDMX", destino_estado="Tabasco")
+    res = run_eval(fv=fv, cp=cp)
+    assert res.tipo_operacion == "VENTA_CLIENTE"
+    assert res.codigo_motor not in ("R-401-D", "R-800", "R-801", "R-802")
+
+
+def test_sin_sello_destinatario_gpa_sigue_siendo_dispersion(run_eval, make_cp):
+    # Sin sello legible, la heurística GPA→GPA sigue viva (119338784).
+    cp = make_cp(codigo_sap="", destinatario_rfc="GPA8402219Y1",
+                 destino_estado="CDMX", tipo_vehiculo="PALLET",
+                 numero_pallets=1, flete_mxn=1800.0)
+    res = run_eval(cp=cp)
+    assert res.tipo_operacion == "DISPERSION_INTERNA"
