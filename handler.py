@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.8"   # GS0242 → R-811 "Dispersión no autorizada" (revisión, no R-101)
+VERSION = "2.5.9"   # Origen/destino desde la tabla del complemento Carta Porte (HORMIK) — complementa, no sustituye
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

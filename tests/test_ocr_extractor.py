@@ -933,6 +933,42 @@ def test_origen_destino_no_duplica_con_un_solo_candidato():
     assert dc is None and de is None               # jamás "Gonzalez Gallo"
 
 
+def test_origen_destino_tabla_carta_porte_hormik():
+    # HORMIK (FAC6637): tabla "ORÍGENES, DESTINOS Y PUNTOS INTERMEDIOS" con
+    # filas OR#####/DE##### y la plaza al final de la dirección. Antes caía a
+    # R-301 "destino no cubierto" con destino vacío.
+    lineas = [
+        {"text": "ORIGENES, DESTINOS Y PUNTOS INTERMEDIOS", "top": 0.10, "left": 0.2},
+        {"text": "Origen OR00256", "top": 0.14, "left": 0.05},
+        {"text": "AV EJE 5 SUR #36,Central de Abasto CP: 09040,Iztapalapa,Ciudad de México,MEX",
+         "top": 0.14, "left": 0.15},
+        {"text": "TCH170824TH2", "top": 0.14, "left": 0.55},
+        {"text": "Destino DE02469", "top": 0.19, "left": 0.05},
+        {"text": "CARRETERA BARRA VIEJA #LOTE 4 MANZANA 1/ GPA/ A&B WATERS int CONDOMINIO",
+         "top": 0.19, "left": 0.15},
+        {"text": "BAYAM RESIDENSES,Plan de los Amates CP: 39893,Acapulco de Juárez,Guerrero,MEX",
+         "top": 0.20, "left": 0.15},
+        {"text": "GPA8402219Y1", "top": 0.19, "left": 0.55},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert oe == "CDMX" and oc == "Iztapalapa"
+    assert de == "Guerrero" and dc == "Acapulco De Juárez"
+
+
+def test_tabla_ccp_complementa_no_sustituye():
+    # La tabla solo trae el DESTINO legible → el ORIGEN se sigue buscando con
+    # las demás estrategias (fila remitente Tresguerras). Nunca degrada.
+    lineas = [
+        {"text": "Destino DE02469", "top": 0.19, "left": 0.05},
+        {"text": "X CP: 39893,Acapulco de Juárez,Guerrero,MEX", "top": 0.20, "left": 0.15},
+        # origen por estrategia clásica (domicilio del remitente):
+        {"text": "GUADALAJARA, JAL., MEX", "top": 0.22, "left": 0.06},
+    ]
+    oc, oe, dc, de = _origen_destino(lineas)
+    assert (dc, de) == ("Acapulco De Juárez", "Guerrero")   # de la tabla
+    assert (oc, oe) == ("Guadalajara", "Jalisco")           # de la estrategia clásica
+
+
 def test_origen_destino_toluca_estado_completo():
     # Caso 119581944 completo: destino con nombre de estado completo a la derecha.
     lineas = [

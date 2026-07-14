@@ -1234,10 +1234,43 @@ def _part_ciudad_estado(s: str):
     return s, ""
 
 
+def _origen_destino_tabla_ccp(lineas):
+    """Tabla "ORÍGENES, DESTINOS Y PUNTOS INTERMEDIOS" del complemento Carta
+    Porte (HORMIK y otros): fila Origen con IdUbicacion OR#####, fila Destino
+    con DE#####; la plaza va al final de la dirección: "... CP: 39893,
+    Acapulco de Juárez, Guerrero, MEX". (Caso real FAC6637 → R-301 falso.)
+    Devuelve parciales (None en lo que no encuentre)."""
+    full_nl = "\n".join(ln["text"] for ln in lineas)
+
+    def _plaza(id_pat):
+        m = re.search(id_pat + r"\b.{0,400}?CP:?\s*\d{4,5}\s*,\s*([^,\n]+?)\s*,\s*([^,\n]+?)\s*,\s*MEX",
+                      full_nl, re.S | re.I)
+        if not m:
+            return (None, None)
+        ciudad = " ".join(m.group(1).split()).title()
+        canon = normalizar_destino(re.sub(r"\.", "", m.group(2)).strip())
+        return (ciudad, canon) if canon in DESTINOS_CATALOGO else (None, None)
+
+    o_c, o_e = _plaza(r"\bOR\d{4,7}")
+    d_c, d_e = _plaza(r"\bDE\d{4,7}")
+    return (o_c, o_e, d_c, d_e)
+
+
 def _origen_destino(lineas):
-    """Origen y destino del CP. El layout varía mucho por fletera, así que se
-    intentan varias estrategias; si ninguna funciona, el caso degrada a
-    EN_REVISION (no a rechazo). Devuelve (ciudadO, estadoO, ciudadD, estadoD)."""
+    """Origen y destino del CP. La tabla del complemento Carta Porte (si
+    existe) es el dato estructurado más confiable, pero COMPLEMENTA a las
+    demás estrategias: lo que la tabla no traiga se sigue buscando con ellas,
+    campo por campo (nunca sustituye un dato ya encontrado por un None)."""
+    t = _origen_destino_tabla_ccp(lineas)
+    if t[1] and t[3]:                         # tabla completa → listo
+        return t
+    r = _origen_destino_estrategias(lineas)
+    return (t[0] or r[0], t[1] or r[1], t[2] or r[2], t[3] or r[3])
+
+
+def _origen_destino_estrategias(lineas):
+    """Estrategias por layout de fletera; si ninguna funciona, el caso degrada
+    a EN_REVISION (no a rechazo). Devuelve (ciudadO, estadoO, ciudadD, estadoD)."""
     full = " ".join(ln["text"] for ln in lineas)
 
     # A) una LÍNEA con "ORIGEN: <ciudad> <ESTADO> ... DESTINO: <ciudad> <ESTADO>"
