@@ -900,6 +900,46 @@ window.gpaAutorizar = async function(solId) {
   }
 };
 
+window.gpaBulk = async function(accion) {
+  // Acción en LOTE desde la barra de selección: un solo comentario que se
+  // replica en todas las tarjetas seleccionadas (los botones existían pero
+  // no hacían nada). Las auto-rechazadas se aprueban como autorización de
+  // rechazo (misma convención que el botón individual "Autorizar").
+  const cards = Array.from(document.querySelectorAll('.chk.on'))
+    .map(c => c.closest('.card')).filter(el => el && el.dataset.id);
+  if (!cards.length) return;
+  const nombres = { aprobar: 'Aprobar', rechazar: 'Rechazar', escalar: 'Escalar' };
+  const comentario = prompt(
+    nombres[accion] + ' ' + cards.length + ' solicitud(es) seleccionada(s).\n' +
+    'Comentario (se registrará en TODAS):');
+  if (comentario === null) return;                 // canceló
+  if (!comentario.trim()) { alert('El comentario es obligatorio en acciones por lote.'); return; }
+  const errores = [];
+  for (const el of cards) {
+    const id = el.dataset.id;
+    try {
+      if (accion === 'aprobar') {
+        // Tarjeta auto-rechazada (chip rojo .cu.s) → autorización de rechazo.
+        const esRechazada = el.querySelector('.cu.s') != null;
+        await gpaApi.aprobar(id, esRechazada
+          ? 'AUTORIZACIÓN DE RECHAZO AUTOMÁTICO: ' + comentario.trim()
+          : comentario.trim());
+      } else if (accion === 'rechazar') {
+        await gpaApi.rechazar(id, comentario.trim());
+      } else {
+        await gpaApi.escalar(id, comentario.trim());
+      }
+    } catch (e) {
+      errores.push((el.querySelector('.cn') || {}).textContent || id);
+    }
+  }
+  if (typeof clrSel === 'function') clrSel();
+  await gpaBridge.refreshKanban();
+  if (errores.length) {
+    alert('No se pudieron procesar ' + errores.length + ': ' + errores.join(', '));
+  }
+};
+
 window.gpaAbrirPdf = async function(key) {
   // Abre el PDF de referencia del caso (URL prefirmada de lectura, 5 min).
   // La pestaña se abre ANTES del fetch para que el navegador no la bloquee

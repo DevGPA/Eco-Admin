@@ -947,7 +947,7 @@ input::placeholder{color:var(--ink3);font-weight:400;}
   </div>
 
   <div class="tb-divider"></div>
-  <span class="tb-title">Motor v2.4</span>
+  <span class="tb-title" id="tbVer">Motor GPA</span>
   <div class="tb-divider"></div>
 
   <div class="layers">
@@ -1195,9 +1195,9 @@ input::placeholder{color:var(--ink3);font-weight:400;}
 <!-- BULK BAR -->
 <div class="bulk" id="bulk">
   <span class="bcnt"><span id="bn">0</span> seleccionadas</span>
-  <button class="bb gob">✓ Aprobar</button>
-  <button class="bb rb">✕ Rechazar</button>
-  <button class="bb">↑ Escalar</button>
+  <button class="bb gob" onclick="gpaBulk('aprobar')">✓ Aprobar</button>
+  <button class="bb rb" onclick="gpaBulk('rechazar')">✕ Rechazar</button>
+  <button class="bb" onclick="gpaBulk('escalar')">↑ Escalar</button>
   <button class="bb" onclick="clrSel()">✕</button>
 </div>
 
@@ -1691,6 +1691,14 @@ window.addEventListener('load', () => {
       typeof gpaBridge !== 'undefined' && gpaBridge.refreshKanban) {
     try { gpaBridge.refreshKanban(); } catch (e) {}
   }
+  // Versión REAL del motor en el encabezado (antes decía "v2.4" fijo y
+  // confundía: parecía código viejo aunque el backend fuera otro).
+  try {
+    fetch(API_CONFIG.apiUrl + '/health').then(r => r.json()).then(h => {
+      const el = document.getElementById('tbVer');
+      if (el && h && h.version) el.textContent = 'Motor v' + h.version + ' · OCR ' + (h.ocr || '');
+    }).catch(() => {});
+  } catch (e) {}
   // Auto-refresco: el tablero se actualiza solo cada 60 s (solo con la pestaña
   // visible y sesión activa) — sin necesidad de recargar a mano para ver datos
   // nuevos que el motor haya evaluado.
