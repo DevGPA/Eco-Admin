@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.6"   # Reglas GPA: MUESTRAS y GS0247 exentos, GS0245 a revisión; diagnóstico por página
+VERSION = "2.5.7"   # RFC de GPA tolerante al ruido del OCR (M845517 pág.2: GPA940221471→GPA8402219Y1)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

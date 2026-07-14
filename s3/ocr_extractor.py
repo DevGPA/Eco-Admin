@@ -351,11 +351,14 @@ def _parse_textract(resp: dict) -> dict:
     lineas = _lineas_texto(blocks)
     senales = _senales_especiales(lineas)
     rfcs_pos = _rfcs_en_lineas(lineas)
-    rfcs_detectados = list(dict.fromkeys(r["rfc"] for r in rfcs_pos))
+    # Tolerancia al ruido del OCR sobre el RFC de GPA (ver _rfc_gpa_tolerante)
+    rfcs_detectados = list(dict.fromkeys(
+        _rfc_gpa_tolerante(r["rfc"]) for r in rfcs_pos))
     tipo_doc = _tipo_documento(lineas)
     emisor, receptor = _emisor_receptor(_norm_rfc(campos.get("rfcEmisor")),
                                         _norm_rfc(campos.get("rfcReceptor")),
                                         rfcs_pos, lineas)
+    emisor, receptor = _rfc_gpa_tolerante(emisor), _rfc_gpa_tolerante(receptor)
 
     # Alinear roles con GPA: en un CP, GPA es receptor; en una FV, GPA es emisor.
     # Así el RFC de la fletera (emisor del CP) queda correcto y la clasificación es directa.
@@ -494,13 +497,23 @@ def _codigo_sap_valido(v) -> str:
     return m.group(0) if m else ""
 
 
+def _rfc_gpa_tolerante(rfc: Optional[str]) -> Optional[str]:
+    """El OCR de escaneos deforma dígitos del RFC de GPA (caso real M845517
+    pág. 2: "GPA940221471" por GPA8402219Y1 → la página caía a 'ajena' y el
+    caso quedaba sin FV). En los documentos de fletes de GPA, un RFC con el
+    prefijo de GPA ES GPA: ningún cliente ni fletera lo lleva."""
+    if rfc and rfc.upper().startswith(RFC_GPA[:3]):
+        return RFC_GPA
+    return rfc
+
+
 def _adaptar_bedrock(raw: dict) -> dict:
     """Mapea el JSON del modelo (PROMPT_OCR) al MISMO contrato de dict de página
     que _parse_textract/_pagina_desde_texto. Sin esto, el pipeline (clasificar_
     pagina, emparejar_casos) no entiende la salida de Bedrock: 'tipoDocumento'
     usa otro vocabulario, faltan rfcsDetectados/señales y los RFC vienen crudos."""
-    emisor = _norm_rfc(raw.get("rfcEmisor"))
-    receptor = _norm_rfc(raw.get("rfcReceptor"))
+    emisor = _rfc_gpa_tolerante(_norm_rfc(raw.get("rfcEmisor")))
+    receptor = _rfc_gpa_tolerante(_norm_rfc(raw.get("rfcReceptor")))
     fleta = _norm_rfc(raw.get("fletaRFC"))
     # Clasificación: el ROL del RFC manda sobre el TÍTULO (regla del modelo de
     # documentos GPA). Las facturas de fletera se titulan "Factura" (Estrella:

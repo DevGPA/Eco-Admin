@@ -452,6 +452,29 @@ def test_adaptar_bedrock_cumple_contrato_de_pagina():
     assert p["partidas"][0]["importe"] == 1000.0
 
 
+def test_rfc_gpa_deformado_por_ocr_se_repara():
+    # Caso real M845517 pág. 2 (log de prod): el modelo leyó "GPA940221471"
+    # en vez de GPA8402219Y1 → la página caía a 'ajena' y el caso a R-093.
+    # Un RFC con prefijo GPA en estos documentos ES GPA.
+    p = ocr._adaptar_bedrock({
+        "rfcEmisor": "GPA940221471", "rfcReceptor": None,
+        "tipoDocumento": "FACTURA", "subtotal": 450.66, "moneda": "USD",
+        "tipoCambio": 17.39, "folio": "FMTY 70088673",
+    })
+    assert p["rfcEmisor"] == RFC_GPA
+    assert clasificar_pagina(p) == "FV"
+    # E2E: la CP de Estrella (texto) + esta FV (OCR) arman el caso completo.
+    cp_pag = pag(emisor="TEE070612ITA", receptor=RFC_GPA, subtotal=300.0,
+                 moneda="MXN", folio="M845517")
+    res = emparejar_casos([cp_pag, p], "M845517")
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["foliosFV"] == ["FMTY 70088673"]
+    assert caso["montoVentaFV"] == 450.66
+    # Y un RFC ajeno NO se toca.
+    assert ocr._rfc_gpa_tolerante("TEE070612ITA") == "TEE070612ITA"
+
+
 def test_adaptar_bedrock_codigo_sap_invalido_se_descarta():
     p = ocr._adaptar_bedrock({"tipoDocumento": "FACTURA", "codigoSAP": "GSXX31"})
     assert p["codigoSAP"] == "" and p["tipoDoc"] == "FV"
