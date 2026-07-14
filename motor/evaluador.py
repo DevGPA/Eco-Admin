@@ -12,7 +12,8 @@ from .catalogos import (
     UMBRAL_FLETE_WARN, UMBRAL_FLETE_CRIT, UMBRAL_FLETE_BORDERLINE,
     UMBRAL_CARGO_ENVIO, UMBRAL_TARIFA_DISP, BACKORDER_ENABLED,
     CARGO_ENVIO_POR_SAP, TIPO_CAMBIO_DEFAULT,
-    SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER,
+    SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER, SAP_COM_PED,
+    SAP_REQUIERE_AUTORIZACION,
     SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
     evaluar_destino, categoria_partida, es_cargo_envio,
@@ -50,6 +51,8 @@ class FacturaVenta:
     partidas: list[Partida] = field(default_factory=list)
     sku_id: Optional[str] = None  # Para GS0248
     descripcion: Optional[str] = None
+    # Envío de MUESTRAS (partidas "MUESTRA ..."): exento de mínimos y % flete.
+    es_muestra: bool = False
 
     @property
     def subtotal_usd(self) -> float:
@@ -197,6 +200,14 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             ))
             return _res("R-401-D")
         return _evaluar_dispersion(cp, tipo_cambio_ref, criterios, _res)
+
+    # ── CAPA 1a-bis — GS0245: requiere AUTORIZACIÓN humana (regla GPA) ──
+    if cp.codigo_sap == SAP_REQUIERE_AUTORIZACION:
+        criterios.append(CriterioDetalle(
+            "Sello presupuestal", "WARN", cp.codigo_sap,
+            "GS0245 requiere autorización: revisión obligatoria"
+        ))
+        return _res("R-810")
 
     # ── CAPA 1b — GS0248 CARGO POR ENVÍO (legacy, off por defecto) ──
     # La clasificación oficial evalúa GS0248 como VENTA; esta capa solo corre
@@ -356,12 +367,28 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     flete_usd  = cp.subtotal_sin_impuestos / tc_ref
     pct_flete  = flete_usd / monto_usd if monto_usd else 0
 
+    # ── Exenciones de monto (regla GPA 2026-07-13) ───────────────
+    # El monto de estos envíos es simbólico: ni los mínimos ni el % de flete
+    # aplican (el resto de capas — origen, fletera, destino — sí).
+    #  · MUESTRAS: partidas "MUESTRA ..." (caso 119518759: FV de $0.07 USD).
+    #  · GS0247 com. ped. pagado: el sello presupuestal ES la autorización
+    #    (caso 119540819: venta $5.74, flete $8.31).
+    exencion = None
+    if any(fv.es_muestra for fv in fvs):
+        exencion = "Envío de MUESTRAS"
+    elif cp.codigo_sap == SAP_COM_PED:
+        exencion = "GS0247 · com. ped. pagado (sello)"
+    if exencion:
+        criterios.append(CriterioDetalle(
+            "C1 Monto", "INFO", "EXENTO",
+            f"{exencion}: no aplican mínimos ni % de flete"))
+
     # ── Salvaguarda: flete MAYOR que el pedido ────────────────────
     # Un flete que supera el monto de la venta es atípico: o la extracción
     # leyó mal, o es un caso especial real (cargo al cliente, garantía,
     # complemento — p. ej. FV de $0.07 con flete de $8). Auto-rechazarlo por
     # R-101 esconde el caso; debe decidirlo un humano.
-    if monto_usd > 0 and flete_usd > monto_usd and monto_usd < MONTO_MIN_GENERAL:
+    if not exencion and monto_usd > 0 and flete_usd > monto_usd and monto_usd < MONTO_MIN_GENERAL:
         criterios.append(CriterioDetalle(
             "C1 Monto", "WARN",
             f"${monto_usd:.2f} < flete ${flete_usd:.2f}",
@@ -372,7 +399,9 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
         return res
 
     # ── C1 Monto ─────────────────────────────────────────────────
-    if tiene_costal:
+    if exencion:
+        pass                       # exento: ni mínimos ni proporciones
+    elif tiene_costal:
         if monto_usd < MONTO_MIN_COSTAL:
             criterios.append(CriterioDetalle(
                 "C1 Monto", "FAIL",
@@ -412,11 +441,12 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
             ))
             return _res("R-101")
 
-    criterios.append(CriterioDetalle(
-        "C1 Monto", "PASS",
-        f"${monto_usd:.2f} USD",
-        f"{'Con costal' if tiene_costal else 'Con accesorios' if tiene_accs else 'Limpio'} ✓"
-    ))
+    if not exencion:
+        criterios.append(CriterioDetalle(
+            "C1 Monto", "PASS",
+            f"${monto_usd:.2f} USD",
+            f"{'Con costal' if tiene_costal else 'Con accesorios' if tiene_accs else 'Limpio'} ✓"
+        ))
 
     # ── C2 Producto ───────────────────────────────────────────────
     if tiene_costal and not tiene_elig:
@@ -531,35 +561,37 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
         f"Flete ${flete_usd:.2f} USD / Pedido ${monto_usd:.2f} USD"
     ))
 
-    # Combinar R-302 + C5
+    # Combinar R-302 + C5 (el % no agrava si el caso está exento de montos)
     if dest_result == "R-302":
-        if pct_flete > UMBRAL_FLETE_WARN:
+        if not exencion and pct_flete > UMBRAL_FLETE_WARN:
             return _res("R-601")   # Remoto + flete alto
-        if pct_flete > UMBRAL_FLETE_BORDERLINE:
+        if not exencion and pct_flete > UMBRAL_FLETE_BORDERLINE:
             return _res("R-602")   # Borderline + flete moderado
         return _res("R-302")
 
-    if pct_flete > UMBRAL_FLETE_CRIT:
+    if exencion:
+        criterios.append(CriterioDetalle(
+            "C5 Proporción", "INFO", "EXENTA", exencion))
+    elif pct_flete > UMBRAL_FLETE_CRIT:
         criterios.append(CriterioDetalle(
             "C5 Proporción", "WARN",
             f"{pct_flete*100:.1f}% > {UMBRAL_FLETE_CRIT*100:.0f}%",
             "Flete crítico"
         ))
         return _res("R-502")
-
-    if pct_flete > UMBRAL_FLETE_WARN:
+    elif pct_flete > UMBRAL_FLETE_WARN:
         criterios.append(CriterioDetalle(
             "C5 Proporción", "WARN",
             f"{pct_flete*100:.1f}% > {UMBRAL_FLETE_WARN*100:.0f}%",
             "Flete alto"
         ))
         return _res("R-501")
-
-    criterios.append(CriterioDetalle(
-        "C5 Proporción", "PASS",
-        f"{pct_flete*100:.1f}% ✓",
-        f"Dentro del umbral {UMBRAL_FLETE_WARN*100:.0f}%"
-    ))
+    else:
+        criterios.append(CriterioDetalle(
+            "C5 Proporción", "PASS",
+            f"{pct_flete*100:.1f}% ✓",
+            f"Dentro del umbral {UMBRAL_FLETE_WARN*100:.0f}%"
+        ))
 
     return _res("R-000")
 

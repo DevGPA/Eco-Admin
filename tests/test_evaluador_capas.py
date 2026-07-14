@@ -112,3 +112,39 @@ def test_backorder_legacy_r302_con_flag(run_eval, make_cp, monkeypatch):
                  destino_ciudad="San Cristóbal")
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-302"
+
+
+# ── Exenciones de monto (reglas GPA 2026-07-13) ───────────────────
+def test_muestras_exentas_de_minimos_y_pct(run_eval, make_fv):
+    # 119518759: FV de $0.07 USD, 7 renglones "MUESTRA ..." → ni R-101 ni
+    # R-501/502; auto-aprobada si el resto de capas pasa.
+    fv = make_fv(partidas=[], subtotal=0.07)
+    fv.es_muestra = True
+    res = run_eval(fv=fv)
+    assert res.codigo_motor == "R-000"
+    assert res.estado == "AUTO_APROBADA"
+    assert any("MUESTRAS" in (c.valor or "") + (c.detalle or "") for c in res.criterios)
+
+
+def test_gs0247_com_ped_exento(run_eval, make_fv, make_cp):
+    # 119540819: venta $5.74, flete $8.31, sello GS0247 "COM. PED. PAGADO" →
+    # el sello es la autorización; sin él este caso caía a R-101/EN_REVISION.
+    fv = make_fv(partidas=[], subtotal=5.74)
+    cp = make_cp(codigo_sap="GS0247", flete_mxn=143.0)
+    res = run_eval(fv=fv, cp=cp)
+    assert res.codigo_motor == "R-000"
+
+
+def test_gs0245_requiere_autorizacion(run_eval, make_cp):
+    # GS0245 nunca se auto-aprueba: revisión obligatoria (R-810).
+    cp = make_cp(codigo_sap="GS0245")
+    res = run_eval(cp=cp)
+    assert res.codigo_motor == "R-810"
+    assert res.estado == "EN_REVISION"
+
+
+def test_sin_exencion_r101_sigue_vivo(run_eval, make_fv):
+    # La exención NO se cuela a casos normales: monto chico sin muestra → R-101.
+    fv = make_fv(partidas=[], subtotal=100.0)
+    res = run_eval(fv=fv)
+    assert res.codigo_motor == "R-101"

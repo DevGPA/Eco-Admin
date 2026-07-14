@@ -32,7 +32,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.5.5"   # Folio serie-F solo en FV (el CP 119524726 aterrizaba como FD408735)
+VERSION = "2.5.6"   # Reglas GPA: MUESTRAS y GS0247 exentos, GS0245 a revisión; diagnóstico por página
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
@@ -264,6 +264,7 @@ def _build_solicitud_input(b: dict) -> SolicitudInput:
             tipo_cambio_doc=tc_ref,
             campo_entrega=campo_entrega,
             partidas=partidas if i==0 else [],
+            es_muestra=bool(b.get("esMuestraFV")),
         ))
     # Líneas de cargo de la carta porte: flete base + ferry opcional
     lineas = [LineaCargo(codigo="78101802", descripcion="FLETE",

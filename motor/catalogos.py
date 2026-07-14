@@ -84,6 +84,15 @@ RFC_GPA = os.environ.get("RFC_GPA", "GPA8402219Y1").strip().upper()
 SUCURSALES_VALIDAS       = {"GDL", "CDMX", "MTY", "CUN", "PVR", "SJD"}
 SUCURSAL_ORIGEN_DISPERSION = "GDL"
 
+# GS0247 — "COM. PED. PAGADO" (complemento de pedido, sello presupuestal):
+# el sello ES la autorización → exento de mínimos y % de flete (regla GPA
+# 2026-07-13, caso real 119540819: venta $5.74 USD, flete $8.31).
+SAP_COM_PED = "GS0247"
+
+# GS0245 — requiere AUTORIZACIÓN humana siempre (regla GPA 2026-07-13):
+# nunca auto-aprobar; el caso va a revisión (R-810).
+SAP_REQUIERE_AUTORIZACION = "GS0245"
+
 # RFCs internos GPA que disparan DISPERSIÓN_INTERNA (Capa 1a) por igualdad exacta.
 # Configurable vía env RECEPTORES_INTERNOS_GPA="RFC1,RFC2". Default: el propio
 # RFC de GPA — una carta porte cuyo DESTINATARIO es GPA (GPA se envía a sí
@@ -377,6 +386,7 @@ R_CONCEPTOS: dict[str, str] = {
     "R-800": "Dispersión OK",
     "R-801": "Dispersión sin tarifa",
     "R-802": "Dispersión excede tarifa",
+    "R-810": "Sello GS0245: requiere autorización",
     "R-901": "Escalado por aprobador",
     "R-902": "Escalado por SLA",
 }
@@ -414,4 +424,5 @@ ESTADO_POR_CODIGO: dict[str, str] = {
     "R-800": "AUTO_APROBADA",
     "R-801": "EN_REVISION",
     "R-802": "EN_REVISION",
+    "R-810": "EN_REVISION",
 }

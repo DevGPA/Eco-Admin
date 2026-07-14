@@ -412,6 +412,8 @@ def _parse_textract(resp: dict) -> dict:
         "fletaRFC":      emisor,   # en un CP, la fletera es el emisor
         "fleteraTexto":  fletera_por_nombre(" ".join(ln["text"] for ln in lineas)),
         "partidas":      _partidas_de_tablas(blocks, by_id, _texto),
+        "esMuestra":     tipo_doc == "FV" and bool(_RE_MUESTRA.search(
+                             _sin_acentos(" ".join(ln["text"] for ln in lineas)))),
         **senales,       # esNotaCredito / esPreguia / destinatarioGPA
     }
 
@@ -548,6 +550,8 @@ def _adaptar_bedrock(raw: dict) -> dict:
         "esNotaCredito":  bool(raw.get("esNotaCredito")),
         "esPreguia":      bool(raw.get("esPreguia")),
         "destinatarioGPA": bool(raw.get("destinatarioGPA")),
+        "esMuestra":      any(_RE_MUESTRA.search(_sin_acentos(p["descripcion"]))
+                              for p in partidas),
         # Sello de Control Presupuestal (validado; "" si no pasa el formato)
         "codigoSAP":      _codigo_sap_valido(raw.get("codigoSAP")),
         "sucursalSello":  str(raw.get("sucursalSello") or "").strip(),
@@ -629,6 +633,9 @@ def _sin_acentos(s: str) -> str:
 
 _RE_NOTA_CREDITO = re.compile(r"NOTA\s+(?:DE\s+)?CREDITO|\bE\s*-\s*EGRESO\b")
 _RE_PREGUIA = re.compile(r"PRE\s*GUIA\s+ALMACEN\s+ORIGEN")
+# Envío de MUESTRAS (partidas "MUESTRA Mosaico ..."): exento de mínimos y
+# % de flete (regla GPA, caso 119518759). Solo se marca en páginas FV.
+_RE_MUESTRA = re.compile(r"\bMUESTRAS?\b")
 
 
 def _senales_especiales(lineas: list[dict]) -> dict:
@@ -800,6 +807,7 @@ def _fv_consolidada(pages: list[dict]) -> dict:
         "fleteraTexto": next((p.get("fleteraTexto") for p in pages if p.get("fleteraTexto")), ""),
         "rfcEmisor":   base.get("rfcEmisor"),
         "partidas":    [pt for p in pages for pt in (p.get("partidas") or [])],
+        "esMuestra":   any(p.get("esMuestra") for p in pages),
     }
 
 
@@ -902,9 +910,11 @@ def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str,
         "fechaEmision": cp.get("fecha") or next((fv.get("fecha") for fv in fvs if fv.get("fecha")), "") or "",
         "partidas": partidas,
         # Sello de Control Presupuestal (si se pudo leer): rutea GS0231/32 a
-        # dispersión y deja listo GS0247 (com.ped) para su regla.
+        # dispersión y GS0247 (com.ped) queda exento de mínimos/% en el motor.
         "codigoSAP": cp.get("codigoSAP") or "",
         "tipoFleteSello": cp.get("tipoFleteSello") or "",
+        # Envío de MUESTRAS → exento de mínimos/% (regla GPA).
+        "esMuestraFV": any(fv.get("esMuestra") for fv in fvs),
     }
 
 
@@ -918,8 +928,14 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
     paginas = [p for p in paginas if not p.get("desglose")]
 
     cps, fvs, ajenas = [], [], []
-    for p in paginas:
+    for idx, p in enumerate(paginas):
         clase = clasificar_pagina(p)
+        # Diagnóstico por página (visible en CloudWatch): sin esto, un lote de
+        # páginas "ajenas" es una caja negra — no se sabe QUÉ leyó el OCR.
+        logger.info("%s pag%d: clase=%s tipoDoc=%s rfcE=%s rfcR=%s sub=%s folio=%s nc=%s",
+                    folio_archivo or "PDF", idx + 1, clase, p.get("tipoDoc"),
+                    p.get("rfcEmisor"), p.get("rfcReceptor"), p.get("subtotal"),
+                    p.get("folio"), p.get("esNotaCredito"))
         (cps if clase == "CP" else fvs if clase == "FV" else ajenas).append(p)
 
     # Una carta porte de COBRO trae su flete (Sub-Total). Las páginas del
@@ -1027,9 +1043,11 @@ def caso_a_solicitud(caso: dict, fecha_emision: str = "") -> dict:
         "foliosFV": caso["foliosFV"],
         # Dispersión interna (GPA→GPA): rutea a la Capa 1a del motor.
         "destinatarioRFC": caso.get("destinatarioRFC") or "",
-        # Sello presupuestal (GS0231/32 → dispersión; GS0247 com.ped pendiente).
+        # Sello presupuestal (GS0231/32 → dispersión; GS0247 exento de mínimos).
         "codigoSAP": caso.get("codigoSAP") or "",
         "tipoFleteSello": caso.get("tipoFleteSello") or "",
+        # MUESTRAS → exento de mínimos/% de flete.
+        "esMuestraFV": bool(caso.get("esMuestraFV")),
         "origenSucursal": caso.get("origenSucursal", ""),
         "destinoEstado": caso.get("destinoEstado") or "",
         "destinoCiudad": caso.get("destinoCiudad") or "",
@@ -1409,6 +1427,7 @@ def _pagina_desde_texto(lineas: list[dict]) -> dict:
         # logo) — se usa a nivel caso si el CP no trajo RFC.
         "fleteraTexto":   fletera_por_nombre(full),
         "partidas":       [],   # del texto aún no se extraen renglones (ver follow-up)
+        "esMuestra":      clase == "FV" and bool(_RE_MUESTRA.search(_sin_acentos(full))),
         **senales,              # esNotaCredito / esPreguia / destinatarioGPA
     }
 
