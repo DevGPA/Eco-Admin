@@ -166,6 +166,9 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 .seg-mc.on{background:${C.blue};border-color:${C.blue};color:#fff}
 .seg-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
 .seg-kpi{background:#fff;border:1px solid #e4e9f0;border-radius:12px;padding:14px 16px}
+.seg-kpi.clk{cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s}
+.seg-kpi.clk:hover{border-color:${C.blue};box-shadow:0 2px 8px rgba(24,95,165,.15);transform:translateY(-1px)}
+[id^="segmod-"]{scroll-margin-top:60px}
 .seg-kl{font-size:12px;color:#5b6675;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 .seg-kv{font-size:28px;font-weight:800;margin-top:6px;line-height:1}
 .seg-ks{font-size:11.5px;color:#5b6675;margin-top:4px}
@@ -2207,6 +2210,11 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
     if(tipo==="combustible")return<SolDetail sol={reg} rol={rol} refrescar={()=>refrescarTipo("combustible")} showToast={showToast} onBack={cerrar}/>;
     return<div><button className="bs" onClick={cerrar}>← Volver</button><div className="empty">Sin vista de detalle para este registro.</div></div>;
   }
+  // Saltar a la sección de un módulo (clic en su tarjeta KPI / fila del resumen)
+  const irAModulo=k=>{const el=document.getElementById("segmod-"+k);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});};
+  const irAModuloM=k=>{if(!exp[k])toggleExp(k);setTimeout(()=>irAModulo(k),80);};
+  const irAProblemas=()=>{const m1=mods.find(m=>m.conProblemas&&(m.problemas||[]).length);if(m1)irAModulo(m1.key);};
+
   // ── Filtros y chips de módulos (compartidos) ──
   const chipsMods=(cls)=>allMods.map(mk=><span key={mk} className={cls+(selMods.includes(mk)?" on":"")} onClick={()=>toggleMod(mk)}>{modNombre(mk)}{selMods.includes(mk)?" ✓":""}</span>);
   const selectSuc=<select value={fSuc} onChange={e=>setFSuc(e.target.value)}>{(!sucursalesUser||sucursalesUser.length>1)&&<option value="__todas">Todas {sucursalesUser?"(mías)":""}</option>}{sucAll.map(s=><option key={s} value={s}>{s}</option>)}</select>;
@@ -2226,12 +2234,12 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
       </div>
       {cargando.__all&&<div className="spin"/>}
       <div className="seg-kpis">
-        {mods.map(m=>{const p=segPct(m.resumen);return<div key={m.key} className="seg-kpi"><div className="seg-kl">{m.label}</div><div className="seg-kv" style={{color:m.cargar?"#bbb":pctCol(p)}}>{m.cargar?"…":p+"%"}</div><div className="seg-ks">{m.cargar?"cargando…":`${m.resumen.cumplido}/${m.resumen.total} cumplidos`}</div><div className="seg-kbar"><i style={{width:(m.cargar?0:p)+"%",background:pctCol(p)}}/></div></div>;})}
-        <div className="seg-kpi"><div className="seg-kl">Problemas</div><div className="seg-kv" style={{color:totProblemas?C.red:C.green}}>{totProblemas}</div><div className="seg-ks">sin contar Reparto</div><div className="seg-kbar"><i style={{width:(totProblemas?100:0)+"%",background:C.red}}/></div></div>
+        {mods.map(m=>{const p=segPct(m.resumen);return<div key={m.key} className="seg-kpi clk" title={"Ir a "+m.label} onClick={()=>irAModulo(m.key)}><div className="seg-kl">{m.label}</div><div className="seg-kv" style={{color:m.cargar?"#bbb":pctCol(p)}}>{m.cargar?"…":p+"%"}</div><div className="seg-ks">{m.cargar?"cargando…":`${m.resumen.cumplido}/${m.resumen.total} cumplidos`}</div><div className="seg-kbar"><i style={{width:(m.cargar?0:p)+"%",background:pctCol(p)}}/></div></div>;})}
+        <div className="seg-kpi clk" title="Ir al primer módulo con problemas" onClick={irAProblemas}><div className="seg-kl">Problemas</div><div className="seg-kv" style={{color:totProblemas?C.red:C.green}}>{totProblemas}</div><div className="seg-ks">sin contar Reparto</div><div className="seg-kbar"><i style={{width:(totProblemas?100:0)+"%",background:C.red}}/></div></div>
       </div>
       {selMods.length===0&&<div className="card"><div className="empty">Selecciona uno o más módulos.</div></div>}
       {mods.map(m=>(
-        <div key={m.key} className="seg-mod">
+        <div key={m.key} id={"segmod-"+m.key} className="seg-mod">
           <div className="seg-modh"><h2>{m.label}</h2><span className="seg-cad">{m.periodoLbl}</span>{!m.cargar&&<span className="seg-pct" style={{color:pctCol(segPct(m.resumen))}}>{segPct(m.resumen)}%</span>}</div>
           <div className="seg-modb">
             {m.cargar?<div className="spin"/>:<>
@@ -2278,12 +2286,12 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
       {/* Resumen por módulo */}
       <div className="card"><div className="ct">Resumen del período</div>
         {selMods.length===0&&<div className="empty">Selecciona uno o más módulos.</div>}
-        {mods.map(m=>{const r=m.resumen;return<div key={m.key} className="dr" style={{alignItems:"center"}}><span style={{maxWidth:"48%"}}>{m.label}</span><span style={{display:"flex",gap:6,alignItems:"center"}}>{m.cargar?<span style={{fontSize:11,color:"#aaa"}}>sin cargar</span>:<><b style={{color:segPct(r)>=90?C.green:segPct(r)>=60?C.amber:C.red}}>{segPct(r)}%</b><span className="bdg dok" style={{fontSize:10}}>{r.cumplido}</span><span className="bdg dpe" style={{fontSize:10}}>{r.pendiente}</span><span className="bdg drj" style={{fontSize:10}}>{r.vencido}</span></>}</span></div>;})}
+        {mods.map(m=>{const r=m.resumen;return<div key={m.key} className="dr" style={{alignItems:"center",cursor:"pointer"}} title={"Ir a "+m.label} onClick={()=>irAModuloM(m.key)}><span style={{maxWidth:"48%",color:C.blue,fontWeight:600}}>{m.label} ›</span><span style={{display:"flex",gap:6,alignItems:"center"}}>{m.cargar?<span style={{fontSize:11,color:"#aaa"}}>sin cargar</span>:<><b style={{color:segPct(r)>=90?C.green:segPct(r)>=60?C.amber:C.red}}>{segPct(r)}%</b><span className="bdg dok" style={{fontSize:10}}>{r.cumplido}</span><span className="bdg dpe" style={{fontSize:10}}>{r.pendiente}</span><span className="bdg drj" style={{fontSize:10}}>{r.vencido}</span></>}</span></div>;})}
         {totProblemas>0&&<div style={{marginTop:8,fontSize:12,color:C.red,fontWeight:600}}>⚠️ {totProblemas} problema(s) detectado(s) en el período.</div>}
       </div>
       {/* Secciones por módulo */}
       {mods.map(m=>(
-        <div key={m.key} className="card">
+        <div key={m.key} id={"segmod-"+m.key} className="card">
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}} onClick={()=>toggleExp(m.key)}>
             <div><div style={{fontSize:13,fontWeight:700,color:C.blue}}>{m.label}</div><div style={{fontSize:11,color:"#888"}}>{m.cargar?"Toca para cargar":(m.periodoLbl||"")}</div></div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>{!m.cargar&&<b style={{fontSize:13,color:segPct(m.resumen)>=90?C.green:segPct(m.resumen)>=60?C.amber:C.red}}>{segPct(m.resumen)}%</b>}<span style={{fontSize:16,color:"#aaa"}}>{exp[m.key]?"▾":"▸"}</span></div>
