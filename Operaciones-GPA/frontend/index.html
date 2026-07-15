@@ -1101,25 +1101,40 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const[lleno,setLleno]=useState(D.lleno||"Si");
   const[fotoBomba,setFotoBomba]=useState(D.fotoBomba||null);
   const[litros,setLitros]=useState(D.litros||"");const[precioLitro,setPrecioLitro]=useState(D.precioLitro||"");const[monto,setMonto]=useState(D.monto||"");
-  const[fotoTicket,setFotoTicket]=useState(D.fotoTicket||null);const[ubic,setUbic]=useState(D.ubic||null);
+  // Ubicación: NO se restaura del borrador (evita que se altere entre sesiones);
+  // el valor autoritativo se re-lee del dispositivo al enviar. Ver submit().
+  const[fotoTicket,setFotoTicket]=useState(D.fotoTicket||null);const[ubic,setUbic]=useState(null);
   const[fotoPersona,setFotoPersona]=useState(D.fotoPersona||null);const[obs,setObs]=useState(D.obs||"");const[sig,setSig]=useState(D.sig||null);
   const[step,setStep]=useState(D.step||1);const[busy,setBusy]=useState(false);const[geo,setGeo]=useState(false);
   const[teniaBorrador]=useState(!!(D.km||D.fotoAntes||D.litros||(D.step&&D.step>1)));
   const sigRef=useRef(null);const sigH=useSig(sigRef);
-  useEffect(()=>{try{localStorage.setItem(DKEY,JSON.stringify({veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,ubic,fotoPersona,obs,sig,step}));}catch{}},[veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,ubic,fotoPersona,obs,sig,step]);
+  // Inicio del llenado (para la métrica de duración; no se persiste ni se muestra).
+  const inicioRef=useRef(null);if(inicioRef.current===null)inicioRef.current=new Date().toISOString();
+  // `ubic` NO se persiste al borrador: la ubicación no puede quedar en un almacén editable.
+  useEffect(()=>{try{localStorage.setItem(DKEY,JSON.stringify({veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,fotoPersona,obs,sig,step}));}catch{}},[veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,fotoPersona,obs,sig,step]);
   const descartar=()=>{try{localStorage.removeItem(DKEY);}catch{}setVeh(availVeh[0]?String(availVeh[0].id):"");setKm("");setFotoAntes(null);setFotoDespues(null);setLleno("Si");setFotoBomba(null);setLitros("");setPrecioLitro("");setMonto("");setFotoTicket(null);setUbic(null);setFotoPersona(null);setObs("");setSig(null);setStep(1);showToast("Borrador descartado");};
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
   const lastKm=items.filter(s=>String(s.vehicleId)===String(veh)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.km??null;
   const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
-  const obtenerUbic=()=>{
-    if(!navigator.geolocation){showToast("Este dispositivo no tiene GPS");return;}
+  // Lectura CRUDA del dispositivo (no editable por el usuario): resuelve
+  // {lat,lng,accuracy,capturadoEn} o rechaza. El navegador exige permiso de GPS
+  // por seguridad; no hay forma de leer la ubicación sin él.
+  const leerGPS=()=>new Promise((resolve,reject)=>{
+    if(!navigator.geolocation)return reject(new Error("Este dispositivo no tiene GPS"));
+    navigator.geolocation.getCurrentPosition(
+      pos=>resolve({lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,capturadoEn:new Date().toISOString()}),
+      ()=>reject(new Error("Debes permitir el GPS para enviar el reporte")),
+      {enableHighAccuracy:true,timeout:15000,maximumAge:0});
+  });
+  const obtenerUbic=async()=>{
     setGeo(true);
-    navigator.geolocation.getCurrentPosition(async pos=>{
-      const lat=pos.coords.latitude,lng=pos.coords.longitude;let direccion="";
-      try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);const d=await r.json();direccion=d.display_name||"";}catch{}
-      setUbic({lat,lng,direccion});setGeo(false);
-    },()=>{showToast("No se pudo obtener la ubicación (permite el GPS)");setGeo(false);},{enableHighAccuracy:true,timeout:12000,maximumAge:0});
+    try{
+      const g=await leerGPS();let direccion="";
+      try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${g.lat}&lon=${g.lng}`);const d=await r.json();direccion=d.display_name||"";}catch{}
+      setUbic({...g,direccion});
+    }catch(e){showToast(e.message);}
+    setGeo(false);
   };
   useEffect(()=>{if(step===2&&!ubic&&!geo)obtenerUbic();},[step]);
   // Monto total = litros × precio/L (automático; no se captura a mano)
@@ -1128,8 +1143,25 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const can2=fotoBomba&&fotoPersona&&litros&&precioLitro&&monto&&fotoTicket;
   const submit=async()=>{
     if(!vehicle||busy||!sig||!fotoPersona)return;setBusy(true);
+    // Ubicación OBLIGATORIA e inmodificable: se re-lee del dispositivo en fresco
+    // en el momento del envío. Si el usuario no da permiso, no se puede enviar.
+    let fix;
+    try{fix=await leerGPS();}catch(e){showToast("⚠️ "+e.message);setBusy(false);return;}
+    let direccion="";
+    try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${fix.lat}&lon=${fix.lng}`);const d=await r.json();direccion=d.display_name||"";}catch{}
+    setUbic({...fix,direccion});
+    // Bloque de auditoría: lo ve Fleet Command, NO se muestra al operador.
+    const fin=new Date().toISOString();
+    const _auditoria={
+      inicioLlenado:inicioRef.current,
+      finLlenado:fin,
+      duracionSeg:Math.max(0,Math.round((new Date(fin)-new Date(inicioRef.current))/1000)),
+      geo:fix,                                    // lat,lng,accuracy(m),capturadoEn — lectura del dispositivo
+      tz:(Intl.DateTimeFormat().resolvedOptions().timeZone)||"",
+      plataforma:navigator.userAgent||""
+    };
     try{
-      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:ubic,userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente"};
+      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:{lat:fix.lat,lng:fix.lng,direccion},userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente",_auditoria};
       const subido=await api.subirEvidencias("combustible",datos);
       await api.crear("combustible",subido);
       try{localStorage.removeItem(DKEY);}catch{}

@@ -118,6 +118,19 @@ def _body(event) -> dict:
         raise ValueError("Body debe ser JSON válido")
 
 
+def _req_meta(event) -> dict:
+    """Metadatos de la petición sellados por el servidor (el usuario NO los puede
+    tocar): IP de origen, user-agent y hora de recepción. Sirven de contraste
+    independiente contra el GPS del dispositivo en el reporte de carga."""
+    from datetime import datetime, timezone
+    http = (event.get("requestContext", {}) or {}).get("http", {}) or {}
+    return {
+        "sourceIp":   http.get("sourceIp"),
+        "userAgent":  http.get("userAgent"),
+        "recibidoEn": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # ── Resolver claves de evidencia → URLs prefirmadas ──────────────
 def _resolver_urls(obj):
     if isinstance(obj, str):
@@ -153,7 +166,8 @@ def lambda_handler(event, context):
         # ── Combustible ──
         if route == "POST /combustible":
             return _crear(m.SOL, _body(event), cl,
-                          notif=(EMAIL_LOGIS, "Nueva solicitud de combustible"))
+                          notif=(EMAIL_LOGIS, "Nueva solicitud de combustible"),
+                          req_meta=_req_meta(event))
         if route == "GET /combustible":
             return _listar(m.SOL, cl)
         if route == "POST /combustible/{id}/estado":
@@ -218,12 +232,18 @@ def lambda_handler(event, context):
 
 
 # ── Operaciones de registro ──────────────────────────────────────
-def _crear(tipo, datos, cl, notif=None):
+def _crear(tipo, datos, cl, notif=None, req_meta=None):
     if cl["rol"] == "analista":
         return _err("El analista no captura registros", 403)
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
     sucursal = datos.get("sucursal") or cl["sucursal"] or "SIN_SUCURSAL"
+    # Reporte de carga: sella los metadatos del servidor bajo _auditoria.servidor.
+    # Se pone al final para que el cliente NO pueda sobrescribir el bloque servidor.
+    if tipo == m.SOL and datos.get("formato") == "reporte" and req_meta:
+        aud = dict(datos.get("_auditoria") or {})
+        aud["servidor"] = req_meta
+        datos = {**datos, "_auditoria": aud}
     # Análisis de foto puede llegar después; lo separamos del cuerpo principal
     res = crear_registro(tipo, datos, sucursal, cl["email"])
     if notif:
@@ -236,7 +256,15 @@ def _listar(tipo, cl):
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
     regs = listar_registros(tipo, cl["rol"], cl["sucursales"], cl["email"])
-    return _resp({"items": [_resolver_urls(r) for r in regs]})
+    # El bloque _auditoria es solo para el back office (y Fleet Command vía el
+    # puente, que lo lee del stream): el operador que capturó no lo recibe.
+    oculta_aud = cl["rol"] == "operador"
+    items = []
+    for r in regs:
+        if oculta_aud and isinstance(r, dict) and "_auditoria" in r:
+            r = {k: v for k, v in r.items() if k != "_auditoria"}
+        items.append(_resolver_urls(r))
+    return _resp({"items": items})
 
 
 def _estado(tipo, event, cl):

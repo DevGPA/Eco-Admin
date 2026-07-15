@@ -43,7 +43,25 @@
     "fotoTicket": "SOL/a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4.jpg",
     "fotoPersona": "SOL/a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5.jpg",
     "obs": "",
-    "status": "Pendiente"
+    "status": "Pendiente",
+    "_auditoria": {
+      "inicioLlenado": "2026-07-08T19:03:10+00:00",
+      "finLlenado": "2026-07-08T19:05:47+00:00",
+      "duracionSeg": 157,
+      "geo": {
+        "lat": 20.6597,
+        "lng": -103.3496,
+        "accuracy": 12.4,
+        "capturadoEn": "2026-07-08T19:05:45+00:00"
+      },
+      "tz": "America/Mexico_City",
+      "plataforma": "Mozilla/5.0 (Android)",
+      "servidor": {
+        "sourceIp": "189.203.11.42",
+        "userAgent": "Mozilla/5.0 (Android)",
+        "recibidoEn": "2026-07-08T19:05:48+00:00"
+      }
+    }
   },
   "evidencias": [
     {

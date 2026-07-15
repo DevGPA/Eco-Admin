@@ -125,6 +125,29 @@ producto, precio, tanque, subMarca, areaResponsable, ubicacion {lat,lng},
 mail, obs, status`, y las evidencias de 5 puntos:
 `fotoAntes, fotoDespues (odómetro), fotoBomba, fotoTicket, fotoPersona`.
 
+#### `answers._auditoria` — bloque de auditoría (solo reporte de carga)
+
+Metadatos anti-fraude que **NO se muestran al operador que capturó** (la app
+los oculta en el listado del rol operador y no los renderiza), pero **sí
+viajan a Fleet Command** en `answers`. La ubicación es del dispositivo, se
+re-lee en fresco al enviar (no proviene de ningún valor editable) y el envío
+se bloquea si el operador no concede el GPS: es **obligatoria e inmodificable**.
+
+| Campo | Origen | Descripción |
+|---|---|---|
+| `inicioLlenado` / `finLlenado` | cliente | ISO de apertura del formulario y de envío |
+| `duracionSeg` | cliente | segundos de llenado (fin − inicio) |
+| `geo` | dispositivo | `{lat, lng, accuracy (m), capturadoEn (ISO)}` — lectura del GPS al enviar |
+| `tz`, `plataforma` | cliente | zona horaria y user-agent |
+| `servidor` | **backend** | `{sourceIp, userAgent, recibidoEn}` sellado por el Lambda; el cliente NO lo puede alterar (se escribe al final). Contraste independiente contra `geo` para detectar GPS falseado |
+
+Nota técnica: el navegador exige permiso de geolocalización por diseño; no
+existe forma de leer GPS preciso sin él. El control se logra haciéndolo
+**obligatorio** (sin ubicación no hay envío) y **no editable** (nunca es un
+campo de texto ni se persiste en el borrador), más la IP de origen del
+servidor como señal sin permiso. Debe estar cubierto en el aviso de
+privacidad / política laboral del personal.
+
 ### `CL` (checklist de reparto) — `answers` contiene
 
 `km, fotoKm (clave S3), answers{ itemId → valor }, obs`

@@ -81,6 +81,24 @@ def _img_sol_reporte():
         "fotoPersona": {"S": "SOL/" + "a5" * 16 + ".jpg"},
         "obs": {"S": ""}, "status": {"S": "Pendiente"},
         "firma": {"S": "SOL/" + "a6" * 16 + ".png"},
+        # Bloque de auditoría: oculto al operador, viaja a Fleet Command.
+        # geo = lectura del dispositivo al enviar; servidor = sellado por el Lambda.
+        "_auditoria": {"M": {
+            "inicioLlenado": {"S": "2026-07-08T19:03:10+00:00"},
+            "finLlenado":    {"S": "2026-07-08T19:05:47+00:00"},
+            "duracionSeg":   {"N": "157"},
+            "geo": {"M": {
+                "lat": {"N": "20.6597"}, "lng": {"N": "-103.3496"},
+                "accuracy": {"N": "12.4"}, "capturadoEn": {"S": "2026-07-08T19:05:45+00:00"},
+            }},
+            "tz": {"S": "America/Mexico_City"},
+            "plataforma": {"S": "Mozilla/5.0 (Android)"},
+            "servidor": {"M": {
+                "sourceIp": {"S": "189.203.11.42"},
+                "userAgent": {"S": "Mozilla/5.0 (Android)"},
+                "recibidoEn": {"S": "2026-07-08T19:05:48+00:00"},
+            }},
+        }},
     }
 
 
@@ -190,6 +208,15 @@ class TestEvento(unittest.TestCase):
         campos = {e["campo"] for e in ev["evidencias"]}
         for c in ("fotoAntes", "fotoDespues", "fotoBomba", "fotoTicket", "fotoPersona"):
             self.assertIn(c, campos)
+        # bloque de auditoría fluye a Fleet Command en answers
+        aud = ev["answers"]["_auditoria"]
+        self.assertEqual(aud["duracionSeg"], 157)
+        self.assertEqual(aud["geo"]["accuracy"], 12.4)
+        self.assertEqual(aud["geo"]["lat"], 20.6597)
+        self.assertEqual(aud["servidor"]["sourceIp"], "189.203.11.42")
+        # las claves de auditoría/geo NO son evidencias S3 (no ensucian el copiado de fotos)
+        self.assertNotIn("_auditoria", campos)
+        self.assertFalse(any(e["campo"].startswith("_auditoria") for e in ev["evidencias"]))
 
     def test_evento_cl_semanal_con_evidencias_anidadas(self):
         item, _ = publisher.filtrar_record(_record("INSERT", _img_cl()))
