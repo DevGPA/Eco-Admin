@@ -30,12 +30,21 @@ def test_dispersion_excede_tarifa_r802(run_eval, make_cp):
     assert res.codigo_motor == "R-802"
 
 
-def test_dispersion_sin_tarifa_r801(run_eval, make_cp):
-    # ACT no tiene tarifa PALLET para "Yucatán" → R-801
+def test_dispersion_sin_tarifa_dentro_del_tope_r800(run_eval, make_cp):
+    # REGLA 2026-07-15 (120466326): sin tarifa de ruta pero DENTRO del tope
+    # autorizado ($33,000 + IVA) → auto-aprobada (antes R-801 revisión).
     cp = make_cp(codigo_sap="GS0231", destino_estado="Yucatán",
                  tipo_vehiculo="PALLET", numero_pallets=1)
     res = run_eval(cp=cp)
-    assert res.codigo_motor == "R-801"
+    assert res.codigo_motor == "R-800"
+
+
+def test_dispersion_excede_tope_global_r802(run_eval, make_cp):
+    # Por encima del tope de $33,000 MXN → revisión SIEMPRE (con o sin tarifa).
+    cp = make_cp(codigo_sap="GS0231", destino_estado="Yucatán",
+                 tipo_vehiculo="PALLET", numero_pallets=1, flete_mxn=34000.0)
+    res = run_eval(cp=cp)
+    assert res.codigo_motor == "R-802"
 
 
 def test_dispersion_fuera_de_gdl_r401d(run_eval, make_cp):
@@ -187,3 +196,13 @@ def test_sin_sello_destinatario_gpa_sigue_siendo_dispersion(run_eval, make_cp):
                  numero_pallets=1, flete_mxn=1800.0)
     res = run_eval(cp=cp)
     assert res.tipo_operacion == "DISPERSION_INTERNA"
+
+
+def test_gs0229_y_gs0244_exentos(run_eval, make_fv, make_cp):
+    # 120481847/120560842 (GS0229 comp ped) y 120488022 (GS0244 garantías):
+    # exentos de mínimos y % de flete, como GS0247/GS0248.
+    for sap in ("GS0229", "GS0244"):
+        fv = make_fv(partidas=[], subtotal=10.67)
+        cp = make_cp(codigo_sap=sap)
+        res = run_eval(fv=fv, cp=cp)
+        assert res.codigo_motor == "R-000", (sap, res.codigo_motor)

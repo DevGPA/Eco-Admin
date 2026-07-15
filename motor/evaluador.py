@@ -14,6 +14,7 @@ from .catalogos import (
     CARGO_ENVIO_POR_SAP, TIPO_CAMBIO_DEFAULT,
     SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER, SAP_COM_PED,
     SAP_REQUIERE_AUTORIZACION, SAP_DISPERSION_NO_AUT,
+    SAPS_EXENTOS_MONTO, MONTO_MAX_DISPERSION_MXN,
     SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
     evaluar_destino, categoria_partida, es_cargo_envio,
@@ -290,12 +291,28 @@ def _evaluar_dispersion(cp, tc_ref, criterios, _res):
     tarifa_ref = TARIFAS_DISPERSIONES.get(fletera, {}).get(vehiculo, {}).get(destino)
     flete_real = cp.subtotal_sin_impuestos  # MXN
 
-    if not tarifa_ref:
+    # Tope GLOBAL de dispersiones (regla GPA 2026-07-15, caso 120466326):
+    # máximo autorizado $33,000 MXN + IVA. Por encima → revisión SIEMPRE.
+    if flete_real > MONTO_MAX_DISPERSION_MXN:
         criterios.append(CriterioDetalle(
-            "C4 Tarifa", "WARN", f"{fletera}/{vehiculo}/{destino}",
-            "Ruta/vehículo no encontrado en tabla de tarifas 2026"
+            "C4 Tope", "WARN",
+            f"${flete_real:,.2f} > ${MONTO_MAX_DISPERSION_MXN:,.0f}",
+            "Excede el monto máximo autorizado de dispersión ($33,000 + IVA)"
         ))
-        res = _res("R-801")
+        res = _res("R-802")
+        res.tipo_operacion = "DISPERSION_INTERNA"
+        return res
+
+    if not tarifa_ref:
+        # Sin tarifa de ruta pero DENTRO del tope autorizado → auto-aprobada
+        # (la regla del tope es la autorización); sin tope aplicable → revisión.
+        criterios.append(CriterioDetalle(
+            "C4 Tarifa", "PASS",
+            f"${flete_real:,.2f} ≤ ${MONTO_MAX_DISPERSION_MXN:,.0f}",
+            f"Ruta {fletera}/{vehiculo}/{destino} sin tarifa 2026; dentro del "
+            "tope autorizado de dispersión ($33,000 + IVA)"
+        ))
+        res = _res("R-800")
         res.tipo_operacion = "DISPERSION_INTERNA"
         return res
 
@@ -391,12 +408,10 @@ def _evaluar_venta_cliente(sol, tc_ref, criterios, _res):
     exencion = None
     if any(fv.es_muestra for fv in fvs):
         exencion = "Envío de MUESTRAS"
-    elif cp.codigo_sap == SAP_COM_PED:
-        exencion = "GS0247 · com. ped. pagado (sello)"
-    elif cp.codigo_sap == SAP_CARGO_ENVIO:
-        # GS0248: el flete lo paga el CLIENTE (regla GPA 2026-07-14, caso
-        # 119696433) → el mínimo de venta no aplica.
-        exencion = "GS0248 · cargo por envío al cliente (sello)"
+    else:
+        # Sellos exentos (GS0247 com.ped, GS0248 cargo a cliente, GS0229 BO
+        # pagado, GS0244 garantías): catálogo SAPS_EXENTOS_MONTO.
+        exencion = SAPS_EXENTOS_MONTO.get(cp.codigo_sap)
     if exencion:
         criterios.append(CriterioDetalle(
             "C1 Monto", "INFO", "EXENTO",

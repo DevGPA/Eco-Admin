@@ -89,6 +89,21 @@ SUCURSAL_ORIGEN_DISPERSION = "GDL"
 # 2026-07-13, caso real 119540819: venta $5.74 USD, flete $8.31).
 SAP_COM_PED = "GS0247"
 
+# Sellos EXENTOS de mínimos y % de flete (el sello es la autorización y el
+# monto de la venta es simbólico o lo absorbe el cliente). Reglas GPA
+# dictadas caso por caso en el tablero (2026-07-13/14/15):
+SAPS_EXENTOS_MONTO = {
+    "GS0247": "GS0247 · com. ped. pagado (sello)",
+    "GS0248": "GS0248 · cargo por envío al cliente (sello)",       # 119696433
+    "GS0229": "GS0229 · complemento de pedido / BO pagado (sello)", # 120481847, 120560842
+    "GS0244": "GS0244 · garantías y devoluciones (sello)",          # 120488022
+}
+
+# Tope de dispersiones (regla GPA 2026-07-15, caso 120466326): el monto
+# máximo autorizado de un flete de dispersión es $33,000 MXN + IVA. Dentro
+# del tope, una ruta SIN tarifa se auto-aprueba; por encima, siempre revisión.
+MONTO_MAX_DISPERSION_MXN = float(os.environ.get("MONTO_MAX_DISPERSION_MXN", "33000"))
+
 # GS0245 — requiere AUTORIZACIÓN humana siempre (regla GPA 2026-07-13):
 # nunca auto-aprobar; el caso va a revisión (R-810).
 SAP_REQUIERE_AUTORIZACION = "GS0245"

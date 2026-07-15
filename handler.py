@@ -33,7 +33,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.6.1"   # Reglas del reporte: GS0248 exento, sello venta manda sobre GPA→GPA, Solicitud de Traslado = dispersión
+VERSION = "2.6.2"   # Reglas: GS0229/GS0244 exentos; tope dispersión $33,000+IVA (sin tarifa bajo tope → auto)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
