@@ -1211,6 +1211,11 @@ def test_origen_destino_por_codigo_postal():
     _, _, _, de2 = _origen_destino_por_cp([
         {"text": "CP: 29000, TEL: 1", "top": 0.24, "left": 0.51}])
     assert de2 is None
+    # Origen que NO es plaza GPA: se rellena al menos el ESTADO (León → Gto),
+    # para que el revisor vea de dónde salió en vez de un origen vacío.
+    oc3, oe3, _, _ = _origen_destino_por_cp([
+        {"text": "CP: 37000, TEL: 4777885200", "top": 0.24, "left": 0.06}])
+    assert oc3 is None and oe3 == "Guanajuato"
 
 
 def test_estado_por_cp_rangos():

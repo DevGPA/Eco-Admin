@@ -1356,6 +1356,11 @@ def _origen_destino_por_cp(lineas):
         suc = sucursal_por_cp(izq[0])
         if suc:
             oc, oe = _PLAZA_DE_SUCURSAL[suc]
+        else:
+            # No es plaza GPA: aún así el ESTADO de origen es dato útil (la
+            # tarjeta sale con "León/Guanajuato" en vez de vacío y el revisor
+            # ve de dónde salió realmente).
+            oe = estado_por_cp(izq[0])
     if der:
         est = estado_por_cp(der[0])
         # Chiapas exige ciudad autorizada: sin ciudad legible mejor dejarlo
