@@ -80,3 +80,27 @@ def from_dynamo(value: Any) -> Any:
     if isinstance(value, list):
         return [from_dynamo(v) for v in value]
     return value
+
+
+# ── Regla de kilometraje (pura, sin dependencias) ────────────────
+# Tope de avance permitido desde el último km de la unidad, por combustible.
+KM_MAX_DELTA_ESPECIAL = 100      # Gas LP / Eléctrico (montacargas, etc.)
+KM_MAX_DELTA_DEFAULT  = 1000     # resto
+
+
+def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | None:
+    """Valida el km de una nueva captura contra el último de la unidad.
+    Devuelve un mensaje de error, o None si es válido.
+    `km_ultimo` None = primer registro de la unidad → se permite cualquier km."""
+    if km_nuevo is None or km_ultimo is None:
+        return None
+    try:
+        nuevo, ult = float(km_nuevo), float(km_ultimo)
+    except (TypeError, ValueError):
+        return "Kilometraje inválido"
+    max_delta = KM_MAX_DELTA_ESPECIAL if combustible in ("Gas LP", "Electrico") else KM_MAX_DELTA_DEFAULT
+    if nuevo < ult:
+        return f"El kilometraje ({nuevo:g}) no puede ser menor al último de la unidad ({ult:g})."
+    if nuevo - ult > max_delta:
+        return f"El kilometraje ({nuevo:g}) excede {max_delta:,} km del último de la unidad ({ult:g}). Verifica la lectura."
+    return None

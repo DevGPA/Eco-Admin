@@ -29,7 +29,8 @@ from db.escritura import (crear_registro, cambiar_estado,
                           actualizar_precio_por_combustible,
                           guardar_modulo, guardar_plantilla,
                           guardar_responsable_alerta)
-from db.queries import listar_registros, get_registro, cargar_catalogos, get_plantilla
+from db.queries import (listar_registros, get_registro, cargar_catalogos,
+                        get_plantilla, get_vehiculo, ultimo_km_por_vehiculo)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -232,11 +233,37 @@ def lambda_handler(event, context):
 
 
 # ── Operaciones de registro ──────────────────────────────────────
+def _validar_km(tipo, datos, cl):
+    """Bloqueo AUTORITATIVO de kilometraje para combustible (SOL): compara
+    contra el último km REAL de la unidad (todo el historial, no solo lo del
+    operador). Un admin puede saltarlo con datos['forzar']=True (corrección).
+    Devuelve mensaje de error o None."""
+    if tipo != m.SOL:
+        return None
+    if datos.get("forzar") and cl["rol"] == "admin":
+        return None                       # override explícito de admin
+    vid = str(datos.get("vehicleId") or "")
+    if not vid or datos.get("km") in (None, ""):
+        return None
+    ult = ultimo_km_por_vehiculo(m.SOL).get(vid)
+    if not ult:
+        return None                       # primer registro de la unidad
+    comb = datos.get("combustible") or (get_vehiculo(vid) or {}).get("combustible")
+    return m.evaluar_km(datos.get("km"), ult["km"], comb)
+
+
 def _crear(tipo, datos, cl, notif=None, req_meta=None):
     if cl["rol"] == "analista":
         return _err("El analista no captura registros", 403)
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    err_km = _validar_km(tipo, datos, cl)
+    if err_km:
+        return _err(err_km, 422)
+    # Si un admin forzó la captura fuera de rango, se deja rastro y no se
+    # persiste la bandera cruda.
+    if datos.pop("forzar", None) and cl["rol"] == "admin":
+        datos["kmForzadoPor"] = cl["email"]
     sucursal = datos.get("sucursal") or cl["sucursal"] or "SIN_SUCURSAL"
     # Reporte de carga: sella los metadatos del servidor bajo _auditoria.servidor.
     # Se pone al final para que el cliente NO pueda sobrescribir el bloque servidor.

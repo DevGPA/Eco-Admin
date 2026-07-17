@@ -1007,6 +1007,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const[km,setKm]=useState(D.km||"");const[tank,setTank]=useState(D.tank??0.25);const[obs,setObs]=useState(D.obs||"");
   // Evidencia: una o más fotos (borradores viejos con una sola 'photo' se migran solos)
   const[fotos,setFotos]=useState(D.fotos||(D.photo?[D.photo]:[]));const[sig,setSig]=useState(D.sig||null);const[step,setStep]=useState(D.step||1);const[busy,setBusy]=useState(false);
+  const[forzarKm,setForzarKm]=useState(false);
   const[teniaBorrador]=useState(!!(D.km||(D.fotos&&D.fotos.length)||D.photo||D.obs||(D.step&&D.step>1)));
   useEffect(()=>{try{localStorage.setItem(DKEY,JSON.stringify({veh,km,tank,obs,fotos,sig,step}));}catch{}},[veh,km,tank,obs,fotos,sig,step]);
   const descartarBorrador=()=>{try{localStorage.removeItem(DKEY);}catch{}setVeh(availVeh[0]?String(availVeh[0].id):"");setKm("");setTank(0.25);setObs("");setFotos([]);setSig(null);setStep(1);showToast("Borrador descartado");};
@@ -1014,15 +1015,18 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
   const user=solicitante;
   const need=Math.max(0,1-tank);const litros=vehicle?Math.round(vehicle.tanque*need):0;const monto=vehicle?Math.round(litros*vehicle.precio):0;
-  const lastKm=items.filter(s=>String(s.vehicleId)===String(veh)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.km??null;
+  // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
+  const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
   // Montacargas (Gas LP/Eléctrico): máx 100 km entre cargas; vehículos normales: 1000
   const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
+  // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
+  const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
   const submit=async()=>{
     if(!vehicle||!user||busy)return;
     setBusy(true);
     try{
-      const datos={vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,userId:user.id,responsable:user.nombre,mail:user.mail,km:kmN,tankBefore:tank,tankAfter:1,necesidad:need,litros,monto,obs,fotos,photo:fotos[0]||null,firma:sig,status:"Pendiente"};
+      const datos={vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,userId:user.id,responsable:user.nombre,mail:user.mail,km:kmN,tankBefore:tank,tankAfter:1,necesidad:need,litros,monto,obs,fotos,photo:fotos[0]||null,firma:sig,status:"Pendiente",...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("combustible",datos);
       await api.crear("combustible",subido);
       try{localStorage.removeItem(DKEY);}catch{}
@@ -1050,6 +1054,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
           <input type="number" placeholder="Ej. 91127" value={km} onChange={e=>setKm(e.target.value)}/>
           {lastKm!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastKm.toLocaleString()} km</div>}
           {kmErr&&<div className="eb">{kmErr}</div>}
+          {kmErr&&puedeForzar&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,marginTop:6,color:C.red}}><input type="checkbox" checked={forzarKm} onChange={e=>setForzarKm(e.target.checked)} style={{width:"auto"}}/>Forzar captura fuera de rango (corrección de admin)</label>}
         </div>
         <div className="card">
           <div className="ct">Nivel de Tanque</div>
@@ -1059,7 +1064,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         </div>
         <label>Observaciones</label>
         <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Notas adicionales..."/>
-        <button className="bp" disabled={!veh||!km||!!kmErr} onClick={()=>setStep(2)}>Siguiente →</button>
+        <button className="bp" disabled={!veh||!km||!!kmBloq} onClick={()=>setStep(2)}>Siguiente →</button>
       </>}
       {step===2&&<>
         <div className="card">
@@ -1106,6 +1111,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const[fotoTicket,setFotoTicket]=useState(D.fotoTicket||null);const[ubic,setUbic]=useState(null);
   const[fotoPersona,setFotoPersona]=useState(D.fotoPersona||null);const[obs,setObs]=useState(D.obs||"");const[sig,setSig]=useState(D.sig||null);
   const[step,setStep]=useState(D.step||1);const[busy,setBusy]=useState(false);const[geo,setGeo]=useState(false);
+  const[forzarKm,setForzarKm]=useState(false);
   const[teniaBorrador]=useState(!!(D.km||D.fotoAntes||D.litros||(D.step&&D.step>1)));
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   // Inicio del llenado (para la métrica de duración; no se persiste ni se muestra).
@@ -1114,9 +1120,12 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   useEffect(()=>{try{localStorage.setItem(DKEY,JSON.stringify({veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,fotoPersona,obs,sig,step}));}catch{}},[veh,km,fotoAntes,fotoDespues,lleno,fotoBomba,litros,precioLitro,monto,fotoTicket,fotoPersona,obs,sig,step]);
   const descartar=()=>{try{localStorage.removeItem(DKEY);}catch{}setVeh(availVeh[0]?String(availVeh[0].id):"");setKm("");setFotoAntes(null);setFotoDespues(null);setLleno("Si");setFotoBomba(null);setLitros("");setPrecioLitro("");setMonto("");setFotoTicket(null);setUbic(null);setFotoPersona(null);setObs("");setSig(null);setStep(1);showToast("Borrador descartado");};
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
-  const lastKm=items.filter(s=>String(s.vehicleId)===String(veh)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.km??null;
+  // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
+  const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
   const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
+  // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
+  const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
   // Lectura CRUDA del dispositivo (no editable por el usuario): resuelve
   // {lat,lng,accuracy,capturadoEn} o rechaza. El navegador exige permiso de GPS
   // por seguridad; no hay forma de leer la ubicación sin él.
@@ -1139,7 +1148,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   useEffect(()=>{if(step===2&&!ubic&&!geo)obtenerUbic();},[step]);
   // Monto total = litros × precio/L (automático; no se captura a mano)
   useEffect(()=>{const mm=(parseFloat(litros)||0)*(parseFloat(precioLitro)||0);setMonto(mm?mm.toFixed(2):"");},[litros,precioLitro]);
-  const can1=veh&&km&&!kmErr&&fotoAntes&&fotoDespues;
+  const can1=veh&&km&&!kmBloq&&fotoAntes&&fotoDespues;
   const can2=fotoBomba&&fotoPersona&&litros&&precioLitro&&monto&&fotoTicket;
   const submit=async()=>{
     if(!vehicle||busy||!sig||!fotoPersona)return;setBusy(true);
@@ -1161,7 +1170,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
       plataforma:navigator.userAgent||""
     };
     try{
-      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:{lat:fix.lat,lng:fix.lng,direccion},userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente",_auditoria};
+      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:{lat:fix.lat,lng:fix.lng,direccion},userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente",_auditoria,...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("combustible",datos);
       await api.crear("combustible",subido);
       try{localStorage.removeItem(DKEY);}catch{}
@@ -1182,6 +1191,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
           <label>Kilometraje al cargar combustible</label><input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="Ej. 14806"/>
           {lastKm!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastKm.toLocaleString()} km</div>}
           {kmErr&&<div className="eb">{kmErr}</div>}
+          {kmErr&&puedeForzar&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,marginTop:6,color:C.red}}><input type="checkbox" checked={forzarKm} onChange={e=>setForzarKm(e.target.checked)} style={{width:"auto"}}/>Forzar captura fuera de rango (corrección de admin)</label>}
           <FotoCampo val={fotoAntes} set={setFotoAntes} label="Foto de km y medidor ANTES de cargar (ambos en la misma foto)"/>
           <FotoCampo val={fotoDespues} set={setFotoDespues} label="Foto del medidor al FINALIZAR la carga"/>
           <label>¿Se llenó el tanque?</label>

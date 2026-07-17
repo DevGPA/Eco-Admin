@@ -73,6 +73,37 @@ def get_registro(tipo: str, rid: str) -> dict | None:
     return _limpiar(m.from_dynamo(item)) if item else None
 
 
+def get_vehiculo(vid) -> dict | None:
+    resp = _t().get_item(Key={"PK": m.PK_VEHICLE, "SK": m.sk_vehicle(vid)})
+    it = resp.get("Item")
+    return _limpiar(m.from_dynamo(it)) if it else None
+
+
+def ultimo_km_por_vehiculo(tipo: str) -> dict:
+    """Último km (por fecha) de cada vehículo para un tipo de registro.
+    Recorre el índice por tipo en orden descendente por fecha y se queda con
+    el primero de cada vehículo. → {vehicleId(str): {"km": float, "fecha": str}}.
+    Autoritativo: NO depende del rol ni de quién capturó (a diferencia de
+    listar_registros, que filtra por cuenta para el operador)."""
+    t = _t()
+    out: dict = {}
+    kwargs = dict(IndexName="tipo-fecha-idx",
+                  KeyConditionExpression=Key("GSI1PK").eq(tipo),
+                  ScanIndexForward=False,               # desc por fecha
+                  ProjectionExpression="vehicleId, km, fecha")
+    while True:
+        resp = t.query(**kwargs)
+        for it in resp.get("Items", []):
+            vid = str(it.get("vehicleId") or "")
+            if vid and vid not in out and it.get("km") is not None:
+                d = m.from_dynamo(it)
+                out[vid] = {"km": float(d["km"]), "fecha": d.get("fecha")}
+        if "LastEvaluatedKey" not in resp:
+            break
+        kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+    return out
+
+
 def _limpiar(item: dict) -> dict:
     """Quita las claves internas de Dynamo antes de mandar al cliente."""
     for k in ("PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK", "GSI3SK"):
@@ -94,6 +125,15 @@ def cargar_catalogos() -> dict:
         for it in lst:
             _limpiar(it)
     cfg = _limpiar(m.from_dynamo(cfg))
+    # Último km REAL por unidad (combustible) para que la validación del
+    # formulario compare contra el historial completo, no contra lo que ve el
+    # operador (que solo tiene sus propias cargas). Ver evaluar_km / _validar_km.
+    ult_km = ultimo_km_por_vehiculo(m.SOL)
+    for v in veh:
+        u = ult_km.get(str(v.get("id")))
+        # Campo DERIVADO (no se persiste): siempre refleja el cálculo actual.
+        v["ultimoKm"] = u["km"] if u else None
+        v["ultimoKmFecha"] = u["fecha"] if u else None
     return {
         "vehicles":     sorted(veh, key=lambda v: str(v.get("economico", ""))),
         "users":        sorted(usr, key=lambda u: str(u.get("nombre", ""))),
