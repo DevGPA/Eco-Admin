@@ -652,15 +652,22 @@ def test_emparejar_unico_cp_fv_sin_comentario():
     assert res["fvsSinCP"] == []
 
 
-def test_emparejar_varios_cp_sin_comentario_no_hace_fallback():
-    # Con 2 CP + 2 FV sin comentario NO se adivina el emparejamiento (evita errores)
+def test_emparejar_varios_cp_sin_refs_agrega_en_un_caso():
+    # REGLA GPA 2026-07-15 (119877129-119874733, 119697309-119700106): un PDF
+    # "paquete" con VARIOS CPs + facturas SIN referencias cruzadas se evalúa
+    # como UN caso agregado: flete TOTAL contra venta TOTAL (antes cada CP
+    # moría en SIN_FV_VINCULADA → R-093 falso).
     cp1 = {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "A", "subtotal": 100, "moneda": "MXN"}
     cp2 = {"rfcEmisor": HORMIK, "rfcReceptor": RFC_GPA, "folio": "B", "subtotal": 200, "moneda": "MXN"}
     fv1 = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "F1", "subtotal": 10, "moneda": "MXN"}
     fv2 = {"rfcEmisor": RFC_GPA, "rfcReceptor": CLIENTE, "folio": "F2", "subtotal": 20, "moneda": "MXN"}
-    res = emparejar_casos([cp1, fv1, cp2, fv2])
-    assert all(c["status"] == "ERROR" for c in res["casos"])
-    assert res["casos"][0]["error"] == "SIN_FV_VINCULADA"
+    res = emparejar_casos([cp1, fv1, cp2, fv2], "PAQUETE-X")
+    assert len(res["casos"]) == 1
+    caso = res["casos"][0]
+    assert caso["status"] == "OK"
+    assert caso["fleteSinIvaMXN"] == 300          # suma de las CPs
+    assert caso["montoVentaFV"] == 30             # suma de las FVs
+    assert caso["folioCP"] == "PAQUETE-X"
 
 
 def test_caso_usd_sin_tipo_cambio_es_error():
@@ -1184,3 +1191,35 @@ def test_desglose_viaja_al_caso_y_solicitud():
     assert caso["desglose"][0]["guia"] == "48980JRZE38QLZEJ"
     sol = caso_a_solicitud(caso)
     assert sol["desgloseConsolidado"][0]["total"] == 500.0
+
+
+def test_origen_destino_por_codigo_postal():
+    # RESPALDO por CP (regla GPA 2026-07-16): el CP del destinatario (columna
+    # derecha) da el estado; el del remitente, la sucursal de origen. Se
+    # ignoran el Lugar de Expedición y la fila del receptor (REG:).
+    from s3.ocr_extractor import _origen_destino_por_cp
+    lineas = [
+        {"text": "LUGAR DE EXPEDICION 44890", "top": 0.04, "left": 0.80},
+        {"text": "CP: 44190,   TEL: 3310573231", "top": 0.24, "left": 0.06},
+        {"text": "CP: 55800,   TEL: 5949562931", "top": 0.24, "left": 0.51},
+        {"text": "GPA8402219Y1, GENERAL DE PRODUCTOS (REG: 601, CP: 44930)", "top": 0.29, "left": 0.10},
+    ]
+    oc, oe, dc, de = _origen_destino_por_cp(lineas)
+    assert (oc, oe) == ("Guadalajara", "Jalisco")      # 44190 → GDL
+    assert de == "Edo. México"                          # 55800 (Teotihuacán)
+    # Chiapas sin ciudad NO se rellena (exige ciudad autorizada).
+    _, _, _, de2 = _origen_destino_por_cp([
+        {"text": "CP: 29000, TEL: 1", "top": 0.24, "left": 0.51}])
+    assert de2 is None
+
+
+def test_estado_por_cp_rangos():
+    from motor.catalogos import estado_por_cp, sucursal_por_cp
+    assert estado_por_cp("77500") == "Quintana Roo"
+    assert estado_por_cp("63000") == "Nayarit"
+    assert estado_por_cp("09040") == "CDMX"
+    assert estado_por_cp("48300") == "Jalisco"
+    assert estado_por_cp("1234") is None
+    assert sucursal_por_cp("48300") == "PVR"            # Puerto Vallarta ≠ GDL
+    assert sucursal_por_cp("44190") == "GDL"
+    assert sucursal_por_cp("67130") == "MTY"

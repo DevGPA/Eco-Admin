@@ -123,6 +123,62 @@ RECEPTORES_INTERNOS_GPA = {
     if r.strip()
 }
 
+# ── Código postal → estado (primeros 2 dígitos, tabla SEPOMEX) ──
+# El CP impreso en los bloques REMITENTE/DESTINATARIO es la señal más robusta
+# del documento (numérico, sobrevive al OCR) y determina el ESTADO sin
+# ambigüedad. Se usa como RESPALDO cuando el texto no da origen/destino.
+_CP_ESTADO_RANGOS = [
+    ((1, 16), "CDMX"), ((20, 20), "Aguascalientes"), ((21, 22), "BCN"),
+    ((23, 23), "BCS"), ((24, 24), "Campeche"), ((25, 27), "Coahuila"),
+    ((28, 28), "Colima"), ((29, 30), "Chiapas"), ((31, 33), "Chihuahua"),
+    ((34, 35), "Durango"), ((36, 38), "Guanajuato"), ((39, 41), "Guerrero"),
+    ((42, 43), "Hidalgo"), ((44, 49), "Jalisco"), ((50, 57), "Edo. México"),
+    ((58, 61), "Michoacán"), ((62, 62), "Morelos"), ((63, 63), "Nayarit"),
+    ((64, 67), "Nuevo León"), ((68, 71), "Oaxaca"), ((72, 75), "Puebla"),
+    ((76, 76), "Querétaro"), ((77, 77), "Quintana Roo"),
+    ((78, 79), "San Luis Potosí"), ((80, 82), "Sinaloa"), ((83, 85), "Sonora"),
+    ((86, 86), "Tabasco"), ((87, 89), "Tamaulipas"), ((90, 90), "Tlaxcala"),
+    ((91, 96), "Veracruz"), ((97, 97), "Yucatán"), ((98, 99), "Zacatecas"),
+]
+
+
+def estado_por_cp(cp: str) -> Optional[str]:
+    """Estado (nombre canónico del catálogo) desde un código postal de 5 dígitos."""
+    s = re.sub(r"\D", "", str(cp or ""))
+    if len(s) != 5:
+        return None
+    pref = int(s[:2])
+    for (lo, hi), estado in _CP_ESTADO_RANGOS:
+        if lo <= pref <= hi:
+            return estado
+    return None
+
+
+def sucursal_por_cp(cp: str) -> str:
+    """Sucursal GPA de ORIGEN desde el código postal del remitente. Primero el
+    mapeo exacto (CPs de las bodegas); luego por zona (prefijo): PVR se separa
+    de GDL por el prefijo 48 (Puerto Vallarta)."""
+    s = re.sub(r"\D", "", str(cp or ""))
+    if len(s) != 5:
+        return ""
+    if s in MAPEO_CP_SUCURSAL:
+        return MAPEO_CP_SUCURSAL[s]
+    pref = int(s[:2])
+    if 1 <= pref <= 16:
+        return "CDMX"
+    if pref == 48:
+        return "PVR"
+    if pref in (44, 45, 46, 47, 49):
+        return "GDL"
+    if 64 <= pref <= 67:
+        return "MTY"
+    if pref == 77:
+        return "CUN" if s[:3] in ("775", "774", "776", "777") else ""
+    if pref == 23:
+        return "SJD"
+    return ""
+
+
 # Mapeo código postal SAP → sucursal
 MAPEO_CP_SUCURSAL = {
     "44930": "GDL", "44190": "GDL",

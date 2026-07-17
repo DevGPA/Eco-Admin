@@ -27,7 +27,8 @@ import boto3
 
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
                              fletera_por_nombre, TIPO_CAMBIO_DEFAULT,
-                             normalizar_destino, DESTINOS_CATALOGO, SAPS_DISPERSION)
+                             normalizar_destino, DESTINOS_CATALOGO, SAPS_DISPERSION,
+                             estado_por_cp, sucursal_por_cp)
 
 logger = logging.getLogger(__name__)
 
@@ -989,9 +990,60 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
     facturas = _consolidar_fvs(fvs)
 
     # Dispersión interna: si CUALQUIER página del PDF es la Pre Guía Almacén
-    # Origen, o el CP tiene a GPA como DESTINATARIO (GPA→GPA), el caso no lleva
-    # factura de venta — no debe morir en SIN_FV_VINCULADA (caso 119338784).
+    # Origen / Solicitud de Traslado, o el CP tiene a GPA como DESTINATARIO
+    # (GPA→GPA), el caso no lleva factura de venta — no debe morir en
+    # SIN_FV_VINCULADA (caso 119338784).
     hay_preguia = any(p.get("esPreguia") for p in paginas)
+    preguia_pags = [p for p in paginas if p.get("esPreguia")]
+
+    def _origen_desde_preguia(caso):
+        # La Solicitud de Traslado / Pre Guía trae el origen real cuando el CP
+        # no lo dice (JC757545/757471: el CP solo trae el domicilio de la
+        # fletera en León; el origen GDL está en la hoja de traslado).
+        if caso.get("status") != "OK" or caso.get("origenSucursal"):
+            return
+        for pgx in preguia_pags:
+            oc, oe = pgx.get("origenCiudad"), pgx.get("origenEstado")
+            suc = sucursal_de_origen(oc, oe)
+            if not suc and pgx.get("sucursalSello"):
+                s = str(pgx["sucursalSello"]).upper().strip()
+                if s in _SUCURSAL_SELLO:
+                    oc, oe = _SUCURSAL_SELLO[s]
+                    suc = sucursal_de_origen(oc, oe)
+            if suc:
+                caso["origenCiudad"], caso["origenEstado"] = oc, oe
+                caso["origenSucursal"] = suc
+                return
+
+    # PDFs "paquete": VARIOS CPs + facturas SIN referencias cruzadas (regla GPA
+    # 2026-07-15, casos 119877129-119874733 y 119697309-119700106: "sumar todas
+    # las CPs y sumar todas las FVs"). Sin refs no hay forma de repartir 1-a-1,
+    # y partirlo daba SIN_FV_VINCULADA por CP: el paquete se evalúa como UN
+    # caso agregado — flete TOTAL contra venta TOTAL (el %flete decide).
+    if len(cps) > 1 and facturas:
+        con_ref = any(_fv_coincide(fv.get("folio"), _folios_referenciados(cp.get("comentarios")))
+                      for cp in cps for fv in facturas)
+        if not con_ref:
+            agregado = dict(cps[0])
+            agregado["subtotal"] = sum(_num(c.get("subtotal")) for c in cps)
+            agregado["folio"] = folio_archivo or agregado.get("folio")
+            for c in cps[1:]:
+                for k, v in c.items():
+                    if agregado.get(k) in (None, "", []) and v not in (None, "", []):
+                        agregado[k] = v
+            caso = _construir_caso(
+                agregado, list(facturas), folio_archivo,
+                es_dispersion=(hay_preguia
+                               or any(c.get("destinatarioGPA") for c in cps)
+                               or any((c.get("codigoSAP") or "") in SAPS_DISPERSION for c in cps)))
+            _origen_desde_preguia(caso)
+            if desglose and caso.get("status") == "OK":
+                caso["desglose"] = desglose
+            logger.info("%s: paquete de %d CPs + %d facturas sin refs → 1 caso agregado",
+                        folio_archivo or "PDF", len(cps), len(facturas))
+            return {"casos": [caso], "totalCP": len(cps), "totalFV": len(fvs),
+                    "totalFacturas": len(facturas), "fvsSinCP": [],
+                    "paginasAjenas": len(ajenas), "folioArchivo": folio_archivo}
 
     casos, usadas = [], set()
     for cp in cps:
@@ -1012,6 +1064,7 @@ def emparejar_casos(paginas: list[dict], folio_archivo: str = "") -> dict:
         caso = _construir_caso(cp, match, folio_archivo,
                                es_dispersion=(hay_preguia or bool(cp.get("destinatarioGPA"))
                                               or (cp.get("codigoSAP") or "") in SAPS_DISPERSION))
+        _origen_desde_preguia(caso)
         # Consolidados: anexar la tabla de desglose (guía/ciudad/total) al caso
         # para que el revisor la vea en el detalle del monitor.
         if desglose and caso.get("status") == "OK":
@@ -1181,12 +1234,21 @@ def _tc_moneda(lineas):
             (mon.group(1) if mon else None))
 
 
+# Prefijos de CALLE: "AV. VERACRUZ" o "PROL. HIDALGO" son direcciones, no
+# plazas — tomarlas como ciudad producía orígenes/destinos basura (120472995,
+# 120493319: origen "Av."/"Prol.").
+_ES_CALLE = re.compile(r"^(AV|AVE|AVENIDA|CALLE|CALZ|CALZADA|PROL|PROLONGACION|"
+                       r"BLVD|BOULEVARD|CARR|CARRETERA|KM|PERIF|PERIFERICO)\b[. ]?", re.I)
+
+
 def _ciudad_estado(txt):
     """'VALLADOLID, YUC.' → ('Valladolid','Yucatán'). Acepta abreviaturas
     ('JAL.', 'Q.R.') y nombres COMPLETOS tras la coma ('TOLUCA, EDO. DE
     MEXICO', 'MERIDA, YUCATAN'); tolera el sufijo-país ', MEX' de las filas
     de domicilio. None si no es ciudad,estado."""
     raw = txt.strip().rstrip(",")
+    if _ES_CALLE.match(raw):
+        return None
     t = re.sub(r",?\s*(MEX|MEXICO|MÉXICO)\.?$", "", raw, flags=re.I).strip().rstrip(",")
     # 1) Abreviatura corta tras la coma
     m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]+?),\s*([A-ZÑ][A-ZÑ. ]{1,5}?)\.?$", t)
@@ -1209,6 +1271,13 @@ def _ciudad_estado(txt):
             if (canon in DESTINOS_CATALOGO or canon.upper() in ("CHIAPAS", "OAXACA")) \
                     and re.match(r"^[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]*$", ciudad_p.strip()):
                 return (" ".join(ciudad_p.split()).title(), canon)
+    # 3) "CIUDAD, MEX" sin OTRO estado: aquí MEX no es el sufijo-país sino el
+    # ESTADO DE MÉXICO (120540032: "TEOTIHUACAN DE ARISTA, MEX" → destino
+    # vacío → R-301 falso). Solo aplica si al recortar ", MEX" no quedó coma
+    # (o sea, MEX era el único token de estado).
+    m = re.match(r"([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ .]+?),\s*MEX\.?$", raw)
+    if m and "," not in t:
+        return (" ".join(m.group(1).split()).title(), "Edo. México")
     return None
 
 
@@ -1258,16 +1327,59 @@ def _origen_destino_tabla_ccp(lineas):
     return (o_c, o_e, d_c, d_e)
 
 
+_PLAZA_DE_SUCURSAL = {
+    "GDL": ("Guadalajara", "Jalisco"), "CDMX": ("Iztapalapa", "CDMX"),
+    "MTY": ("Monterrey", "Nuevo León"), "CUN": ("Cancun", "Quintana Roo"),
+    "PVR": ("Puerto Vallarta", "Jalisco"), "SJD": ("Cabo San Lucas", "Baja California Sur"),
+}
+
+
+def _origen_destino_por_cp(lineas):
+    """RESPALDO por CÓDIGO POSTAL (regla GPA 2026-07-16): el CP del bloque
+    DESTINATARIO (columna derecha) determina el ESTADO destino sin ambigüedad,
+    y el del REMITENTE (columna izquierda) la sucursal de origen. Es numérico:
+    sobrevive al OCR mejor que los nombres de plaza. Se excluyen el 'Lugar de
+    Expedición' (caja superior de la fletera) y la fila del RECEPTOR ('REG:')."""
+    izq, der = [], []
+    for ln in lineas:
+        if not (0.10 < ln["top"] < 0.35):
+            continue
+        u = ln["text"].upper()
+        if "REG" in u or "EXPEDICI" in u:
+            continue
+        m = re.search(r"\bC\.?P\.?[:.\s]\s*(\d{5})\b", u)
+        if not m:
+            continue
+        (izq if ln["left"] < 0.45 else der).append(m.group(1))
+    oc = oe = de = None
+    if izq:
+        suc = sucursal_por_cp(izq[0])
+        if suc:
+            oc, oe = _PLAZA_DE_SUCURSAL[suc]
+    if der:
+        est = estado_por_cp(der[0])
+        # Chiapas exige ciudad autorizada: sin ciudad legible mejor dejarlo
+        # vacío (revisión) que disparar el rechazo/errores de validación.
+        if est and est != "Chiapas":
+            de = est
+    return (oc, oe, None, de)
+
+
 def _origen_destino(lineas):
     """Origen y destino del CP. La tabla del complemento Carta Porte (si
     existe) es el dato estructurado más confiable, pero COMPLEMENTA a las
     demás estrategias: lo que la tabla no traiga se sigue buscando con ellas,
-    campo por campo (nunca sustituye un dato ya encontrado por un None)."""
+    campo por campo, y el CÓDIGO POSTAL entra como último respaldo (nunca se
+    sustituye un dato ya encontrado por un None)."""
     t = _origen_destino_tabla_ccp(lineas)
     if t[1] and t[3]:                         # tabla completa → listo
         return t
     r = _origen_destino_estrategias(lineas)
-    return (t[0] or r[0], t[1] or r[1], t[2] or r[2], t[3] or r[3])
+    res = (t[0] or r[0], t[1] or r[1], t[2] or r[2], t[3] or r[3])
+    if res[1] and res[3]:
+        return res
+    c = _origen_destino_por_cp(lineas)
+    return (res[0] or c[0], res[1] or c[1], res[2] or c[2], res[3] or c[3])
 
 
 def _origen_destino_estrategias(lineas):
@@ -1311,7 +1423,9 @@ def _origen_destino_estrategias(lineas):
                          r"SONORA|MORELOS|AGUASCALIENTES|CHIHUAHUA|DURANGO|ZACATECAS|"
                          r"HIDALGO|CAMPECHE|TABASCO|COLIMA|COAHUILA|TAMAULIPAS|"
                          r"CHIAPAS|OAXACA)\s*$", ln["text"].strip().upper())
-            if m:
+            # "AV. VERACRUZ" / "PROL. HIDALGO" son CALLES, no plazas (120472995,
+            # 120493319: producían origen/destino "Av."/"Prol.").
+            if m and not _ES_CALLE.match(m.group(1)):
                 plazas.add((m.group(1).title().strip(), m.group(2).title()))
     if len(plazas) == 1:
         (ciu, edo), = plazas
