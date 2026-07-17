@@ -104,3 +104,23 @@ def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | Non
     if nuevo - ult > max_delta:
         return f"El kilometraje ({nuevo:g}) excede {max_delta:,} km del último de la unidad ({ult:g}). Verifica la lectura."
     return None
+
+
+HORAS_MAX_DELTA = 100            # tope de avance de horas por captura (montacargas)
+
+
+def evaluar_horas(horas_nueva, horas_ultima) -> str | None:
+    """Valida las horas de un montacargas contra la última lectura de la unidad.
+    Devuelve un mensaje de error, o None si es válido.
+    `horas_ultima` None = primera lectura → se permite cualquier valor."""
+    if horas_nueva is None or horas_ultima is None:
+        return None
+    try:
+        nueva, ult = float(horas_nueva), float(horas_ultima)
+    except (TypeError, ValueError):
+        return "Horas inválidas"
+    if nueva < ult:
+        return f"Las horas ({nueva:g}) no pueden ser menores a las últimas de la unidad ({ult:g})."
+    if nueva - ult > HORAS_MAX_DELTA:
+        return f"Las horas ({nueva:g}) exceden {HORAS_MAX_DELTA} h de las últimas de la unidad ({ult:g}). Verifica la lectura."
+    return None

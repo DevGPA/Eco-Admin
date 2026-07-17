@@ -79,28 +79,36 @@ def get_vehiculo(vid) -> dict | None:
     return _limpiar(m.from_dynamo(it)) if it else None
 
 
-def ultimo_km_por_vehiculo(tipo: str) -> dict:
-    """Último km (por fecha) de cada vehículo para un tipo de registro.
-    Recorre el índice por tipo en orden descendente por fecha y se queda con
-    el primero de cada vehículo. → {vehicleId(str): {"km": float, "fecha": str}}.
-    Autoritativo: NO depende del rol ni de quién capturó (a diferencia de
-    listar_registros, que filtra por cuenta para el operador)."""
+def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
+    """Última lectura de `campo` por vehículo, tomando el registro MÁS RECIENTE
+    (por fecha) entre los `tipos` dados (str o lista). Autoritativo: NO depende
+    del rol ni de quién capturó (a diferencia de listar_registros, que filtra por
+    cuenta para el operador). → {vehicleId(str): {"valor": float, "fecha": str}}.
+    Uso: km sobre [SOL, CL] (odómetro compartido); horas sobre [MC]."""
+    if isinstance(tipos, str):
+        tipos = [tipos]
     t = _t()
     out: dict = {}
-    kwargs = dict(IndexName="tipo-fecha-idx",
-                  KeyConditionExpression=Key("GSI1PK").eq(tipo),
-                  ScanIndexForward=False,               # desc por fecha
-                  ProjectionExpression="vehicleId, km, fecha")
-    while True:
-        resp = t.query(**kwargs)
-        for it in resp.get("Items", []):
-            vid = str(it.get("vehicleId") or "")
-            if vid and vid not in out and it.get("km") is not None:
+    for tipo in tipos:
+        kwargs = dict(IndexName="tipo-fecha-idx",
+                      KeyConditionExpression=Key("GSI1PK").eq(tipo),
+                      ScanIndexForward=False,           # desc por fecha
+                      ProjectionExpression="vehicleId, #c, fecha",
+                      ExpressionAttributeNames={"#c": campo})
+        while True:
+            resp = t.query(**kwargs)
+            for it in resp.get("Items", []):
+                vid = str(it.get("vehicleId") or "")
+                if not vid or it.get(campo) is None:
+                    continue
                 d = m.from_dynamo(it)
-                out[vid] = {"km": float(d["km"]), "fecha": d.get("fecha")}
-        if "LastEvaluatedKey" not in resp:
-            break
-        kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+                fecha = str(d.get("fecha") or "")
+                prev = out.get(vid)
+                if prev is None or fecha > str(prev["fecha"] or ""):
+                    out[vid] = {"valor": float(d[campo]), "fecha": fecha}
+            if "LastEvaluatedKey" not in resp:
+                break
+            kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
     return out
 
 
@@ -128,12 +136,16 @@ def cargar_catalogos() -> dict:
     # Último km REAL por unidad (combustible) para que la validación del
     # formulario compare contra el historial completo, no contra lo que ve el
     # operador (que solo tiene sus propias cargas). Ver evaluar_km / _validar_km.
-    ult_km = ultimo_km_por_vehiculo(m.SOL)
+    ult_km = ultimo_medidor_por_vehiculo([m.SOL, m.CL], "km")   # odómetro compartido
+    ult_hr = ultimo_medidor_por_vehiculo([m.MC], "horas")       # horómetro montacargas
     for v in veh:
-        u = ult_km.get(str(v.get("id")))
-        # Campo DERIVADO (no se persiste): siempre refleja el cálculo actual.
-        v["ultimoKm"] = u["km"] if u else None
-        v["ultimoKmFecha"] = u["fecha"] if u else None
+        k = ult_km.get(str(v.get("id")))
+        h = ult_hr.get(str(v.get("id")))
+        # Campos DERIVADOS (no se persisten): siempre reflejan el cálculo actual.
+        v["ultimoKm"] = k["valor"] if k else None
+        v["ultimoKmFecha"] = k["fecha"] if k else None
+        v["ultimasHoras"] = h["valor"] if h else None
+        v["ultimasHorasFecha"] = h["fecha"] if h else None
     return {
         "vehicles":     sorted(veh, key=lambda v: str(v.get("economico", ""))),
         "users":        sorted(usr, key=lambda u: str(u.get("nombre", ""))),

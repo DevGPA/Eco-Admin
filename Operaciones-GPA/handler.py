@@ -30,7 +30,7 @@ from db.escritura import (crear_registro, cambiar_estado,
                           guardar_modulo, guardar_plantilla,
                           guardar_responsable_alerta)
 from db.queries import (listar_registros, get_registro, cargar_catalogos,
-                        get_plantilla, get_vehiculo, ultimo_km_por_vehiculo)
+                        get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -233,23 +233,37 @@ def lambda_handler(event, context):
 
 
 # ── Operaciones de registro ──────────────────────────────────────
-def _validar_km(tipo, datos, cl):
-    """Bloqueo AUTORITATIVO de kilometraje para combustible (SOL): compara
-    contra el último km REAL de la unidad (todo el historial, no solo lo del
-    operador). Un admin puede saltarlo con datos['forzar']=True (corrección).
+def _validar_medidor(tipo, datos, cl):
+    """Bloqueo AUTORITATIVO de odómetro/horómetro, comparando contra la lectura
+    REAL de la unidad (todo el historial, no solo lo del operador):
+      · combustible (SOL) y checklist (CL) → km vs último km (historial SOL+CL,
+        odómetro compartido entre ambos módulos).
+      · montacargas (MC) → horas vs últimas horas (solo si el equipo está Activo).
+    Un admin puede saltarlo con datos['forzar']=True (corrección).
     Devuelve mensaje de error o None."""
-    if tipo != m.SOL:
-        return None
     if datos.get("forzar") and cl["rol"] == "admin":
         return None                       # override explícito de admin
     vid = str(datos.get("vehicleId") or "")
-    if not vid or datos.get("km") in (None, ""):
+    if not vid:
         return None
-    ult = ultimo_km_por_vehiculo(m.SOL).get(vid)
-    if not ult:
-        return None                       # primer registro de la unidad
-    comb = datos.get("combustible") or (get_vehiculo(vid) or {}).get("combustible")
-    return m.evaluar_km(datos.get("km"), ult["km"], comb)
+    if tipo in (m.SOL, m.CL):
+        if datos.get("km") in (None, ""):
+            return None
+        ult = ultimo_medidor_por_vehiculo([m.SOL, m.CL], "km").get(vid)
+        if not ult:
+            return None                   # primera lectura de la unidad
+        comb = datos.get("combustible") or (get_vehiculo(vid) or {}).get("combustible")
+        return m.evaluar_km(datos.get("km"), ult["valor"], comb)
+    if tipo == m.MC:
+        if datos.get("estatus") not in (None, "Activo"):
+            return None                   # equipo inactivo: no se exige horómetro
+        if datos.get("horas") in (None, "", 0):
+            return None
+        ult = ultimo_medidor_por_vehiculo([m.MC], "horas").get(vid)
+        if not ult:
+            return None
+        return m.evaluar_horas(datos.get("horas"), ult["valor"])
+    return None
 
 
 def _crear(tipo, datos, cl, notif=None, req_meta=None):
@@ -257,9 +271,9 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
         return _err("El analista no captura registros", 403)
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
-    err_km = _validar_km(tipo, datos, cl)
-    if err_km:
-        return _err(err_km, 422)
+    err_medidor = _validar_medidor(tipo, datos, cl)
+    if err_medidor:
+        return _err(err_medidor, 422)
     # Si un admin forzó la captura fuera de rango, se deja rastro y no se
     # persiste la bandera cruda.
     if datos.pop("forzar", None) and cl["rol"] == "admin":

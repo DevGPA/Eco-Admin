@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from db.modelos import evaluar_km  # noqa: E402
+from db.modelos import evaluar_km, evaluar_horas  # noqa: E402
 
 
 class TestEvaluarKm(unittest.TestCase):
@@ -45,6 +45,30 @@ class TestEvaluarKm(unittest.TestCase):
     def test_km_nuevo_none_no_bloquea(self):
         # Si no viene km, otros validadores lo exigen; aquí no inventamos error.
         self.assertIsNone(evaluar_km(None, 50000))
+
+
+class TestEvaluarHoras(unittest.TestCase):
+    def test_primera_lectura_permite(self):
+        self.assertIsNone(evaluar_horas(1250, None))
+
+    def test_dentro_de_rango_permite(self):
+        self.assertIsNone(evaluar_horas(1250, 1250))
+        self.assertIsNone(evaluar_horas(1300, 1250))
+        self.assertIsNone(evaluar_horas(1350, 1250))      # exactamente +100
+
+    def test_menor_bloquea(self):
+        msg = evaluar_horas(1249, 1250)
+        self.assertIsNotNone(msg)
+        self.assertIn("menor", msg)
+
+    def test_excede_100_bloquea(self):
+        msg = evaluar_horas(1351, 1250)
+        self.assertIsNotNone(msg)
+        self.assertIn("exceden", msg)
+
+    def test_acepta_strings_e_invalidos(self):
+        self.assertIsNone(evaluar_horas("1300", "1250"))
+        self.assertEqual(evaluar_horas("abc", "1250"), "Horas inválidas")
 
 
 if __name__ == "__main__":

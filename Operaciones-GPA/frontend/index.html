@@ -1003,7 +1003,9 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const draftRef=useRef(undefined);
   if(draftRef.current===undefined){try{draftRef.current=JSON.parse(localStorage.getItem(DKEY))||{};}catch{draftRef.current={};}}
   const D=draftRef.current;
-  const[veh,setVeh]=useState(D.veh||(availVeh[0]?String(availVeh[0].id):""));
+  // Preselección: la última unidad que ESTE usuario capturó (si no hay borrador a medias).
+  const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
+  const[veh,setVeh]=useState(D.veh||(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):"")));
   const[km,setKm]=useState(D.km||"");const[tank,setTank]=useState(D.tank??0.25);const[obs,setObs]=useState(D.obs||"");
   // Evidencia: una o más fotos (borradores viejos con una sola 'photo' se migran solos)
   const[fotos,setFotos]=useState(D.fotos||(D.photo?[D.photo]:[]));const[sig,setSig]=useState(D.sig||null);const[step,setStep]=useState(D.step||1);const[busy,setBusy]=useState(false);
@@ -1100,7 +1102,9 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const draftRef=useRef(undefined);
   if(draftRef.current===undefined){try{draftRef.current=JSON.parse(localStorage.getItem(DKEY))||{};}catch{draftRef.current={};}}
   const D=draftRef.current;
-  const[veh,setVeh]=useState(D.veh||(availVeh[0]?String(availVeh[0].id):""));
+  // Preselección: la última unidad que ESTE usuario capturó (si no hay borrador a medias).
+  const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
+  const[veh,setVeh]=useState(D.veh||(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):"")));
   const[km,setKm]=useState(D.km||"");
   const[fotoAntes,setFotoAntes]=useState(D.fotoAntes||null);const[fotoDespues,setFotoDespues]=useState(D.fotoDespues||null);
   const[lleno,setLleno]=useState(D.lleno||"Si");
@@ -1314,10 +1318,17 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico"&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
-  const[veh,setVeh]=useState(availVeh[0]?String(availVeh[0].id):"");
-  const[km,setKm]=useState("");const[fotoKm,setFotoKm]=useState(null);const[ans,setAns]=useState({});const[sig,setSig]=useState(null);const[obs,setObs]=useState("");const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  // Preselección: la última unidad que ESTE usuario capturó en este módulo.
+  const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
+  const[veh,setVeh]=useState(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):""));
+  const[km,setKm]=useState("");const[fotoKm,setFotoKm]=useState(null);const[ans,setAns]=useState({});const[sig,setSig]=useState(null);const[obs,setObs]=useState("");const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);const[forzarKm,setForzarKm]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user={id:session.email,nombre:session.nombre||session.email};
+  // Kilometraje: contra el último km REAL de la unidad (odómetro compartido SOL+CL, del backend).
+  const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
+  const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
+  const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
+  const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
   const total=sections.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?sections[step-1]:null;
   const setA=(id,v)=>setAns(a=>({...a,[id]:v}));const getA=id=>ans[id];
   const visible=item=>{if(!item.cond)return true;const[cid,cv]=item.cond.split(":");return String(getA(cid))===cv;};
@@ -1328,11 +1339,12 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   const submit=async()=>{
     if(busy)return;
     if(!vehicle||!user||!km||!fotoKm){setStep(0);return showToast("⚠️ Faltan datos generales (vehículo, responsable, km y foto).");}
+    if(kmBloq){setStep(0);return showToast("⚠️ "+kmErr);}
     for(let i=0;i<sections.length;i++){const f=faltanCLSec(sections[i].items);if(f.length){setStep(i+1);setMarcar(true);return showToast("⚠️ Faltan "+f.length+" respuesta(s) en «"+sections[i].title+"». Complétalas para enviar.");}}
     if(!sig)return showToast("⚠️ Falta la firma");
     setBusy(true);
     try{
-      const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig,status:"Aprobado"};
+      const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig,status:"Aprobado",...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("checklist",datos);
       await api.crear("checklist",subido);
       showToast("✓ Checklist enviado");await refrescar();onDone();
@@ -1351,8 +1363,11 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
           <label>Foto del kilometraje</label>
           <div className="pb">{!fotoKm&&<><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>Toca para capturar</div></>}{fotoKm&&<img src={fotoKm} alt="km"/>}<input type="file" accept="image/*" capture="environment" onChange={e=>readFile(e,setFotoKm)}/></div>
           {fotoKm&&<button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>setFotoKm(null)}>Cambiar foto</button>}
+          {lastKm!=null&&<div style={{fontSize:11,color:"#888",marginTop:6}}>Último registro: {lastKm.toLocaleString()} km</div>}
+          {kmErr&&<div className="eb">{kmErr}</div>}
+          {kmErr&&puedeForzar&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,marginTop:6,color:C.red}}><input type="checkbox" checked={forzarKm} onChange={e=>setForzarKm(e.target.checked)} style={{width:"auto"}}/>Forzar captura fuera de rango (corrección de admin)</label>}
         </div>
-        <button className="bp" disabled={!veh||!km||!fotoKm} onClick={()=>setStep(1)} style={{background:tipo==="semanal"?C.blue:C.green}}>Siguiente →</button>
+        <button className="bp" disabled={!veh||!km||!fotoKm||!!kmBloq} onClick={()=>setStep(1)} style={{background:tipo==="semanal"?C.blue:C.green}}>Siguiente →</button>
       </div>}
       {curSec&&<div>
         {marcar&&faltanCLSec(curSec.items).length>0&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {faltanCLSec(curSec.items).length} respuesta(s) por completar (marcadas en rojo).</div>}
@@ -1440,7 +1455,7 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
   const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
   const mc=cat.vehicles.filter(v=>v.activo&&catVeh(v)==="montacargas"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
-  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} registros={items} session={session} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
+  if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} registros={items} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
   if(view==="detail"&&sel)return<MCDetail rec={sel} canAuth={canAuth} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>;
   if(view==="history")return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("home")}>← Inicio</button><MCHistory items={items} onSelect={r=>{setSel(r);setView("detail");}}/></div>;
   return(
@@ -1459,14 +1474,16 @@ function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToas
   );
 }
 
-function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToast,onDone}){
+function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,showToast,onDone}){
   const items=tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const availMC=mc.filter(v=>!sucursalesUser||sucursalesUser.includes(v.sucursal));
-  const[eq,setEq]=useState(availMC[0]?String(availMC[0].id):"");
+  // Preselección: el último equipo que ESTE usuario capturó en este módulo.
+  const ultUsado=(registros||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
+  const[eq,setEq]=useState(ultUsado&&availMC.some(v=>String(v.id)===String(ultUsado))?String(ultUsado):(availMC[0]?String(availMC[0].id):""));
   const[estatus,setEstatus]=useState("Activo");const[dia,setDia]=useState(new Date().toISOString().split("T")[0]);
-  const[horas,setHoras]=useState("");
+  const[horas,setHoras]=useState("");const[forzarHoras,setForzarHoras]=useState(false);
   // Número de semana ISO calculado automáticamente a partir de la fecha de revisión
   const isoSemana=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+3-((d.getDay()+6)%7));const w1=new Date(d.getFullYear(),0,4);return 1+Math.round(((d-w1)/86400000-3+((w1.getDay()+6)%7))/7);};
   const semana=isoSemana(dia);
@@ -1474,16 +1491,18 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
   const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);const[marcar,setMarcar]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(eq));
-  // Horas de trabajo: no menor al último ni más de 100 h por encima del último registro
-  const lastHoras=(registros||[]).filter(r=>String(r.vehicleId)===String(eq)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.horas??null;
+  // Horas de trabajo: contra las últimas horas REALES de la unidad (del backend, no
+  // solo lo que capturó este usuario). No menor al último ni más de 100 h por encima.
+  const lastHoras=vehicle&&vehicle.ultimasHoras!=null?vehicle.ultimasHoras:null;
   const horasN=parseFloat(horas);
   const horasErr=horas!==""&&lastHoras!=null?(horasN<lastHoras?`No puede ser menor al último: ${lastHoras} h`:horasN-lastHoras>100?`No puede exceder 100 h del último (${lastHoras} h)`:null):null;
+  const puedeForzar=rol==="admin";const horasBloq=horasErr&&!(puedeForzar&&forzarHoras);
   const CHUNK=10;const chunks=[];for(let i=0;i<items.length;i+=CHUNK)chunks.push(items.slice(i,i+CHUNK));
   const total=chunks.length+2;const isLast=step===total-1;const curChunk=step>0&&step<total-1?chunks[step-1]:null;const off=(step-1)*CHUNK;
   const setR=(i,v)=>setResps(r=>({...r,[i]:v}));const setF=(i,v)=>setFotos(f=>({...f,[i]:v}));const setC=(i,v)=>setComents(c=>({...c,[i]:v}));
   const probs=Object.entries(resps).filter(([,v])=>v==="P");
   const todosResp=items.every((_,i)=>resps[i]);  // todas las preguntas O/P/N/A respondidas
-  const canSubmit=!!(eq&&sig&&(estatus!=="Activo"||(todosResp&&probs.every(([i])=>fotos[i]&&coments[i]))));
+  const canSubmit=!!(eq&&sig&&!horasBloq&&(estatus!=="Activo"||(todosResp&&probs.every(([i])=>fotos[i]&&coments[i]))));
   const submit=async()=>{
     if(busy)return;
     if(estatus==="Activo"&&!todosResp){
@@ -1493,7 +1512,7 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
     if(!canSubmit)return showToast("⚠️ Faltan datos (revisa equipo, firma y fotos de los problemas).");
     setBusy(true);
     try{
-      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático"};
+      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático",...(puedeForzar&&forzarHoras&&horasErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("montacargas",datos);
       await api.crear("montacargas",subido);
       showToast("✓ Checklist enviado");await refrescar();onDone();
@@ -1514,10 +1533,11 @@ function MCForm({tipo,cat,mc,registros,session,sucursalesUser,refrescar,showToas
           <div className="r2"><div><label>Semana No. (automática)</label><input type="text" value={semana?"Semana "+semana:""} disabled style={{background:"#f5f5f5",color:"#666"}}/></div><div><label>Horas de trabajo</label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
           {lastHoras!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastHoras} h</div>}
           {horasErr&&<div className="eb">{horasErr}</div>}
+          {horasErr&&puedeForzar&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,marginTop:6,color:C.red}}><input type="checkbox" checked={forzarHoras} onChange={e=>setForzarHoras(e.target.checked)} style={{width:"auto"}}/>Forzar captura fuera de rango (corrección de admin)</label>}
           <label>Quien revisa</label><input type="text" value={yo?.nombre||session.nombre} disabled style={{background:"#f5f5f5",color:"#aaa"}}/>
         </div>
         {estatus!=="Activo"&&<div className="wb">⚠️ Equipo inactivo — solo se registran datos generales y firma.</div>}
-        <button className="bp" disabled={!eq||!dia||!!horasErr} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
+        <button className="bp" disabled={!eq||!dia||!!horasBloq} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
       </div>}
       {curChunk&&estatus==="Activo"&&<div>
         {marcar&&curChunk.some((_,idx)=>!resps[off+idx])&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {curChunk.filter((_,idx)=>!resps[off+idx]).length} punto(s) por responder (marcados en rojo).</div>}
