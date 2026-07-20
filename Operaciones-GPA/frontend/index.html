@@ -1159,7 +1159,13 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   // Monto total = litros × precio/L (automático; no se captura a mano)
   useEffect(()=>{const mm=(parseFloat(litros)||0)*(parseFloat(precioLitro)||0);setMonto(mm?mm.toFixed(2):"");},[litros,precioLitro]);
   const can1=veh&&km&&!kmBloq&&fotoAntes&&fotoDespues;
-  const can2=fotoBomba&&fotoPersona&&litros&&precioLitro&&monto&&fotoTicket;
+  // Candados de la carga: litros ≤ capacidad del tanque de la unidad; precio/L ≤ $100.
+  const tanqueCap=vehicle?parseFloat(vehicle.tanque)||0:0;
+  const litrosN=parseFloat(litros);
+  const litrosErr=litros!==""?(!(litrosN>0)?"Litros inválidos.":(tanqueCap>0&&litrosN>tanqueCap?`No puede exceder la capacidad del tanque (${tanqueCap} L).`:null)):null;
+  const precioN=parseFloat(precioLitro);
+  const precioErr=precioLitro!==""?(!(precioN>0)?"Precio inválido.":(precioN>100?"El precio por litro no puede exceder $100.":null)):null;
+  const can2=fotoBomba&&fotoPersona&&litros&&precioLitro&&monto&&fotoTicket&&!litrosErr&&!precioErr;
   const submit=async()=>{
     if(!vehicle||busy||!sig||!fotoPersona)return;setBusy(true);
     // Ubicación OBLIGATORIA e inmodificable: se re-lee del dispositivo en fresco
@@ -1214,8 +1220,10 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         <div className="card"><div className="ct">Datos de la gasolinera</div>
           <FotoCampo val={fotoBomba} set={setFotoBomba} label="Foto de la bomba al finalizar carga"/>
           <FotoCampo val={fotoPersona} set={setFotoPersona} label="Foto de la persona que cargó combustible (en la bomba)" capture="user"/>
-          <label>Litros cargados</label><input type="number" step="0.001" value={litros} onChange={e=>setLitros(e.target.value)} placeholder="Ej. 53.229"/>
-          <label>Precio por litro (debe coincidir con fotos)</label><input type="number" step="0.01" value={precioLitro} onChange={e=>setPrecioLitro(e.target.value)} placeholder="Ej. 28.18"/>
+          <label>Litros cargados{tanqueCap>0?` (máx. ${tanqueCap} L — capacidad del tanque)`:""}</label><input type="number" step="0.001" min="0.001" max={tanqueCap>0?tanqueCap:undefined} value={litros} onChange={e=>setLitros(e.target.value)} placeholder="Ej. 53.229"/>
+          {litrosErr&&<div className="eb">{litrosErr}</div>}
+          <label>Precio por litro (debe coincidir con fotos; máx. $100)</label><input type="number" step="0.01" min="0.01" max="100" value={precioLitro} onChange={e=>setPrecioLitro(e.target.value)} placeholder="Ej. 28.18"/>
+          {precioErr&&<div className="eb">{precioErr}</div>}
           <label>Monto total de la carga ($) — automático (litros × precio/L)</label><input type="text" value={monto?"$"+Number(monto).toLocaleString("es-MX",{minimumFractionDigits:2}):"—"} disabled style={{background:"#f5f5f5",color:"#222",fontWeight:600}}/>
           <FotoCampo val={fotoTicket} set={setFotoTicket} label="Foto del ticket de carga (fecha y hora deben coincidir)"/>
           <label>Ubicación de carga (automática)</label>

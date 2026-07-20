@@ -283,6 +283,20 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
                      "sigue PENDIENTE de autorización" if ult else "no existe"
             return _err("No se puede enviar el reporte: la solicitud de combustible de esta unidad "
                         f"{estado}. Se requiere una solicitud APROBADA (asignación).", 422)
+        # Candados de la carga: litros ≤ capacidad del tanque; precio/L en (0, 100].
+        try:
+            litros = float(datos.get("litros") or 0)
+            precio_l = float(datos.get("precioLitro") or 0)
+        except (TypeError, ValueError):
+            return _err("Litros o precio por litro inválidos.", 422)
+        if litros <= 0:
+            return _err("Los litros cargados deben ser mayores a 0.", 422)
+        cap = float((get_vehiculo(str(datos.get("vehicleId") or "")) or {}).get("tanque") or 0)
+        if cap > 0 and litros > cap:
+            return _err(f"Los litros cargados ({litros:g} L) exceden la capacidad del tanque "
+                        f"de la unidad ({cap:g} L).", 422)
+        if precio_l <= 0 or precio_l > 100:
+            return _err("El precio por litro debe ser mayor a $0 y no exceder $100.", 422)
     err_medidor = _validar_medidor(tipo, datos, cl)
     if err_medidor:
         return _err(err_medidor, 422)
