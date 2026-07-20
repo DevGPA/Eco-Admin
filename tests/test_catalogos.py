@@ -145,3 +145,17 @@ def test_fleteras_extra_por_entorno():
         assert "YYY010101ABC" in d                       # sin nombre también vale
     finally:
         del os.environ["FLETERAS_EXTRA"]
+
+
+def test_resolver_codigo_sello_arbitraje():
+    # Caso real 120885268: el modelo leyó GS0242 + "PAGADO" (par imposible:
+    # GS0242 = APOYO RUTA LOCAL). Candidatos por etiqueta {GS0230, GS0247};
+    # gana el más parecido al código leído → GS0247 (7↔2 = 1 edición).
+    from motor.catalogos import resolver_codigo_sello
+    assert resolver_codigo_sello("GS0242", "PAGADO") == "GS0247"
+    assert resolver_codigo_sello("", "PAGADO") == "GS0230"          # etiqueta exacta
+    assert resolver_codigo_sello("GS0231", "DISP. SEMANAL") == "GS0231"   # consistente
+    assert resolver_codigo_sello("GS0242", "APOYO RUTA LOCAL (FLETERA)") == "GS0242"
+    assert resolver_codigo_sello("GS0244", "") == "GS0244"          # sin etiqueta
+    assert resolver_codigo_sello("GS0247", "GARANTIAS Y DEV.") == "GS0244"  # etiqueta manda con distancia
+    assert resolver_codigo_sello("", "") == ""

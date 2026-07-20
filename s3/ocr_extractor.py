@@ -28,7 +28,8 @@ import boto3
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
                              fletera_por_nombre, TIPO_CAMBIO_DEFAULT,
                              normalizar_destino, DESTINOS_CATALOGO, SAPS_DISPERSION,
-                             estado_por_cp, sucursal_por_cp, sap_por_tipo_flete)
+                             estado_por_cp, sucursal_por_cp, sap_por_tipo_flete,
+                             resolver_codigo_sello)
 
 logger = logging.getLogger(__name__)
 
@@ -580,10 +581,11 @@ def _adaptar_bedrock(raw: dict) -> dict:
         "destinatarioGPA": bool(raw.get("destinatarioGPA")),
         "esMuestra":      any(_RE_MUESTRA.search(_sin_acentos(p["descripcion"]))
                               for p in partidas),
-        # Sello de Control Presupuestal (validado; "" si no pasa el formato;
-        # respaldo determinístico por el recuadro TIPO DE FLETE)
-        "codigoSAP":      (_codigo_sap_valido(raw.get("codigoSAP"))
-                           or sap_por_tipo_flete(raw.get("tipoFleteSello"))),
+        # Sello de Control Presupuestal: arbitrado contra el recuadro TIPO DE
+        # FLETE (rellena faltantes y corrige misreads de un dígito).
+        "codigoSAP":      resolver_codigo_sello(
+                              _codigo_sap_valido(raw.get("codigoSAP")),
+                              raw.get("tipoFleteSello")),
         "sucursalSello":  str(raw.get("sucursalSello") or "").strip(),
         "tipoFleteSello": str(raw.get("tipoFleteSello") or "").strip(),
     }
@@ -625,12 +627,13 @@ def leer_sello_cp(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_
         )
         raw = _parse_json(resp["output"]["message"]["content"][0]["text"])
         tipo = str(raw.get("tipoFleteSello") or "").strip()
-        codigo = _codigo_sap_valido(raw.get("codigoSAP"))
-        # Respaldo DETERMINÍSTICO: el recuadro TIPO DE FLETE identifica el
-        # código sin ambigüedad (catálogo oficial de sellos). El código
-        # subrayado suele ser lo más tenue del sello; la etiqueta grande no.
-        if not codigo and tipo:
-            codigo = sap_por_tipo_flete(tipo)
+        # ARBITRAJE código vs etiqueta (redundantes por catálogo): rellena el
+        # código cuando falta, y corrige misreads de un dígito cuando el par
+        # es imposible (120885268: "GS0242 + PAGADO" → GS0247).
+        leido = _codigo_sap_valido(raw.get("codigoSAP"))
+        codigo = resolver_codigo_sello(leido, tipo)
+        if codigo != leido:
+            logger.info("sello arbitrado: %s + %r → %s", leido or "(vacío)", tipo, codigo)
         return {
             "codigoSAP": codigo,
             "sucursalSello": str(raw.get("sucursalSello") or "").strip(),

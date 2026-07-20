@@ -133,16 +133,52 @@ _TIPO_FLETE_A_SAP = sorted(
 def sap_por_tipo_flete(texto: Optional[str]) -> str:
     """Código SAP inferido del texto del recuadro TIPO DE FLETE del sello.
     Igualdad exacta primero; luego contención (etiqueta más larga gana)."""
+    cands = saps_candidatos_por_tipo(texto)
+    return cands[0] if cands else ""
+
+
+def saps_candidatos_por_tipo(texto: Optional[str]) -> list:
+    """TODOS los códigos compatibles con el texto leído del recuadro TIPO DE
+    FLETE, en orden de mejor coincidencia. La lectura puede ser PARCIAL
+    ("PAGADO" es la cola visible de "COM. PED. PAGADO"), así que la contención
+    se prueba en ambos sentidos: leído⊆etiqueta y etiqueta⊆leído."""
     n = _normalizar(re.sub(r"[.]", "", str(texto or "")))
     if not n:
-        return ""
-    for etiqueta, sap in _TIPO_FLETE_A_SAP:
-        if n == etiqueta:
-            return sap
-    for etiqueta, sap in _TIPO_FLETE_A_SAP:
-        if etiqueta in n:
-            return sap
-    return ""
+        return []
+    exactos = [sap for etiqueta, sap in _TIPO_FLETE_A_SAP if n == etiqueta]
+    parciales = [sap for etiqueta, sap in _TIPO_FLETE_A_SAP
+                 if sap not in exactos and (etiqueta in n or n in etiqueta)]
+    return exactos + parciales
+
+
+def _dist_edicion(a: str, b: str) -> int:
+    """Distancia de Levenshtein simple (los códigos miden 6 chars)."""
+    if a == b:
+        return 0
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def resolver_codigo_sello(codigo_leido: str, tipo_leido: Optional[str]) -> str:
+    """Arbitraje código vs TIPO DE FLETE (son redundantes por catálogo).
+    Caso real 120885268: el modelo leyó GS0242 + "PAGADO" — par IMPOSIBLE
+    (GS0242 = APOYO RUTA LOCAL). Candidatos por etiqueta: {GS0230 PAGADO,
+    GS0247 COM. PED. PAGADO}; gana el más parecido al código leído
+    (GS0242↔GS0247 = 1 edición) → GS0247, que es lo que el sello decía."""
+    codigo = codigo_leido if codigo_leido in SELLOS_CATALOGO else ""
+    cands = saps_candidatos_por_tipo(tipo_leido)
+    if not cands:
+        return codigo                       # sin etiqueta: manda el código
+    if not codigo:
+        return cands[0]                     # sin código: manda la etiqueta
+    if codigo in cands:
+        return codigo                       # consistentes ✓
+    return min(cands, key=lambda c: _dist_edicion(c, codigo))
 
 # Tope de dispersiones (regla GPA 2026-07-15, caso 120466326): el monto
 # máximo autorizado de un flete de dispersión es $33,000 MXN + IVA. Dentro
