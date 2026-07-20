@@ -13,7 +13,7 @@ from .catalogos import (
     UMBRAL_CARGO_ENVIO, UMBRAL_TARIFA_DISP, BACKORDER_ENABLED,
     CARGO_ENVIO_POR_SAP, TIPO_CAMBIO_DEFAULT,
     SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER, SAP_COM_PED,
-    SAP_REQUIERE_AUTORIZACION, SAP_DISPERSION_NO_AUT,
+    SAP_REQUIERE_AUTORIZACION, SAP_DISPERSION_NO_AUT, SAPS_VALIDAR_MANUAL,
     SAPS_EXENTOS_MONTO, MONTO_MAX_DISPERSION_MXN,
     SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
@@ -224,6 +224,18 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             "GS0242 dispersión no autorizada: revisión obligatoria"
         ))
         return _res("R-811")
+
+    # ── CAPA 1a-quater — GS0229/GS0247: validar en sistema (regla GPA
+    # 2026-07-20). Los complementos de pedido no llevan mínimo de FV, pero
+    # tampoco se auto-aprueban: código propio y a revisión manual. La capa
+    # legacy de back-order (GS0229) manda si su flag está encendido.
+    if cp.codigo_sap in SAPS_VALIDAR_MANUAL \
+            and not (BACKORDER_ENABLED and cp.codigo_sap == SAP_BACKORDER):
+        criterios.append(CriterioDetalle(
+            "Sello presupuestal", "WARN", cp.codigo_sap,
+            f"{cp.codigo_sap} complemento de pedido: validar en sistema"
+        ))
+        return _res("R-812")
 
     # ── CAPA 1b — GS0248 CARGO POR ENVÍO (legacy, off por defecto) ──
     # La clasificación oficial evalúa GS0248 como VENTA; esta capa solo corre

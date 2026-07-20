@@ -33,7 +33,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.6.4"   # CP postal también rellena el ESTADO de origen cuando no es plaza GPA
+VERSION = "2.6.5"   # GS0229/GS0247 → R-812 validar en sistema; sello con reintento 300 DPI y log SIEMPRE
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

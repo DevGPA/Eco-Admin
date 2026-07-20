@@ -618,6 +618,23 @@ def leer_sello_cp(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_
         return {}
 
 
+def leer_sello_cp_pagina(page, folio_archivo: str = "", num_pag: int = 0) -> dict:
+    """Lectura del sello con REINTENTO: primer intento al DPI normal; si no
+    salió un código GS válido, segundo intento a 300 DPI (los sellos borrosos
+    o pequeños se pierden a 200). Deja rastro en el log SIEMPRE — los casos
+    GS02xx que caían a R-101 'sin mínimo' eran sellos no leídos en silencio
+    (reporte del tablero 2026-07-20: 14 casos)."""
+    sello = leer_sello_cp(page.get_pixmap(dpi=OCR_DPI).tobytes("png"))
+    if not sello.get("codigoSAP"):
+        sello2 = leer_sello_cp(page.get_pixmap(dpi=300).tobytes("png"))
+        if sello2.get("codigoSAP"):
+            sello = sello2
+    logger.info("%s pag%d sello: %s / %s / %s", folio_archivo or "PDF", num_pag,
+                sello.get("codigoSAP") or "NO-LEIDO",
+                sello.get("sucursalSello") or "-", sello.get("tipoFleteSello") or "-")
+    return sello
+
+
 def _parse_json(texto: str) -> dict:
     """Extrae el primer objeto JSON de la respuesta del modelo (Bedrock)."""
     ini, fin = texto.find("{"), texto.rfind("}")
@@ -1633,8 +1650,9 @@ def procesar_pdf(pdf_bytes: bytes, folio_archivo: str = "", client=None) -> dict
                     # disponible, leerlo de la página CP (1 llamada; fail-open).
                     if (OCR_BACKEND in ("bedrock", "hibrido")
                             and clasificar_pagina(p) == "CP" and not p.get("codigoSAP")):
-                        png = page.get_pixmap(dpi=OCR_DPI).tobytes("png")
-                        paginas.append((i, "sello", p, png))
+                        p.update({k: v for k, v in
+                                  leer_sello_cp_pagina(page, folio_archivo, i + 1).items() if v})
+                        paginas.append((i, "lista", p, None))
                     else:
                         paginas.append((i, "lista", p, None))
                 else:                            # revuelto/escaneo → rasterizar + OCR

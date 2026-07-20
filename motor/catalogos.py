@@ -93,11 +93,14 @@ SAP_COM_PED = "GS0247"
 # monto de la venta es simbólico o lo absorbe el cliente). Reglas GPA
 # dictadas caso por caso en el tablero (2026-07-13/14/15):
 SAPS_EXENTOS_MONTO = {
-    "GS0247": "GS0247 · com. ped. pagado (sello)",
     "GS0248": "GS0248 · cargo por envío al cliente (sello)",       # 119696433
-    "GS0229": "GS0229 · complemento de pedido / BO pagado (sello)", # 120481847, 120560842
     "GS0244": "GS0244 · garantías y devoluciones (sello)",          # 120488022
 }
+
+# GS0229 y GS0247 (complementos de pedido): sin mínimo de FV, pero NO se
+# auto-aprueban — llevan su propio código R y van a revisión para VALIDAR
+# MANUALMENTE EN SISTEMA (regla GPA 2026-07-20, refina la exención del 07-15).
+SAPS_VALIDAR_MANUAL = {"GS0229", "GS0247"}
 
 # Tope de dispersiones (regla GPA 2026-07-15, caso 120466326): el monto
 # máximo autorizado de un flete de dispersión es $33,000 MXN + IVA. Dentro
@@ -464,6 +467,7 @@ R_CONCEPTOS: dict[str, str] = {
     "R-802": "Dispersión excede tarifa",
     "R-810": "Sello GS0245: requiere autorización",
     "R-811": "Dispersión no autorizada (GS0242)",
+    "R-812": "Comp. pedido (GS0229/GS0247): validar en sistema",
     "R-901": "Escalado por aprobador",
     "R-902": "Escalado por SLA",
 }
@@ -503,4 +507,5 @@ ESTADO_POR_CODIGO: dict[str, str] = {
     "R-802": "EN_REVISION",
     "R-810": "EN_REVISION",
     "R-811": "EN_REVISION",
+    "R-812": "EN_REVISION",
 }

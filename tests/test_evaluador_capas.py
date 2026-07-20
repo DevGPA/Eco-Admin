@@ -135,13 +135,14 @@ def test_muestras_exentas_de_minimos_y_pct(run_eval, make_fv):
     assert any("MUESTRAS" in (c.valor or "") + (c.detalle or "") for c in res.criterios)
 
 
-def test_gs0247_com_ped_exento(run_eval, make_fv, make_cp):
-    # 119540819: venta $5.74, flete $8.31, sello GS0247 "COM. PED. PAGADO" →
-    # el sello es la autorización; sin él este caso caía a R-101/EN_REVISION.
+def test_gs0247_com_ped_validar_en_sistema(run_eval, make_fv, make_cp):
+    # REGLA 2026-07-20 (refina la del 07-13): GS0247 sin mínimo de FV pero NO
+    # auto-aprobada — código propio R-812 y a revisión para validar en sistema.
     fv = make_fv(partidas=[], subtotal=5.74)
     cp = make_cp(codigo_sap="GS0247", flete_mxn=143.0)
     res = run_eval(fv=fv, cp=cp)
-    assert res.codigo_motor == "R-000"
+    assert res.codigo_motor == "R-812"
+    assert res.estado == "EN_REVISION"
 
 
 def test_gs0245_requiere_autorizacion(run_eval, make_cp):
@@ -198,11 +199,12 @@ def test_sin_sello_destinatario_gpa_sigue_siendo_dispersion(run_eval, make_cp):
     assert res.tipo_operacion == "DISPERSION_INTERNA"
 
 
-def test_gs0229_y_gs0244_exentos(run_eval, make_fv, make_cp):
-    # 120481847/120560842 (GS0229 comp ped) y 120488022 (GS0244 garantías):
-    # exentos de mínimos y % de flete, como GS0247/GS0248.
-    for sap in ("GS0229", "GS0244"):
-        fv = make_fv(partidas=[], subtotal=10.67)
-        cp = make_cp(codigo_sap=sap)
-        res = run_eval(fv=fv, cp=cp)
-        assert res.codigo_motor == "R-000", (sap, res.codigo_motor)
+def test_gs0229_validar_gs0244_exento(run_eval, make_fv, make_cp):
+    # REGLA 2026-07-20: GS0229 (comp ped) → R-812 validar en sistema;
+    # GS0244 (garantías) y GS0248 siguen exentos/automáticos.
+    fv = make_fv(partidas=[], subtotal=10.67)
+    res = run_eval(fv=fv, cp=make_cp(codigo_sap="GS0229"))
+    assert res.codigo_motor == "R-812"
+    fv2 = make_fv(partidas=[], subtotal=10.67)
+    res2 = run_eval(fv=fv2, cp=make_cp(codigo_sap="GS0244"))
+    assert res2.codigo_motor == "R-000"
