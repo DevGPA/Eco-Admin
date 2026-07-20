@@ -1228,3 +1228,34 @@ def test_estado_por_cp_rangos():
     assert sucursal_por_cp("48300") == "PVR"            # Puerto Vallarta ≠ GDL
     assert sucursal_por_cp("44190") == "GDL"
     assert sucursal_por_cp("67130") == "MTY"
+
+
+def test_sap_por_tipo_flete_catalogo_oficial():
+    # Catálogo real de sellos ("Sellos Gastos.zip"): el recuadro TIPO DE FLETE
+    # identifica el código aunque el GS0xxx subrayado no se lea. Las etiquetas
+    # largas ganan: "COM. PED. PAGADO"→GS0247 antes que "COM. PED."→GS0229.
+    from motor.catalogos import sap_por_tipo_flete
+    assert sap_por_tipo_flete("COM. PED. PAGADO") == "GS0247"
+    assert sap_por_tipo_flete("COM. PED.") == "GS0229"
+    assert sap_por_tipo_flete("com ped") == "GS0229"
+    assert sap_por_tipo_flete("PAGADO") == "GS0230"
+    assert sap_por_tipo_flete("APOYO RUTA LOCAL (FLETERA)") == "GS0242"
+    assert sap_por_tipo_flete("APOYO RUTA LOCAL") == "GS0243"
+    assert sap_por_tipo_flete("GARANTIAS Y DEVOLUCIONES") == "GS0244"
+    assert sap_por_tipo_flete("MENSAJERÍA Y PAQUETERÍA") == "GS0750"
+    assert sap_por_tipo_flete("DISP. SEMANAL") == "GS0231"
+    assert sap_por_tipo_flete("texto cualquiera") == ""
+    assert sap_por_tipo_flete(None) == ""
+
+
+def test_leer_sello_infiere_codigo_del_tipo_flete():
+    # El modelo no alcanzó a leer el GS0xxx subrayado pero SÍ el recuadro
+    # grande → el código se infiere del catálogo (120885268: NO-LEIDO en prod).
+    fake = FakeBedrock({"codigoSAP": None, "sucursalSello": "Guadalajara",
+                        "tipoFleteSello": "COM. PED. PAGADO"})
+    s = ocr.leer_sello_cp(b"png", client=fake)
+    assert s["codigoSAP"] == "GS0247"
+    # Y en el adaptador de páginas escaneadas, mismo respaldo.
+    p = ocr._adaptar_bedrock({"tipoDocumento": "CARTA_PORTE", "rfcReceptor": RFC_GPA,
+                              "codigoSAP": None, "tipoFleteSello": "DISP. SEMANAL"})
+    assert p["codigoSAP"] == "GS0231"

@@ -33,7 +33,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.6.5"   # GS0229/GS0247 → R-812 validar en sistema; sello con reintento 300 DPI y log SIEMPRE
+VERSION = "2.6.6"   # Catálogo oficial de 13 sellos + código inferido del recuadro TIPO DE FLETE
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",

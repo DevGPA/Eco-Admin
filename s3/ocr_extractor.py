@@ -28,7 +28,7 @@ import boto3
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
                              fletera_por_nombre, TIPO_CAMBIO_DEFAULT,
                              normalizar_destino, DESTINOS_CATALOGO, SAPS_DISPERSION,
-                             estado_por_cp, sucursal_por_cp)
+                             estado_por_cp, sucursal_por_cp, sap_por_tipo_flete)
 
 logger = logging.getLogger(__name__)
 
@@ -102,16 +102,30 @@ PROMPT_OCR = (
 )
 
 # Prompt corto para leer SOLO el sello presupuestal (páginas CP digitales cuya
-# capa de texto es exacta pero el sello es una imagen estampada).
+# capa de texto es exacta pero el sello es una imagen estampada). Enumera el
+# catálogo OFICIAL de sellos (muestras reales del usuario) para que el modelo
+# sepa exactamente qué buscar; el recuadro TIPO DE FLETE es texto grande y es
+# el ancla más legible — el código se puede inferir de él.
 PROMPT_SELLO = (
-    "La imagen es una carta porte con un SELLO rectangular de 'Formato de Control "
-    "Presupuestal' de General de Productos para el Agua (GPA). Devuelve EXCLUSIVAMENTE "
-    "un objeto JSON:\n"
-    '  "codigoSAP": string|null     (código GS0xxx impreso en el sello, p.ej. "GS0231")\n'
-    '  "sucursalSello": string|null (casilla de sucursal MARCADA: Guadalajara, '
+    "La imagen es una carta porte que trae ESTAMPADO un sello rectangular de "
+    "'Formato de Control Presupuestal' de General de Productos para el Agua (GPA), "
+    "con el logo GPA arriba. El sello tiene: CENTRO DE COSTO (p.ej. CASU 0020), "
+    "CUENTA CONTABLE (p.ej. 6115-020-070), CÓDIGO SAP (subrayado, lado izquierdo), "
+    "casillas de SUCURSAL a la derecha, y abajo un recuadro grande TIPO DE FLETE. "
+    "Los ÚNICOS códigos válidos y su tipo de flete son: "
+    "GS0229=COM. PED. · GS0230=PAGADO · GS0231=DISP. SEMANAL · "
+    "GS0232=DISP. EXP. SUC. · GS0234=OTROS FLETES · GS0242=APOYO RUTA LOCAL (FLETERA) · "
+    "GS0243=APOYO RUTA LOCAL · GS0244=GARANTIAS Y DEV. · GS0245=DISP. EXP. A CLIENTE · "
+    "GS0246=FLETES POR INCIDENCIAS EXTRAORDINARIAS · GS0247=COM. PED. PAGADO · "
+    "GS0248=CARGO POR FLETE · GS0750=MENSAJERIA Y PAQUETERIA. "
+    "El sello puede estar encimado sobre el contenido del documento, inclinado o "
+    "tenue; los números manuscritos cercanos NO son el código. Devuelve "
+    "EXCLUSIVAMENTE un objeto JSON:\n"
+    '  "codigoSAP": string|null     (uno de los códigos del catálogo)\n'
+    '  "sucursalSello": string|null (casilla de sucursal MARCADA/rellenada: Guadalajara, '
     "Monterrey, Pto. Vallarta, México, Cancún, Los Cabos o Corporativo)\n"
-    '  "tipoFleteSello": string|null (texto del recuadro TIPO DE FLETE)\n'
-    "Si no hay sello visible, todo en null."
+    '  "tipoFleteSello": string|null (texto del recuadro TIPO DE FLETE, tal cual)\n'
+    "Si de verdad no hay ningún sello GPA en la página, todo en null."
 )
 
 
@@ -566,8 +580,10 @@ def _adaptar_bedrock(raw: dict) -> dict:
         "destinatarioGPA": bool(raw.get("destinatarioGPA")),
         "esMuestra":      any(_RE_MUESTRA.search(_sin_acentos(p["descripcion"]))
                               for p in partidas),
-        # Sello de Control Presupuestal (validado; "" si no pasa el formato)
-        "codigoSAP":      _codigo_sap_valido(raw.get("codigoSAP")),
+        # Sello de Control Presupuestal (validado; "" si no pasa el formato;
+        # respaldo determinístico por el recuadro TIPO DE FLETE)
+        "codigoSAP":      (_codigo_sap_valido(raw.get("codigoSAP"))
+                           or sap_por_tipo_flete(raw.get("tipoFleteSello"))),
         "sucursalSello":  str(raw.get("sucursalSello") or "").strip(),
         "tipoFleteSello": str(raw.get("tipoFleteSello") or "").strip(),
     }
@@ -608,10 +624,17 @@ def leer_sello_cp(imagen_png: bytes, client=None, model_id: str = BEDROCK_MODEL_
             inferenceConfig={"maxTokens": 300, "temperature": 0},
         )
         raw = _parse_json(resp["output"]["message"]["content"][0]["text"])
+        tipo = str(raw.get("tipoFleteSello") or "").strip()
+        codigo = _codigo_sap_valido(raw.get("codigoSAP"))
+        # Respaldo DETERMINÍSTICO: el recuadro TIPO DE FLETE identifica el
+        # código sin ambigüedad (catálogo oficial de sellos). El código
+        # subrayado suele ser lo más tenue del sello; la etiqueta grande no.
+        if not codigo and tipo:
+            codigo = sap_por_tipo_flete(tipo)
         return {
-            "codigoSAP": _codigo_sap_valido(raw.get("codigoSAP")),
+            "codigoSAP": codigo,
             "sucursalSello": str(raw.get("sucursalSello") or "").strip(),
-            "tipoFleteSello": str(raw.get("tipoFleteSello") or "").strip(),
+            "tipoFleteSello": tipo,
         }
     except Exception as exc:
         logger.warning("leer_sello_cp falló (se ignora): %s", exc)

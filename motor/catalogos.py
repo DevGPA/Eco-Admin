@@ -102,6 +102,48 @@ SAPS_EXENTOS_MONTO = {
 # MANUALMENTE EN SISTEMA (regla GPA 2026-07-20, refina la exención del 07-15).
 SAPS_VALIDAR_MANUAL = {"GS0229", "GS0247"}
 
+# ── Catálogo OFICIAL de sellos presupuestales (muestras del usuario,
+# "Sellos Gastos.zip" 2026-07-20): código SAP → texto del recuadro TIPO DE
+# FLETE. El recuadro es texto GRANDE y legible aunque el código subrayado no
+# lo sea → el mapeo etiqueta→código es el respaldo determinístico de lectura.
+SELLOS_CATALOGO = {
+    "GS0229": "COM. PED.",
+    "GS0230": "PAGADO",
+    "GS0231": "DISP. SEMANAL",
+    "GS0232": "DISP. EXP. SUC.",
+    "GS0234": "OTROS FLETES",
+    "GS0242": "APOYO RUTA LOCAL (FLETERA)",
+    "GS0243": "APOYO RUTA LOCAL",
+    "GS0244": "GARANTIAS Y DEVOLUCIONES",
+    "GS0245": "DISP. EXP. A CLIENTE",
+    "GS0246": "FLETES POR INCIDENCIAS EXTRAORDINARIAS",
+    "GS0247": "COM. PED. PAGADO",
+    "GS0248": "CARGO POR FLETE",
+    "GS0750": "MENSAJERIA Y PAQUETERIA",
+}
+
+# Índice normalizado (sin acentos/puntos) etiqueta→código, etiquetas más
+# LARGAS primero: "COM PED PAGADO"→GS0247 debe ganar antes que "COM PED"→
+# GS0229, y "APOYO RUTA LOCAL (FLETERA)" antes que "APOYO RUTA LOCAL".
+_TIPO_FLETE_A_SAP = sorted(
+    ((_normalizar(re.sub(r"[.]", "", v)), k) for k, v in SELLOS_CATALOGO.items()),
+    key=lambda t: -len(t[0]))
+
+
+def sap_por_tipo_flete(texto: Optional[str]) -> str:
+    """Código SAP inferido del texto del recuadro TIPO DE FLETE del sello.
+    Igualdad exacta primero; luego contención (etiqueta más larga gana)."""
+    n = _normalizar(re.sub(r"[.]", "", str(texto or "")))
+    if not n:
+        return ""
+    for etiqueta, sap in _TIPO_FLETE_A_SAP:
+        if n == etiqueta:
+            return sap
+    for etiqueta, sap in _TIPO_FLETE_A_SAP:
+        if etiqueta in n:
+            return sap
+    return ""
+
 # Tope de dispersiones (regla GPA 2026-07-15, caso 120466326): el monto
 # máximo autorizado de un flete de dispersión es $33,000 MXN + IVA. Dentro
 # del tope, una ruta SIN tarifa se auto-aprueba; por encima, siempre revisión.
