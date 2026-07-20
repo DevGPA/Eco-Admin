@@ -1317,7 +1317,10 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   const sections=tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
-  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico"&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  // Checklist de reparto: por CATEGORÍA de la unidad (no por combustible — los
+  // eléctricos de reparto también se inspeccionan). Gas LP se excluye porque es
+  // combustible de montacargas.
+  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   // Preselección: la última unidad que ESTE usuario capturó en este módulo.
   const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
   const[veh,setVeh]=useState(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):""));
@@ -2001,7 +2004,8 @@ const segUnidades=(cat,tipo,sucs)=>(cat.vehicles||[]).filter(v=>{
   if(!v.activo)return false;
   if(sucs&&!sucs.includes(v.sucursal))return false;
   if(tipo==="combustible")return v.combustible!=="Electrico";
-  if(tipo==="reparto")return catVeh(v)==="reparto"&&v.combustible!=="Gas LP"&&v.combustible!=="Electrico";
+  // Reparto: por categoría; los eléctricos de reparto también hacen checklist.
+  if(tipo==="reparto")return catVeh(v)==="reparto"&&v.combustible!=="Gas LP";
   if(tipo==="montacargas")return catVeh(v)==="montacargas";
   return false;
 });
