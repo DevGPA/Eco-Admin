@@ -649,8 +649,15 @@ class GpaMonitorBridge {
     const fmt   = (d) => d.toISOString().slice(0, 10);
     const first = new Date(now.getFullYear(), now.getMonth(), 1);
     const last  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const desde = document.getElementById('dfFrom')?.value || fmt(first);
-    const hasta = document.getElementById('dfTo')?.value   || fmt(last);
+    let desde = document.getElementById('dfFrom')?.value || fmt(first);
+    let hasta = document.getElementById('dfTo')?.value   || fmt(last);
+    // Con filtro de folios activo (lote en curso / búsqueda de CP) el rango
+    // se abre por completo: la tarjeta buscada puede tener CUALQUIER fecha
+    // de emisión y el filtro de fechas la escondería.
+    if (window._gpaFiltroFolios && window._gpaFiltroFolios.size) {
+      desde = '2020-01-01';
+      hasta = fmt(new Date(now.getTime() + 86400000));
+    }
 
     try {
       const data = await this.api.cargarKanban(desde, hasta);
@@ -760,8 +767,25 @@ class GpaMonitorBridge {
     const el = document.getElementById(containerId);
     if (!el) return;
 
+    // Filtro de FOLIOS activo (lote en ejecución o búsqueda de CP): el
+    // canvas muestra SOLO esas tarjetas; al limpiarse, vuelve a regirse por
+    // el filtro de fechas.
+    const filtro = window._gpaFiltroFolios;
+    if (filtro && filtro.size) {
+      const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      items = items.filter(it => {
+        const f = norm(it.folioCP);
+        for (const q of filtro) {
+          if (f && q && (f.indexOf(q) !== -1 || q.indexOf(f) !== -1)) return true;
+        }
+        return false;
+      });
+    }
+
     if (!items.length) {
-      el.innerHTML = '<div class="empty">Sin solicitudes en este rango.</div>';
+      el.innerHTML = '<div class="empty">' +
+        (filtro && filtro.size ? 'Sin tarjetas para este filtro de folios.'
+                               : 'Sin solicitudes en este rango.') + '</div>';
       return;
     }
 

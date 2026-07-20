@@ -985,6 +985,11 @@ input::placeholder{color:var(--ink3);font-weight:400;}
   </div>
   <button class="df-btn" onclick="applyFilter()">Filtrar</button>
   <button class="df-clear" onclick="clearFilter()">Limpiar</button>
+  <span class="df-label" style="margin-left:14px">Buscar CP</span>
+  <input type="text" class="df-input" id="cpSearch" placeholder="folio…" style="width:130px"
+         onkeydown="if(event.key==='Enter')gpaBuscarCP()">
+  <button class="df-btn" onclick="gpaBuscarCP()">&#128269; Buscar</button>
+  <button class="df-clear" id="cpSearchClear" style="display:none" onclick="gpaLimpiarBusqueda()">&#10005; Quitar</button>
   <div class="df-presets">
     <button class="df-preset" onclick="setPreset('mesActual',this)">Este mes</button>
     <button class="df-preset" onclick="setPreset('mes',this)">Último mes</button>
@@ -2254,6 +2259,23 @@ async function _s3Code(resp) {
 // Tras subir, el backend procesa asíncrono (OCR + evaluación; escaneos tardan
 // minutos). Este vigilante consulta el API cada pocos segundos, actualiza cada
 // tarjeta "EN PROCESO" a su veredicto real y mueve la barra X/N.
+function gpaBuscarCP() {
+  // Busca una CP por folio en TODO el histórico (abre el rango de fechas) y
+  // muestra solo su tarjeta; "Quitar" regresa al filtro normal.
+  const q = _normFolio((document.getElementById('cpSearch') || {}).value || '');
+  if (!q) { gpaLimpiarBusqueda(); return; }
+  window._gpaFiltroFolios = new Set([q]);
+  window._gpaFiltroEsLote = false;
+  document.getElementById('cpSearchClear').style.display = '';
+  try { if (window.gpaBridge && gpaBridge.refreshKanban) gpaBridge.refreshKanban(); } catch (e) {}
+}
+function gpaLimpiarBusqueda() {
+  window._gpaFiltroFolios = null;
+  window._gpaFiltroEsLote = false;
+  const i = document.getElementById('cpSearch'); if (i) i.value = '';
+  const b = document.getElementById('cpSearchClear'); if (b) b.style.display = 'none';
+  try { if (window.gpaBridge && gpaBridge.refreshKanban) gpaBridge.refreshKanban(); } catch (e) {}
+}
 function _normFolio(s) {
   return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -2292,6 +2314,11 @@ async function vigilarProcesamiento(nombres, t0iso) {
   if (!prog) return;
   prog.style.display = 'block';
   const meta = nombres.map(function(n){ return { fn: _normFolio(n.replace(/\.(pdf)$/i,'')), listo: false }; });
+  // Mientras el lote corre, el canvas muestra SOLO sus tarjetas (pedido del
+  // usuario 2026-07-20); al terminar vuelve a regirse por el filtro de fechas.
+  window._gpaFiltroFolios = new Set(meta.map(function(m){ return m.fn; }).filter(Boolean));
+  window._gpaFiltroEsLote = true;
+  try { if (window.gpaBridge && gpaBridge.refreshKanban) gpaBridge.refreshKanban(); } catch (e) {}
   const N = meta.length;
   const ESTADOS = ['EN_REVISION','ESCALADA','AUTO_APROBADA','APROBADA_MANUAL',
                    'AUTO_RECHAZADA','RECHAZADA_MANUAL','BLOQUEADA'];
@@ -2340,6 +2367,8 @@ async function vigilarProcesamiento(nombres, t0iso) {
     ? '✓ Motor terminó: ' + N + ' de ' + N + ' documentos procesados'
     : '⏱ ' + done + ' de ' + N + ' procesados — los restantes siguen en el motor (revisa el tablero en unos minutos)';
   eta.textContent = '';
+  // Lote terminado: liberar el filtro de folios (si no lo reemplazó una búsqueda manual).
+  if (window._gpaFiltroEsLote) { window._gpaFiltroFolios = null; window._gpaFiltroEsLote = false; }
   try { if (window.gpaBridge && gpaBridge.refreshKanban) gpaBridge.refreshKanban(); } catch (e) {}
 }
 
