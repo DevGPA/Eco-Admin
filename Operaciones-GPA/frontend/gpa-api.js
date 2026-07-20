@@ -229,6 +229,8 @@ class GpaApi {
   adminPrecioCombustible(combustible, precio) { return this._fetch("POST", "/admin/precio-combustible", { combustible, precio }); }
   async adminCuentas() { return (await this._fetch("GET", "/admin/cuentas")).items || []; }
   adminCuenta(c)      { return this._fetch("POST", "/admin/cuenta", c); }
+  // Corrección de admin: mueve un registro (SOL/CL/MC) a otra unidad
+  adminReasignarUnidad(tipo, id, vehicleId) { return this._fetch("POST", "/admin/reasignar-unidad", { tipo, id, vehicleId }); }
 
   // ── Motor de formularios dinámicos ─────────────────────────────
   adminModulo(mod)    { return this._fetch("POST", "/admin/modulo", mod); }

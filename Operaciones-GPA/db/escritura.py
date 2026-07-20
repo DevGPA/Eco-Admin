@@ -218,6 +218,43 @@ def guardar_plantilla(p: dict) -> dict:
     return {"ok": True, "clave": clave}
 
 
+# ── Reasignación de unidad (corrección de admin) ─────────────────
+# Espeja el criterio de seed/reasignar_unidad.py: SOLO cambia la identidad
+# desnormalizada de la unidad + el índice por sucursal; los datos del evento
+# (km, litros, fotos, firmas, fechas, estado) NO se tocan.
+_IDENT_REG_A_VEH = {"economico": "economico", "placas": "placas", "subMarca": "subMarca",
+                    "sucursal": "sucursal", "areaResponsable": "responsable"}
+
+
+def reasignar_registro_unidad(tipo: str, rid: str, destino: dict, por: str) -> dict:
+    """Mueve un registro (SOL/CL/MC) a otra unidad del catálogo, dejando rastro
+    en `reasignacion` (unidad anterior, quién y cuándo)."""
+    t = _t()
+    item = t.get_item(Key={"PK": f"{tipo}#{rid}", "SK": "META"}).get("Item")
+    if not item:
+        raise ValueError("Registro no encontrado")
+    if str(item.get("vehicleId")) == str(destino.get("id")):
+        raise ValueError("El registro ya pertenece a esa unidad")
+    parche = {"vehicleId": destino["id"]}
+    for campo_reg, campo_veh in _IDENT_REG_A_VEH.items():
+        nuevo = destino.get(campo_veh)
+        if nuevo is None or campo_reg not in item:
+            continue                      # el registro no traía ese campo: no lo inventamos
+        if item.get(campo_reg) != nuevo:
+            parche[campo_reg] = nuevo
+    if destino.get("sucursal") and item.get("GSI2PK"):
+        nuevo_gsi2 = f"{tipo}#{destino['sucursal']}"
+        if item.get("GSI2PK") != nuevo_gsi2:
+            parche["GSI2PK"] = nuevo_gsi2
+    parche["reasignacion"] = {
+        "de": {"vehicleId": item.get("vehicleId"), "economico": item.get("economico"),
+               "placas": item.get("placas"), "sucursal": item.get("sucursal")},
+        "por": por, "en": _now_iso(),
+    }
+    merge_registro(tipo, rid, parche)
+    return {"ok": True, "id": rid, "vehicleId": destino["id"]}
+
+
 # ── Responsables de alertas del Tablero de Seguimiento ───────────
 def guardar_responsable_alerta(email: str, tipo) -> None:
     """Marca (o quita) una cuenta como responsable de alertas de cumplimiento.

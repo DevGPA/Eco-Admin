@@ -177,6 +177,10 @@ Resources:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/precio-combustible }
 
+        AdminReasignarUnidad:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/reasignar-unidad }
+
         # ── Motor de formularios dinámicos (catálogos + registros genéricos) ──
         AdminModulo:
           Type: HttpApi

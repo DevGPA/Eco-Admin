@@ -28,7 +28,7 @@ from db.escritura import (crear_registro, cambiar_estado,
                           guardar_sucursal, eliminar_sucursal, guardar_config,
                           actualizar_precio_por_combustible,
                           guardar_modulo, guardar_plantilla,
-                          guardar_responsable_alerta)
+                          guardar_responsable_alerta, reasignar_registro_unidad)
 from db.queries import (listar_registros, get_registro, cargar_catalogos,
                         get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
                         ultima_solicitud_vehiculo)
@@ -222,6 +222,8 @@ def lambda_handler(event, context):
                     guardar_responsable_alerta(res.get("email") or b.get("email", ""),
                                                b.get("responsableAlerta"))
                 return _resp(res)
+            if route == "POST /admin/reasignar-unidad":
+                return _reasignar_unidad(_body(event), cl)
             return _admin(route, _body(event))
 
         return _err(f"Ruta no encontrada: {route}", 404)
@@ -436,6 +438,23 @@ def _texto_notif(tipo, datos, sucursal, cl, rid, email_dest):
 
 
 # ── Admin ────────────────────────────────────────────────────────
+def _reasignar_unidad(b, cl):
+    """Corrección de admin: mueve un registro (SOL/CL/MC) a otra unidad.
+    Solo cambia la identidad de la unidad en el registro (+ índice por sucursal);
+    los datos capturados no se alteran y queda rastro en `reasignacion`."""
+    tipo = b.get("tipo")
+    if tipo not in (m.SOL, m.CL, m.MC):
+        return _err("tipo inválido (SOL/CL/MC)")
+    rid = str(b.get("id") or "").strip()
+    if not rid:
+        return _err("Falta el id del registro")
+    veh = get_vehiculo(str(b.get("vehicleId") or "").strip())
+    if not veh:
+        return _err("Unidad destino no encontrada", 404)
+    res = reasignar_registro_unidad(tipo, rid, veh, cl["email"])
+    return _resp(res)
+
+
 def _admin(route, body):
     if route == "POST /admin/vehiculo":
         guardar_vehiculo(body)
