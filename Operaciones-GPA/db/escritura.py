@@ -88,6 +88,16 @@ EDITABLES_VEH = ("economico", "responsable", "combustible", "precio", "producto"
 # subMarca (+ id, que es la clave).
 
 
+def _economico_duplicado(t, economico, vid) -> bool:
+    """True si OTRA unidad ya usa ese número económico (mezclaría los reportes)."""
+    if economico in (None, ""):
+        return False
+    eco = str(economico).strip()
+    resp = t.query(KeyConditionExpression=Key("PK").eq(m.PK_VEHICLE))
+    return any(str(it.get("economico") or "") == eco and str(it.get("id")) != str(vid)
+               for it in resp.get("Items", []))
+
+
 def guardar_vehiculo(v: dict) -> dict:
     """
     Reglas (autoritativas en servidor):
@@ -96,6 +106,7 @@ def guardar_vehiculo(v: dict) -> dict:
         (responsable, combustible, precio, producto, activo); el resto se conserva.
       • Vehículo NUEVO: el id debe ser numérico y CONSECUTIVO INCREMENTAL
         (mayor al id más alto existente). Si no, se rechaza.
+      • El número ECONÓMICO no puede repetirse entre unidades.
     """
     vid = str(v.get("id", "")).strip()
     if not vid:
@@ -103,6 +114,10 @@ def guardar_vehiculo(v: dict) -> dict:
     t = _t()
     sk = m.sk_vehicle(vid)
     existente = t.get_item(Key={"PK": m.PK_VEHICLE, "SK": sk}).get("Item")
+
+    if v.get("economico") not in (None, "") and _economico_duplicado(t, v["economico"], vid):
+        raise ValueError(f"El número económico '{v['economico']}' ya lo usa otra unidad. "
+                         f"Cada unidad debe tener un económico distinto.")
 
     if existente:
         item = dict(existente)

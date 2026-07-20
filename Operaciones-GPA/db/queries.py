@@ -112,6 +112,27 @@ def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
     return out
 
 
+def ultima_solicitud_vehiculo(vid) -> dict | None:
+    """Última SOLICITUD de combustible (no reporte) de una unidad, sobre el
+    historial completo (GSI1 por fecha desc). Autoritativa: no depende del rol.
+    Se usa para exigir asignación (solicitud Aprobada) antes del reporte de carga."""
+    if vid in (None, ""):
+        return None
+    t = _t()
+    vid = str(vid)
+    kwargs = dict(IndexName="tipo-fecha-idx",
+                  KeyConditionExpression=Key("GSI1PK").eq(m.SOL),
+                  ScanIndexForward=False)
+    while True:
+        resp = t.query(**kwargs)
+        for it in resp.get("Items", []):
+            if str(it.get("vehicleId") or "") == vid and it.get("formato") != "reporte":
+                return _limpiar(m.from_dynamo(it))
+        if "LastEvaluatedKey" not in resp:
+            return None
+        kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+
+
 def _limpiar(item: dict) -> dict:
     """Quita las claves internas de Dynamo antes de mandar al cliente."""
     for k in ("PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK", "GSI3SK"):

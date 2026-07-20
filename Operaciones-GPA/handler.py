@@ -30,7 +30,8 @@ from db.escritura import (crear_registro, cambiar_estado,
                           guardar_modulo, guardar_plantilla,
                           guardar_responsable_alerta)
 from db.queries import (listar_registros, get_registro, cargar_catalogos,
-                        get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo)
+                        get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
+                        ultima_solicitud_vehiculo)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -271,6 +272,15 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
         return _err("El analista no captura registros", 403)
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    # Reporte de carga SOLO con asignación: la última solicitud de la unidad
+    # debe estar APROBADA (regla autoritativa; el cliente solo avisa).
+    if tipo == m.SOL and datos.get("formato") == "reporte":
+        ult = ultima_solicitud_vehiculo(datos.get("vehicleId"))
+        if not ult or ult.get("status") != "Aprobada":
+            estado = "está RECHAZADA" if (ult or {}).get("status") == "Rechazada" else \
+                     "sigue PENDIENTE de autorización" if ult else "no existe"
+            return _err("No se puede enviar el reporte: la solicitud de combustible de esta unidad "
+                        f"{estado}. Se requiere una solicitud APROBADA (asignación).", 422)
     err_medidor = _validar_medidor(tipo, datos, cl)
     if err_medidor:
         return _err(err_medidor, 422)
@@ -308,6 +318,22 @@ def _listar(tipo, cl):
     return _resp({"items": items})
 
 
+# Estados permitidos al autorizar (whitelist; femenino=combustible, masculino=MC/FRM)
+_ESTADOS_OK = ("Pendiente", "Aprobada", "Rechazada", "Aprobado", "Rechazado")
+
+
+def _veto_estado(cl, reg) -> str | None:
+    """Reglas de autorización sobre UN registro (además del rol):
+    · supervisor restringido → solo registros de SUS sucursales;
+    · nadie (salvo admin) autoriza sus PROPIAS capturas."""
+    if cl["rol"] == "supervisor" and cl["sucursales"] and \
+            reg.get("sucursal") not in cl["sucursales"]:
+        return "Este registro es de otra sucursal (fuera de tu alcance)."
+    if cl["rol"] != "admin" and reg.get("accountId") == cl["email"]:
+        return "No puedes autorizar tus propias capturas; pide a otro autorizador (solo un administrador puede)."
+    return None
+
+
 def _estado(tipo, event, cl):
     if cl["rol"] not in ("admin", "analista", "supervisor"):
         return _err("No autorizado para cambiar estado", 403)
@@ -317,8 +343,14 @@ def _estado(tipo, event, cl):
     nuevo = _body(event).get("status")
     if not nuevo:
         return _err("Falta status")
-    if not get_registro(tipo, rid):
+    if nuevo not in _ESTADOS_OK:
+        return _err("Estado inválido", 400)
+    reg = get_registro(tipo, rid)
+    if not reg:
         return _err("Registro no encontrado", 404)
+    veto = _veto_estado(cl, reg)
+    if veto:
+        return _err(veto, 403)
     cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"])
     return _resp({"ok": True, "status": nuevo})
 
@@ -375,8 +407,14 @@ def _estado_form(event, cl):
     nuevo = _body(event).get("status")
     if not nuevo:
         return _err("Falta status")
-    if not get_registro(tipo, rid):
+    if nuevo not in _ESTADOS_OK:
+        return _err("Estado inválido", 400)
+    reg = get_registro(tipo, rid)
+    if not reg:
         return _err("Registro no encontrado", 404)
+    veto = _veto_estado(cl, reg)
+    if veto:
+        return _err(veto, 403)
     cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"])
     return _resp({"ok": True, "status": nuevo})
 

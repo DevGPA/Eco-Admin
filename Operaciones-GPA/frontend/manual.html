@@ -203,7 +203,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
       <p>Guía completa de la aplicación: combustible, mantenimiento, seguridad, formularios, seguimiento de cumplimiento y administración.</p>
     </div>
     <div class="meta">
-      Versión 1.4 · jul 2026<br/>Aplicación móvil / web (PWA)<br/>Acceso con correo <span class="mono">@gpa.com.mx</span>
+      Versión 1.5 · jul 2026<br/>Aplicación móvil / web (PWA)<br/>Acceso con correo <span class="mono">@gpa.com.mx</span>
     </div>
   </div>
 </header>
@@ -330,7 +330,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
           <tbody>
             <tr><td><span class="chip rol-ope">Operador</span></td><td>Captura y envía registros (combustible, checklists, formularios) de sus módulos y sucursales. Ve su propio historial.</td></tr>
             <tr><td><span class="chip rol-sup">Supervisor</span></td><td>Todo lo del operador <b>+ autoriza</b> (aprueba o rechaza) registros de sus sucursales, y consulta el <b>Tablero de Seguimiento</b>.</td></tr>
-            <tr><td><span class="chip rol-ana">Analista</span></td><td>Solo <b>lectura</b>: consulta historiales y el <b>Tablero de Seguimiento</b>. No captura.</td></tr>
+            <tr><td><span class="chip rol-ana">Analista</span></td><td>Consulta historiales y el <b>Tablero de Seguimiento</b>, y <b>autoriza</b> (aprueba/rechaza) registros. No captura.</td></tr>
             <tr><td><span class="chip rol-adm">Administrador</span></td><td>Acceso total: todo lo anterior <b>+ panel de Administración</b> (vehículos, cuentas, sucursales, formularios, etc.).</td></tr>
           </tbody>
         </table>
@@ -413,7 +413,8 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
         <li>Toma la <b>foto</b> de evidencia (km y medidor) y <b>firma</b>.</li>
         <li>Envía. Queda en estado <span class="st st-warn">Pendiente</span> hasta que un supervisor o administrador la autorice.</li>
       </ol>
-      <p><b>Autorizar</b> <span class="chip rol-sup">Supervisor</span> <span class="chip rol-adm">Administrador</span>: abre la solicitud en el Historial y usa <b>Cambiar Estado</b> → <span class="st st-ok">Aprobada</span> o <span class="st st-bad">Rechazada</span>. Una solicitud <b>aprobada</b> es una <b>asignación</b>: habilita cargar y activa el reporte de carga.</p>
+      <p><b>Autorizar</b> <span class="chip rol-sup">Supervisor</span> <span class="chip rol-ana">Analista</span> <span class="chip rol-adm">Administrador</span>: abre la solicitud en el Historial y usa <b>Cambiar Estado</b> → <span class="st st-ok">Aprobada</span> o <span class="st st-bad">Rechazada</span>. Una solicitud <b>aprobada</b> es una <b>asignación</b>: habilita cargar y activa el reporte de carga.</p>
+      <div class="note"><span class="callout-t">Reglas de autorización:</span> nadie puede aprobar sus <b>propias</b> capturas (solo un administrador puede); el supervisor solo autoriza registros de <b>sus sucursales</b>; y el <b>reporte de carga</b> únicamente se puede enviar cuando la solicitud de esa unidad está <b>Aprobada</b> (con asignación).</div>
 
       <h3>Reporte de carga</h3>
       <p>Es la comprobación de la carga <b>ya realizada</b> (después de cargar). Se capturan: kilometraje, fotos antes/después, foto de la bomba, litros y precio por litro (el <b>monto total se calcula automático</b> = litros × precio, no se escribe a mano), foto del ticket, ubicación GPS automática, la <b>foto de la persona que realiza la carga</b> (recuadro propio, justo antes de la firma) y la firma.</p>
@@ -704,7 +705,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v1.4. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v1.5. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>
