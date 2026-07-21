@@ -240,6 +240,16 @@ Resources:
             Method: POST
             Path:   /aprobar
 
+        # API Gateway — POST /confirmar-rechazo (aceptar el rechazo del motor;
+        # el handler ya lo ruteaba pero sin este Event la puerta no existía y
+        # el navegador recibía "Failed to fetch")
+        ApiConfirmarRechazo:
+          Type: HttpApi
+          Properties:
+            ApiId:  !Ref GpaHttpApi
+            Method: POST
+            Path:   /confirmar-rechazo
+
         # API Gateway — POST /rechazar
         ApiRechazar:
           Type: HttpApi

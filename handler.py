@@ -33,7 +33,7 @@ from s3.ocr_extractor import procesar_objeto_s3, caso_a_solicitud
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-VERSION = "2.6.7"   # Arbitraje código↔etiqueta del sello (corrige misreads de un dígito)
+VERSION = "2.6.8"   # Ruta API Gateway para /confirmar-rechazo (Failed to fetch al Aceptar)
 
 def _ok(b, s=200):
     return {"statusCode":s,"headers":{"Content-Type":"application/json",
