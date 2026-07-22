@@ -1307,7 +1307,7 @@ function SolHistory({items,rol,onSelect}){
 function ReasignarUnidad({tipoApi,reg,cat,rol,refrescar,showToast,onBack}){
   const[nv,setNv]=useState("");const[busy,setBusy]=useState(false);
   if(rol!=="admin"||!cat)return null;
-  const pool=cat.vehicles.filter(v=>esActivoV(v)&&String(v.id)!==String(reg.vehicleId)&&(tipoApi==="SOL"?!esElectrico(v):tipoApi==="CL"?(catVeh(v)==="reparto"&&!esGasLP(v)):catVeh(v)==="montacargas"));
+  const pool=cat.vehicles.filter(v=>esActivoV(v)&&String(v.id)!==String(reg.vehicleId)&&(tipoApi==="SOL"?!esElectrico(v):tipoApi==="CL"?catVeh(v)==="reparto":catVeh(v)==="montacargas"));
   const aplicar=async()=>{
     if(!nv||busy)return;
     const dest=cat.vehicles.find(v=>String(v.id)===String(nv));
@@ -1404,7 +1404,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   // Checklist de reparto: por CATEGORÍA de la unidad (no por combustible — los
   // eléctricos de reparto también se inspeccionan). Gas LP se excluye porque es
   // combustible de montacargas.
-  const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&!esGasLP(v)&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   // Preselección: la última unidad que ESTE usuario capturó en este módulo.
   const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
   const[veh,setVeh]=useState(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):""));
@@ -2090,8 +2090,9 @@ const segUnidades=(cat,tipo,sucs)=>(cat.vehicles||[]).filter(v=>{
   if(!esActivoV(v))return false;                 // inactivos NUNCA cuentan
   if(sucs&&!sucs.includes(v.sucursal))return false;
   if(tipo==="combustible")return !esElectrico(v); // eléctricos no cargan combustible
-  // Reparto: por categoría; los eléctricos de reparto también hacen checklist.
-  if(tipo==="reparto")return catVeh(v)==="reparto"&&!esGasLP(v);
+  // Reparto: SOLO por categoría (una unidad de reparto puede ser gasolina, diésel,
+  // eléctrica o Gas LP). Un Gas LP sin categoría explícita se auto-clasifica como montacargas.
+  if(tipo==="reparto")return catVeh(v)==="reparto";  // por CATEGORÍA (una unidad de reparto puede ser eléctrica o Gas LP)
   if(tipo==="montacargas")return catVeh(v)==="montacargas";
   return false;
 });
