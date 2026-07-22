@@ -394,7 +394,13 @@ const mxDia=(Y,M,d)=>new Date(Date.UTC(Y,M-1,d,18,0,0)); // instante ~mediodía 
 const mxHora=(ds,H)=>{const[y,m,d]=String(ds).split("-").map(Number);return new Date(Date.UTC(y,m-1,d,H+6,0,0));}; // instante de las H:00 (México) del día ds
 // Categoría del vehículo: usa v.categoria si está definida; si no, la infiere
 // (responsable ALMACEN o combustible Gas LP = montacargas; el resto = reparto). Editable en Admin/Excel.
-const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMACEN")||v.combustible==="Gas LP")?"montacargas":"reparto");
+// Normalización robusta: acentos/mayúsculas del catálogo no deben romper reglas
+// ("Eléctrico" vs "Electrico", "GAS LP", activo como texto, etc.).
+const normTxt=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const esElectrico=v=>normTxt(v&&v.combustible).includes("electric");
+const esGasLP=v=>normTxt(v&&v.combustible).replace(/\s+/g,"").includes("gaslp");
+const esActivoV=v=>!!v&&v.activo!==false&&v.activo!==0&&normTxt(v.activo)!=="false"&&normTxt(v.activo)!=="no";
+const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMACEN")||esGasLP(v))?"montacargas":"reparto");
 // Folio de identificación de un registro: TIPO-ID único (se muestra en el detalle
 // y se plasma en el PDF y en los CSV descargados).
 const folioDe=r=>{if(!r||!r.id)return"";const t=String(r.tipo_reg||"REG").split("#")[0];return (t+"-"+String(r.id)).toUpperCase();};
@@ -746,7 +752,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const secs=plantilla.secciones||[];
-  const availVeh=cat.vehicles.filter(v=>v.activo&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const sucOpts=(sucursalesUser&&!["admin","analista"].includes(rol))?sucursalesUser:cat.sucursales;
   const[suc,setSuc]=useState(sucOpts[0]||session.sucursal||"");
   const[ans,setAns]=useState({});const[obs,setObs]=useState("");const[proxServ,setProxServ]=useState("");const[sig,setSig]=useState(null);
@@ -1024,7 +1030,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   // Combustible: Gasolina, Diésel y Gas LP cargan combustible; solo se excluyen los eléctricos.
-  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&!esElectrico(v)&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   // El solicitante SIEMPRE es la persona que inició sesión (match por su correo).
   const solicitante=yo||{id:null,nombre:session.nombre||session.email,mail:session.email};
   // Borrador: guarda lo no enviado para retomarlo después. No se envía → no cuenta para km/controles.
@@ -1049,7 +1055,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
   // Montacargas (Gas LP/Eléctrico): máx 100 km entre cargas; vehículos normales: 1000
-  const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
+  const maxDeltaKm=vehicle&&(esGasLP(vehicle)||esElectrico(vehicle))?100:1000;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
@@ -1125,7 +1131,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
 function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDone}){
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
-  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Electrico"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&!esElectrico(v)&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const solicitante=yo||{id:null,nombre:session.nombre||session.email,mail:session.email};
   const DKEY="gpa_rep_draft_"+session.email;
   const draftRef=useRef(undefined);
@@ -1155,7 +1161,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
   // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
-  const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
+  const maxDeltaKm=vehicle&&(esGasLP(vehicle)||esElectrico(vehicle))?100:1000;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
@@ -1301,7 +1307,7 @@ function SolHistory({items,rol,onSelect}){
 function ReasignarUnidad({tipoApi,reg,cat,rol,refrescar,showToast,onBack}){
   const[nv,setNv]=useState("");const[busy,setBusy]=useState(false);
   if(rol!=="admin"||!cat)return null;
-  const pool=cat.vehicles.filter(v=>v.activo&&String(v.id)!==String(reg.vehicleId)&&(tipoApi==="SOL"?v.combustible!=="Electrico":tipoApi==="CL"?(catVeh(v)==="reparto"&&v.combustible!=="Gas LP"):catVeh(v)==="montacargas"));
+  const pool=cat.vehicles.filter(v=>esActivoV(v)&&String(v.id)!==String(reg.vehicleId)&&(tipoApi==="SOL"?!esElectrico(v):tipoApi==="CL"?(catVeh(v)==="reparto"&&!esGasLP(v)):catVeh(v)==="montacargas"));
   const aplicar=async()=>{
     if(!nv||busy)return;
     const dest=cat.vehicles.find(v=>String(v.id)===String(nv));
@@ -1398,7 +1404,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   // Checklist de reparto: por CATEGORÍA de la unidad (no por combustible — los
   // eléctricos de reparto también se inspeccionan). Gas LP se excluye porque es
   // combustible de montacargas.
-  const availVeh=cat.vehicles.filter(v=>v.activo&&v.combustible!=="Gas LP"&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&!esGasLP(v)&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   // Preselección: la última unidad que ESTE usuario capturó en este módulo.
   const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
   const[veh,setVeh]=useState(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):""));
@@ -1407,7 +1413,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user={id:session.email,nombre:session.nombre||session.email};
   // Kilometraje: contra el último km REAL de la unidad (odómetro compartido SOL+CL, del backend).
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
-  const maxDeltaKm=vehicle&&(vehicle.combustible==="Gas LP"||vehicle.combustible==="Electrico")?100:1000;
+  const maxDeltaKm=vehicle&&(esGasLP(vehicle)||esElectrico(vehicle))?100:1000;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
   const total=sections.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?sections[step-1]:null;
@@ -1535,7 +1541,7 @@ function CLDetail({cl,cat,rol,refrescar,showToast,onBack}){
 // ─── MÓDULO MONTACARGAS ──────────────────────────────────────────────
 function ModMontacargas({cat,items,rol,sucursalesUser,session,refrescar,showToast}){
   const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
-  const mc=cat.vehicles.filter(v=>v.activo&&catVeh(v)==="montacargas"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
+  const mc=cat.vehicles.filter(v=>esActivoV(v)&&catVeh(v)==="montacargas"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
   if(view==="new")return<MCForm tipo={tipo} cat={cat} mc={mc} registros={items} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("history")}/>;
   if(view==="detail"&&sel)return<MCDetail rec={sel} canAuth={canAuth&&(rol==="admin"||sel.accountId!==session.email)} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>;
@@ -2081,11 +2087,11 @@ const segPeriodoForm=(periodicidad,hoy)=>{
 };
 // unidades (vehículos) activas de una categoría, dentro del alcance de sucursales
 const segUnidades=(cat,tipo,sucs)=>(cat.vehicles||[]).filter(v=>{
-  if(!v.activo)return false;
+  if(!esActivoV(v))return false;                 // inactivos NUNCA cuentan
   if(sucs&&!sucs.includes(v.sucursal))return false;
-  if(tipo==="combustible")return v.combustible!=="Electrico";
+  if(tipo==="combustible")return !esElectrico(v); // eléctricos no cargan combustible
   // Reparto: por categoría; los eléctricos de reparto también hacen checklist.
-  if(tipo==="reparto")return catVeh(v)==="reparto"&&v.combustible!=="Gas LP";
+  if(tipo==="reparto")return catVeh(v)==="reparto"&&!esGasLP(v);
   if(tipo==="montacargas")return catVeh(v)==="montacargas";
   return false;
 });
@@ -2099,6 +2105,10 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
   const hoyStr=ymd(hoy);const out=[];const inc=k=>!modKeys||modKeys.includes(k);const ahora=hoy.getTime();
   // Fecha de inicio (go-live/reset): no se exige nada cuyo día o plazo sea ANTERIOR a ella.
   const inicio=(cat.config&&cat.config.fechaInicio)||null;
+  // Estado considerando la fecha de inicio (go-live): si el plazo original cayó
+  // ANTES del inicio pero el período SIGUE en curso, se exige como PENDIENTE
+  // (ámbar, sin vencer); si el período ya terminó, queda "No aplica".
+  const estIni=(hay,limite,fin)=>{if(hay)return"cumplido";if(inicio&&limite<inicio)return hoyStr<=fin?"pendiente":"na";return hoyStr>limite?"vencido":"pendiente";};
   // Combustible: (1) Solicitudes L/X/V por unidad, límite 10:00 (hora local/centro de México);
   //             (2) Reportes de carga: cada solicitud APROBADA (asignación) exige un reporte en 18 h.
   if(inc("combustible")){
@@ -2122,7 +2132,8 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
     });return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas};});
     // (2) Reportes de carga por asignación (solicitud aprobada) — límite 18 h desde la aprobación
     const H18=18*3600*1000;const tAp=r=>new Date(r.fechaAut||r.fecha).getTime();
-    const asigns=(combustible||[]).filter(r=>esSol(r)&&r.status==="Aprobada"&&(!sucs||sucs.includes(r.sucursal)));
+    const unitIds=new Set(units.map(v=>String(v.id)));
+    const asigns=(combustible||[]).filter(r=>esSol(r)&&r.status==="Aprobada"&&unitIds.has(String(r.vehicleId)));
     const reportes=(combustible||[]).filter(r=>r.formato==="reporte");
     const porVeh={};asigns.forEach(a=>{(porVeh[a.vehicleId]=porVeh[a.vehicleId]||[]).push(a);});
     Object.values(porVeh).forEach(arr=>arr.sort((a,b)=>tAp(a)-tAp(b)));
@@ -2147,7 +2158,7 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
     const iniM=ymd(mxDia(Y,Mh,1)),finM=ymd(mxDia(Y,Mh+1,0)),limM=ymd(segHabil(mxDia(Y,Mh,5)));
     const cols=[{key:"sem",label:"Semanal"},{key:"men",label:"Mensual"}];
     let cu=0,pe=0,ve=0;
-    const filas=units.map(v=>{const rSem=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="semanal",iniW,finW);const rMen=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="mensual",iniM,finM);let eSem=segEstado(!!rSem,limW,hoyStr),eMen=segEstado(!!rMen,limM,hoyStr);if(eSem!=="cumplido"&&inicio&&limW<inicio)eSem="na";if(eMen!=="cumplido"&&inicio&&limM<inicio)eMen="na";[eSem,eMen].forEach(e=>{if(e==="cumplido")cu++;else if(e==="vencido")ve++;else if(e==="pendiente")pe++;});return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas:[{estado:eSem,reg:rSem},{estado:eMen,reg:rMen}]};});
+    const filas=units.map(v=>{const rSem=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="semanal",iniW,finW);const rMen=segUltRango(checklist,r=>String(r.vehicleId)===String(v.id)&&r.tipo==="mensual",iniM,finM);let eSem=estIni(!!rSem,limW,finW),eMen=estIni(!!rMen,limM,finM);[eSem,eMen].forEach(e=>{if(e==="cumplido")cu++;else if(e==="vencido")ve++;else if(e==="pendiente")pe++;});return {id:v.id,label:"#"+(v.economico||v.id)+(v.placas?" · "+v.placas:""),sub:v.sucursal,celdas:[{estado:eSem,reg:rSem},{estado:eMen,reg:rMen}]};});
     out.push({key:"reparto",label:"Reparto",grupo:"veh",periodoLbl:"Semana + mes en curso",cols,filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas:[],conProblemas:false});
   }
   // Montacargas: diario por unidad (tira de 7 días; sólo hoy cuenta al %)
@@ -2172,7 +2183,7 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
     if(!cargado){out.push({key:mk,label,grupo:"form",cargar:true,plantillas:plts,problemas:[],conProblemas:true});return;}
     let cu=0,pe=0,ve=0;const problemas=[];
     const filas=plts.map(p=>{const per=segPeriodoForm(p.periodicidad||"mensual",hoy);const regs=formData[p.clave]||[];
-      const celdas=sucs.map(s=>{const reg=segUltRango(regs,r=>(r.sucursal||"")===s,per.ini,per.fin);let est=segEstado(!!reg,per.limite,hoyStr);if(est!=="cumplido"&&inicio&&per.limite<inicio)est="na";if(est==="cumplido")cu++;else if(est==="vencido")ve++;else if(est==="pendiente")pe++;if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg,plantilla:p,tipo:"form"});return {suc:s,estado:est,reg};});
+      const celdas=sucs.map(s=>{const reg=segUltRango(regs,r=>(r.sucursal||"")===s,per.ini,per.fin);let est=estIni(!!reg,per.limite,per.fin);if(est==="cumplido")cu++;else if(est==="vencido")ve++;else if(est==="pendiente")pe++;if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg,plantilla:p,tipo:"form"});return {suc:s,estado:est,reg};});
       return {plantilla:p,periodoLbl:PERIOD_LBL[p.periodicidad||"mensual"]+" · "+per.label,celdas};});
     out.push({key:mk,label,grupo:"form",periodoLbl:plts.length+" formulario(s) · por sucursal",cols:sucs.map(s=>({key:s,label:s})),filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
   });
