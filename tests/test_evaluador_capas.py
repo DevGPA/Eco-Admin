@@ -15,17 +15,19 @@ def test_happy_path_r000(run_eval):
 
 # ── Capa 1a — Dispersión interna (GS0231, solo GDL) ───────────────
 def test_dispersion_ok_r800(run_eval, make_cp):
-    # ACT/PALLET/CDMX = tarifa 1901; flete 1800 ≤ 1901*1.10 → R-800
-    cp = make_cp(codigo_sap="GS0231", destino_estado="CDMX",
-                 tipo_vehiculo="PALLET", numero_pallets=1, flete_mxn=1800.0)
+    # Tabla oficial 2026 (solo tórtón/cajas): ACT/TORTON/Jalisco = 17,207;
+    # flete 18,000 ≤ 17,207*1.10 = 18,927.70 → R-800
+    cp = make_cp(codigo_sap="GS0231", destino_estado="Jalisco",
+                 tipo_vehiculo="TORTON", flete_mxn=18000.0)
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-800"
     assert res.tipo_operacion == "DISPERSION_INTERNA"
 
 
 def test_dispersion_excede_tarifa_r802(run_eval, make_cp):
-    cp = make_cp(codigo_sap="GS0231", destino_estado="CDMX",
-                 tipo_vehiculo="PALLET", numero_pallets=1, flete_mxn=2500.0)
+    # 19,500 > tarifa+10% (18,927.70) aunque esté bajo el tope de $33,000.
+    cp = make_cp(codigo_sap="GS0231", destino_estado="Jalisco",
+                 tipo_vehiculo="TORTON", flete_mxn=19500.0)
     res = run_eval(cp=cp)
     assert res.codigo_motor == "R-802"
 

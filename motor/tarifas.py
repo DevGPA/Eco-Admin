@@ -1,87 +1,102 @@
 # motor/tarifas.py
 # Tarifas 2026 para dispersiones internas — solo desde GDL
 # ─────────────────────────────────────────────────────────────────
+# Fuente OFICIAL: "tarifas dispersiones 2026.xlsx" (hoja "Tarifas maestras
+# 2026", actualizada mayo 2026) — cargada el 2026-07-20 por indicación del
+# usuario considerando ÚNICAMENTE Tórtón y Cajas (25 y 50 kg); pallet y
+# trailer de esa tabla se cargarán más adelante.
+#
 # Estructura: RFC_fletera → tipo_vehiculo → destino_estado → tarifa_MXN
-# Para PALLET: tarifa es por pallet unitario (se multiplica por numero_pallets)
-# Para TORTON/TRAILER: tarifa es por viaje completo
+#   CAJA   = "Caja 25kg" · CAJA50 = "Caja 50kg" (por caja)
+#   TORTON = viaje completo
+# Destinos de la tabla → estado canónico del catálogo:
+#   PVR (Puerto Vallarta) → "Jalisco" y "Nayarit" (misma tarifa: el destino
+#   real puede caer en Bahía de Banderas, lado Nayarit)
+#   CUN → "Quintana Roo" · MTY → "Nuevo León" · CDMX → "CDMX"
+#   LC (La Paz / Los Cabos, B.C.S.) → "BCS"
+# Una ruta SIN tarifa cae a la regla del tope ($33,000 + IVA, catalogos.py).
 
 TARIFAS_DISPERSIONES: dict[str, dict[str, dict[str, float]]] = {
 
-    # ── Transportes Julián de Obregon (TJO680807GU2) ─────────────
+    # ── Transportes Julián de Obregón (TJO680807GU2) ─────────────
     "TJO680807GU2": {
-        "PALLET": {
-            "Quintana Roo": 3732.0,   # CUN
+        "CAJA": {
+            "Quintana Roo": 535.8,
+            "Nuevo León":   392.0,
+            "CDMX":         483.5,
+            "BCS":         1437.5,
         },
         "TORTON": {
-            "Nayarit":    26000.0,    # PVR
-            "Nuevo León": 28100.0,    # MTY
-            "CDMX":       21500.0,
-        },
-        "TRAILER": {
-            "Nayarit":    30000.0,    # PVR
-            "Quintana Roo": 97026.0,  # CUN
-            "Nuevo León": 36000.0,    # MTY
-            "CDMX":       26000.0,
-            "BCS":        117000.0,   # LC / Los Cabos
+            "Jalisco": 26000.0,
+            "Nayarit": 26000.0,
         },
     },
 
     # ── Fletes de Oriente (FOR630225561) ─────────────────────────
     "FOR630225561": {
-        "TORTON": {
-            "Nayarit":  20000.0,
-            "CDMX":     23500.0,
+        "CAJA": {
+            "Jalisco": 197.0,
+            "Nayarit": 197.0,
         },
-        "TRAILER": {
-            "Nayarit":    24000.0,
-            "Nuevo León": 33000.0,
-            "CDMX":       26000.0,
+        "TORTON": {
+            "Jalisco": 20000.0,
+            "Nayarit": 20000.0,
+            "CDMX":   23500.0,
+        },
+    },
+
+    # ── Estafeta Mexicana (EME880309SK5) ─────────────────────────
+    "EME880309SK5": {
+        "CAJA": {
+            "Jalisco":      210.0,
+            "Nayarit":      210.0,
+            "Quintana Roo": 351.0,
+            "Nuevo León":   267.0,
+            "CDMX":         252.9,
+            "BCS":          446.0,
+        },
+        "CAJA50": {
+            "Jalisco":      396.49,
+            "Nayarit":      396.49,
+            "Quintana Roo": 855.4,
+            "Nuevo León":   671.0,
+            "CDMX":         580.1,
+            "BCS":          977.77,
         },
     },
 
     # ── Tres Guerras / Tresguerras (ACT68080665A) ─────────────────
     "ACT68080665A": {
-        "PALLET": {
-            "Nayarit":     1901.0,
-            "Quintana Roo": 3947.0,
-            "Nuevo León":  2339.0,
-            "CDMX":        1901.0,
-            "BCS":         4530.0,
+        "CAJA": {
+            "Jalisco":      132.0,
+            "Nayarit":      132.0,
+            "Quintana Roo": 165.0,
+            "Nuevo León":   143.0,
+            "CDMX":         132.0,
+            "BCS":          214.0,
+        },
+        "CAJA50": {
+            "Jalisco":      240.0,
+            "Nayarit":      240.0,
+            "Quintana Roo": 330.0,
+            "Nuevo León":   286.0,
+            "CDMX":         264.0,
+            "BCS":          483.58,
         },
         "TORTON": {
-            "Nayarit":  17207.0,
-        },
-        "TRAILER": {
-            "Nayarit":    21595.0,
-            "Nuevo León": 29124.0,
-            "CDMX":       23156.0,
-            "BCS":        122176.0,
+            "Jalisco": 17207.0,
+            "Nayarit": 17207.0,
         },
     },
 
-    # ── Transportes de Carga Hormik (TCH170824TH2) ───────────────
-    "TCH170824TH2": {
-        "TRAILER": {
-            "Nuevo León": 29900.0,
-            "CDMX":       25031.0,
-        },
-    },
-
-    # ── NT (pendiente de confirmar RFC) ──────────────────────────
-    # "RFC_NT": {
-    #     "TORTON": { "Nayarit": 17000, "Quintana Roo": 89000, ... }
-    # },
-
-    # ── Continental (pendiente RFC) ───────────────────────────────
-    # "RFC_CONTINENTAL": {
-    #     "PALLET": { "Nayarit": 1500 },
-    #     "TORTON": { "Nayarit": 15000 },
-    # },
-
-    # ── Xpress MG (pendiente RFC) ─────────────────────────────────
-    # "RFC_XPRESSMG": {
-    #     "TRAILER": { "Quintana Roo": 95000, "Nuevo León": 32000 },
-    # },
+    # ── Pendientes de RFC (tienen tórtón/caja en la tabla 2026 pero su
+    #    RFC no está en el catálogo de fleteras; activar cuando el usuario
+    #    lo confirme) ────────────────────────────────────────────────
+    # ENTREGA:              Caja 25kg → MTY 630, CDMX 630
+    # CONTINENTAL:          Caja 25kg → PVR 100 · Caja 50kg → PVR 200 · Tórtón → PVR 15,000
+    # TNT:                  Tórtón → PVR 17,000, CUN 89,000, MTY 27,000, CDMX 22,500
+    # EDGAR GUTIÉRREZ:      Tórtón → PVR 17,000, CDMX 21,000
+    # LÍNEAS INTERNACIONALES: Tórtón → PVR 9,000, CDMX 9,000
 }
 
 
