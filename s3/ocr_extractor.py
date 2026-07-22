@@ -28,6 +28,7 @@ import boto3
 from motor.catalogos import (RFC_GPA, sucursal_de_origen, FLETERAS_AUTORIZADAS,
                              fletera_por_nombre, TIPO_CAMBIO_DEFAULT,
                              normalizar_destino, DESTINOS_CATALOGO, SAPS_DISPERSION,
+                             SAPS_SIN_FV_OK,
                              estado_por_cp, sucursal_por_cp, sap_por_tipo_flete,
                              resolver_codigo_sello)
 
@@ -900,7 +901,10 @@ def _consolidar_fvs(fv_pages: list[dict]) -> list[dict]:
 
 def _construir_caso(cp: dict, fvs: list[dict], folio_archivo: str,
                     es_dispersion: bool = False) -> dict:
-    if not fvs and not es_dispersion:
+    # Garantías/incidencias (GS0244/GS0246): la FV no es obligatoria (regla
+    # GPA 2026-07-22, caso 120870151 — antes moría en R-093).
+    sin_fv_ok = (cp.get("codigoSAP") or "") in SAPS_SIN_FV_OK
+    if not fvs and not es_dispersion and not sin_fv_ok:
         return {"status": "ERROR", "error": "SIN_FV_VINCULADA",
                 "detalle": f"El CP {cp.get('folio')} no tiene FV de GPA emparejada.",
                 "folioCP": cp.get("folio"), "folioArchivo": folio_archivo}

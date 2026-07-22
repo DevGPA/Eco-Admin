@@ -427,7 +427,9 @@ def test_adaptar_bedrock_cumple_contrato_de_pagina():
     # El JSON crudo del modelo debe mapearse al MISMO contrato que _parse_textract:
     # tipoDoc CP/FV, RFCs normalizados, rfcsDetectados, señales y sello validado.
     raw = {
-        "rfcEmisor": "UER-230428-II0", "rfcReceptor": "GPA-840221-9Y1",
+        # OJO: emisor NEUTRO a propósito — UER230428II0 (URUZ) ya es fletera
+        # autorizada (2.7.0) y resolvería fletaRFC, rompiendo el assert de abajo.
+        "rfcEmisor": "ZNE-010101-ZZ9", "rfcReceptor": "GPA-840221-9Y1",
         "tipoDocumento": "CARTA_PORTE", "subtotal": "1,462.96", "moneda": "mxn",
         "tipoCambio": None, "folio": "3fde084e-5e98-4c07-a8b1-5343fc0d5bdc",
         "fecha": "2026-06-08", "comentarios": None,
@@ -442,7 +444,7 @@ def test_adaptar_bedrock_cumple_contrato_de_pagina():
     p = ocr._adaptar_bedrock(raw)
     assert p["tipoDoc"] == "CP"
     assert p["rfcReceptor"] == "GPA8402219Y1"          # normalizado sin guiones
-    assert "UER230428II0" in p["rfcsDetectados"]
+    assert "ZNE010101ZZ9" in p["rfcsDetectados"]
     assert p["folio"] is None                          # UUID fiscal descartado
     assert p["subtotal"] == 1462.96 and p["moneda"] == "MXN"
     assert p["fletaRFC"] == ""                         # RFC inventado NO autorizado
@@ -1259,3 +1261,15 @@ def test_leer_sello_infiere_codigo_del_tipo_flete():
     p = ocr._adaptar_bedrock({"tipoDocumento": "CARTA_PORTE", "rfcReceptor": RFC_GPA,
                               "codigoSAP": None, "tipoFleteSello": "DISP. SEMANAL"})
     assert p["codigoSAP"] == "GS0231"
+
+
+def test_gs0244_gs0246_sin_fv_arman_caso():
+    # Garantías/incidencias sin factura anexa: el caso se arma (no R-093).
+    for sap in ("GS0244", "GS0246"):
+        cp_pag = dict(pag(receptor=RFC_GPA, subtotal=500.0, moneda="MXN", folio="G1"),
+                      codigoSAP=sap)
+        res = emparejar_casos([cp_pag], "G1")
+        caso = res["casos"][0]
+        assert caso["status"] == "OK", (sap, caso)
+        assert caso["foliosFV"] == []
+        assert caso["destinatarioRFC"] == ""      # NO se vuelve dispersión

@@ -14,7 +14,7 @@ from .catalogos import (
     CARGO_ENVIO_POR_SAP, TIPO_CAMBIO_DEFAULT,
     SAPS_DISPERSION, SAP_CARGO_ENVIO, SAP_BACKORDER, SAP_COM_PED,
     SAP_REQUIERE_AUTORIZACION, SAP_DISPERSION_NO_AUT, SAPS_VALIDAR_MANUAL,
-    SAPS_EXENTOS_MONTO, MONTO_MAX_DISPERSION_MXN,
+    SAPS_EXENTOS_MONTO, MONTO_MAX_DISPERSION_MXN, SAPS_SIN_FV_OK,
     SUCURSALES_VALIDAS, SUCURSAL_ORIGEN_DISPERSION, RECEPTORES_INTERNOS_GPA,
     FLETERAS_AUTORIZADAS, R_CONCEPTOS, ESTADO_POR_CODIGO,
     evaluar_destino, categoria_partida, es_cargo_envio,
@@ -224,6 +224,16 @@ def evaluar(sol: SolicitudInput) -> ResultadoMotor:
             "GS0242 dispersión no autorizada: revisión obligatoria"
         ))
         return _res("R-811")
+
+    # ── CAPA 1a-ter-bis — GS0246: incidencias/garantías (regla GPA
+    # 2026-07-22, caso 120870151): la FV no es obligatoria; revisión con
+    # concepto propio (GS0244 sigue exento/automático).
+    if cp.codigo_sap == "GS0246":
+        criterios.append(CriterioDetalle(
+            "Sello presupuestal", "WARN", cp.codigo_sap,
+            "GS0246 incidencias/garantías: revisión (FV no obligatoria)"
+        ))
+        return _res("R-813")
 
     # ── CAPA 1a-quater — GS0229/GS0247: validar en sistema (regla GPA
     # 2026-07-20). Los complementos de pedido no llevan mínimo de FV, pero

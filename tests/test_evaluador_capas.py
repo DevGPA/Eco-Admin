@@ -210,3 +210,12 @@ def test_gs0229_validar_gs0244_exento(run_eval, make_fv, make_cp):
     fv2 = make_fv(partidas=[], subtotal=10.67)
     res2 = run_eval(fv=fv2, cp=make_cp(codigo_sap="GS0244"))
     assert res2.codigo_motor == "R-000"
+
+
+def test_gs0246_sin_fv_no_es_r093_y_va_a_revision(run_eval, make_cp):
+    # 120870151: "Garantías no es obligatorio la FV" — GS0246 sin factura no
+    # es R-093; revisión con concepto propio (R-813).
+    cp = make_cp(codigo_sap="GS0246")
+    res = run_eval(cp=cp)
+    assert res.codigo_motor == "R-813"
+    assert res.estado == "EN_REVISION"

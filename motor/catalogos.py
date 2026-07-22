@@ -102,6 +102,11 @@ SAPS_EXENTOS_MONTO = {
 # MANUALMENTE EN SISTEMA (regla GPA 2026-07-20, refina la exención del 07-15).
 SAPS_VALIDAR_MANUAL = {"GS0229", "GS0247"}
 
+# Garantías/incidencias (GS0244, GS0246): "no es obligatorio la FV" (regla
+# GPA 2026-07-22, caso 120870151) — un CP con estos sellos y sin factura
+# anexa NO es R-093; se evalúa sin FV.
+SAPS_SIN_FV_OK = {"GS0244", "GS0246"}
+
 # ── Catálogo OFICIAL de sellos presupuestales (muestras del usuario,
 # "Sellos Gastos.zip" 2026-07-20): código SAP → texto del recuadro TIPO DE
 # FLETE. El recuadro es texto GRANDE y legible aunque el código subrayado no
@@ -378,6 +383,7 @@ FLETERAS_CATALOGO = {
     "EME880309SK5": "Estafeta Mexicana",
     "ACA170911HY7": "Autotransportes y Carga PTX",
     "TCH170824TH2": "Transportes de Carga Hormik",
+    "UER230428II0": "URUZ Envía y Recibe",
     "FASG781207JM9": "Gerardo Franco Sánchez",
     "CAAE970704V91": "Evelyn M. Camacho Aviña",
     "TPL2402014E9":  "Tiny Pack Logística",
@@ -546,6 +552,7 @@ R_CONCEPTOS: dict[str, str] = {
     "R-810": "Sello GS0245: requiere autorización",
     "R-811": "Dispersión no autorizada (GS0242)",
     "R-812": "Comp. pedido (GS0229/GS0247): validar en sistema",
+    "R-813": "GS0246 · incidencias/garantías: revisión",
     "R-901": "Escalado por aprobador",
     "R-902": "Escalado por SLA",
 }
@@ -586,4 +593,5 @@ ESTADO_POR_CODIGO: dict[str, str] = {
     "R-810": "EN_REVISION",
     "R-811": "EN_REVISION",
     "R-812": "EN_REVISION",
+    "R-813": "EN_REVISION",
 }
