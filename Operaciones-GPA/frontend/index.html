@@ -412,9 +412,12 @@ function csvDownload(nombre,cols,filas){
   const url=URL.createObjectURL(blob);const a=document.createElement("a");
   a.href=url;a.download=nombre+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 }
-// Componente reutilizable: filtros de fecha (desde/hasta) + botón Descargar CSV
-function FiltroFechas({desde,hasta,setDesde,setHasta,onCSV,n}){
+// Unidades presentes en una lista de registros (para el filtro de unidad del historial)
+const unidadesDe=items=>{const m={};(items||[]).forEach(r=>{const k=String(r.vehicleId??"");if(k&&!m[k])m[k]={id:k,label:"#"+(r.economico||k)+(r.placas?" · "+r.placas:"")};});return Object.values(m).sort((a,b)=>a.label.localeCompare(b.label,"es",{numeric:true}));};
+// Componente reutilizable: filtro de unidad (opcional) + fechas (desde/hasta) + botón CSV
+function FiltroFechas({desde,hasta,setDesde,setHasta,onCSV,n,unidades,unidad,setUnidad}){
   return(<div className="card" style={{padding:"10px 12px"}}>
+    {unidades&&unidades.length>0&&<><label>Unidad</label><select value={unidad||""} onChange={e=>setUnidad(e.target.value)} style={{marginBottom:8}}><option value="">Todas las unidades ({unidades.length})</option>{unidades.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}</select></>}
     <div className="r2"><div><label>Desde</label><input type="date" value={desde} onChange={e=>setDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}/></div></div>
     <button className="bs" style={{width:"100%",marginTop:8}} disabled={!n} onClick={onCSV}>⬇ Descargar CSV ({n})</button>
   </div>);
@@ -1274,8 +1277,8 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
 }
 
 function SolHistory({items,rol,onSelect}){
-  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
-  const list=items.filter(s=>(f==="Todos"||s.status===f)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
+  const list=items.filter(s=>(f==="Todos"||s.status===f)&&(!fUni||String(s.vehicleId)===fUni)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV COMPLETO: todos los datos capturados en solicitud y reporte (fotos/firma como conteo/Sí-No).
   const nivelTxt=v=>{const o=TANK_OPTS.find(t=>t.val===v);return o?o.label:(v==null?"":v);};
   const nFotos=s=>((s.fotos&&s.fotos.length)?s.fotos.length:(s.photo?1:0))+[s.fotoAntes,s.fotoDespues,s.fotoBomba,s.fotoTicket,s.fotoPersona].filter(Boolean).length;
@@ -1285,7 +1288,7 @@ function SolHistory({items,rol,onSelect}){
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
-      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
       {list.length===0&&<div className="empty">No hay solicitudes</div>}
       <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.formato==="reporte"?"📋 Reporte":"📝 Solicitud"} · {s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
     </div>
@@ -1501,13 +1504,13 @@ function DmgList({value,onChange}){
 }
 
 function CLHistory({items,onSelect}){
-  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
-  const list=items.filter(c=>(f==="Todos"||c.tipo===f)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
+  const list=items.filter(c=>(f==="Todos"||c.tipo===f)&&(!fUni||String(c.vehicleId)===fUni)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const csv=()=>csvDownload("checklist_reparto",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km"],list.map(c=>[folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km]));
   return(
     <div>
       <div className="tr">{["Todos","semanal","mensual"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="Todos"?"Todos":x==="semanal"?"Semanal":"Mensual"}</button>)}</div>
-      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
       {list.length===0&&<div className="empty">No hay checklists</div>}
       <div className="card">{list.map(c=><div key={c.id} className="li" onClick={()=>onSelect(c)}><div className="lit"><span className="lim">{c.placas} · #{c.economico}</span><span className={"bdg "+(c.tipo==="semanal"?"dpe":"dok")}>{c.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="lis"><span style={{color:C.green,fontWeight:600}}>✓ Aprobado</span> · {c.responsable} · {c.sucursal}</div><div className="lis">{fdt(c.fecha)}</div></div>)}</div>
     </div>
@@ -1654,13 +1657,13 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
 }
 
 function MCHistory({items,onSelect}){
-  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
-  const list=items.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
+  const list=items.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!fUni||String(r.vehicleId)===fUni)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const csv=()=>csvDownload("checklist_montacargas",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas"],list.map(r=>[folioDe(r),fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,Object.values(r.resps||{}).filter(v=>v==="P").length]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobado","Rechazado","gas","electrico"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="gas"?"Gas":x==="electrico"?"Eléctrico":x}</button>)}</div>
-      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
       {list.length===0&&<div className="empty">No hay registros</div>}
       <div className="card">{list.map(r=>{const p=Object.values(r.resps||{}).filter(v=>v==="P").length;return(<div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.placas} · #{r.economico}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"} · {r.sucursal}</div><div className="lis">{fdate(r.fecha)} · Sem {r.semana||"—"}{p>0&&<span style={{color:C.red,fontWeight:600}}> · {p} problema(s)</span>}</div></div>);})}</div>
     </div>
