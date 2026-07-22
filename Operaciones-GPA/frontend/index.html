@@ -1276,7 +1276,12 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
 function SolHistory({items,rol,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");
   const list=items.filter(s=>(f==="Todos"||s.status===f)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("solicitudes_combustible",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Combustible","Litros","Precio/L","Monto","Estado","Ubicacion"],list.map(s=>[folioDe(s),fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.sucursal,s.responsable,s.combustible,s.litros,s.precioLitro||s.precio,s.monto,s.status,s.ubicacion?.direccion||""]));
+  // CSV COMPLETO: todos los datos capturados en solicitud y reporte (fotos/firma como conteo/Sí-No).
+  const nivelTxt=v=>{const o=TANK_OPTS.find(t=>t.val===v);return o?o.label:(v==null?"":v);};
+  const nFotos=s=>((s.fotos&&s.fotos.length)?s.fotos.length:(s.photo?1:0))+[s.fotoAntes,s.fotoDespues,s.fotoBomba,s.fotoTicket,s.fotoPersona].filter(Boolean).length;
+  const csv=()=>csvDownload("solicitudes_combustible",
+    ["Folio","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de"],
+    list.map(s=>[folioDe(s),fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):""]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>

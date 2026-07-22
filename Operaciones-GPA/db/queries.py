@@ -93,8 +93,8 @@ def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
         kwargs = dict(IndexName="tipo-fecha-idx",
                       KeyConditionExpression=Key("GSI1PK").eq(tipo),
                       ScanIndexForward=False,           # desc por fecha
-                      ProjectionExpression="vehicleId, #c, fecha",
-                      ExpressionAttributeNames={"#c": campo})
+                      ProjectionExpression="vehicleId, #c, fecha, #st",
+                      ExpressionAttributeNames={"#c": campo, "#st": "status"})
         while True:
             resp = t.query(**kwargs)
             for it in resp.get("Items", []):
@@ -102,6 +102,10 @@ def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
                 if not vid or it.get(campo) is None:
                     continue
                 d = m.from_dynamo(it)
+                # Los registros RECHAZADOS no cuentan para los controles de medidor
+                # (km/horas): una captura rechazada no es una lectura válida.
+                if str(d.get("status") or "") in ("Rechazada", "Rechazado"):
+                    continue
                 fecha = str(d.get("fecha") or "")
                 prev = out.get(vid)
                 if prev is None or fecha > str(prev["fecha"] or ""):
