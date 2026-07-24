@@ -51,13 +51,16 @@ def crear_registro(tipo: str, datos: dict, sucursal: str, account_id: str) -> di
     return {"id": rid, "fecha": fecha}
 
 
-def cambiar_estado(tipo: str, rid: str, nuevo_estado: str, por: str) -> None:
-    """Actualiza el estado de un registro (combustible o montacargas)."""
+def cambiar_estado(tipo: str, rid: str, nuevo_estado: str, por: str, comentario: str = "") -> None:
+    """Actualiza el estado de un registro (combustible o montacargas). El
+    comentario del autorizador es opcional; si viene, se guarda en comentarioAut."""
+    expr = "SET #s = :s, autorizadoPor = :p, fechaAut = :f, comentarioAut = :c"
     _t().update_item(
         Key={"PK": f"{tipo}#{rid}", "SK": "META"},
-        UpdateExpression="SET #s = :s, autorizadoPor = :p, fechaAut = :f",
+        UpdateExpression=expr,
         ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":s": nuevo_estado, ":p": por, ":f": _now_iso()},
+        ExpressionAttributeValues={":s": nuevo_estado, ":p": por,
+                                   ":f": _now_iso(), ":c": comentario or ""},
     )
 
 

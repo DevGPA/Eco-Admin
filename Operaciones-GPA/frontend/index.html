@@ -1289,8 +1289,8 @@ function SolHistory({items,rol,onSelect}){
   const nivelTxt=v=>{const o=TANK_OPTS.find(t=>t.val===v);return o?o.label:(v==null?"":v);};
   const nFotos=s=>((s.fotos&&s.fotos.length)?s.fotos.length:(s.photo?1:0))+[s.fotoAntes,s.fotoDespues,s.fotoBomba,s.fotoTicket,s.fotoPersona].filter(Boolean).length;
   const csv=()=>csvDownload("solicitudes_combustible",
-    ["Folio","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de"],
-    list.map(s=>[folioDe(s),fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):""]));
+    ["Folio","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Comentario autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de"],
+    list.map(s=>[folioDe(s),fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.comentarioAut||"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):""]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
@@ -1333,8 +1333,8 @@ function ReasignarUnidad({tipoApi,reg,cat,rol,refrescar,showToast,onBack}){
 function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
   // Autorizan admin/analista/supervisor, pero NADIE (salvo admin) sus propias capturas.
   const canChange=(rol==="admin"||rol==="analista"||rol==="supervisor")&&(rol==="admin"||!session||sol.accountId!==session.email);
-  const[busy,setBusy]=useState(false);
-  const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st);showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  const[busy,setBusy]=useState(false);const[coment,setComent]=useState(sol.comentarioAut||"");
+  const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st,coment.trim());showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   const esRep=sol.formato==="reporte";
   const u=sol.ubicacion;
   const mapsUrl=u?`https://www.google.com/maps?q=${u.lat},${u.lng}`:null;
@@ -1353,7 +1353,10 @@ function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
         {((sol.fotos&&sol.fotos.length)||sol.photo)&&<div className="card"><div className="ct">Fotos de Evidencia</div>{(sol.fotos&&sol.fotos.length?sol.fotos:[sol.photo]).map((f,i)=><img key={i} src={f} style={{width:"100%",borderRadius:8,marginTop:i?8:0}} alt={"evidencia "+(i+1)}/>)}</div>}
         {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
       </>}
-      {canChange&&<div className="card no-print"><div className="ct">Cambiar Estado</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
+      {(sol.autorizadoPor||sol.comentarioAut)&&<div className="card"><div className="ct">Autorización</div>{sol.autorizadoPor&&<div className="dr"><span>Autorizó / revisó</span><span>{sol.autorizadoPor}</span></div>}{sol.fechaAut&&<div className="dr"><span>Fecha</span><span>{fdt(sol.fechaAut)}</span></div>}{sol.comentarioAut&&<div className="dr"><span>Comentario</span><span>{sol.comentarioAut}</span></div>}</div>}
+      {canChange&&<div className="card no-print"><div className="ct">Cambiar Estado</div>
+        <label>Comentario (opcional)</label><textarea rows={2} value={coment} onChange={e=>setComent(e.target.value)} placeholder="Motivo, aclaración… (se guarda con la autorización)"/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
       <ReasignarUnidad tipoApi="SOL" reg={sol} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
     </div>
   );

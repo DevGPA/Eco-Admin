@@ -356,7 +356,8 @@ def _estado(tipo, event, cl):
     rid = (event.get("pathParameters") or {}).get("id")
     if not rid:
         return _err("Falta id")
-    nuevo = _body(event).get("status")
+    b = _body(event)
+    nuevo = b.get("status")
     if not nuevo:
         return _err("Falta status")
     if nuevo not in _ESTADOS_OK:
@@ -367,7 +368,7 @@ def _estado(tipo, event, cl):
     veto = _veto_estado(cl, reg)
     if veto:
         return _err(veto, 403)
-    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"])
+    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"], (b.get("comentario") or "").strip())
     return _resp({"ok": True, "status": nuevo})
 
 
@@ -420,7 +421,8 @@ def _estado_form(event, cl):
     rid = (event.get("pathParameters") or {}).get("id")
     if not rid:
         return _err("Falta id")
-    nuevo = _body(event).get("status")
+    b = _body(event)
+    nuevo = b.get("status")
     if not nuevo:
         return _err("Falta status")
     if nuevo not in _ESTADOS_OK:
@@ -431,7 +433,7 @@ def _estado_form(event, cl):
     veto = _veto_estado(cl, reg)
     if veto:
         return _err(veto, 403)
-    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"])
+    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"], (b.get("comentario") or "").strip())
     return _resp({"ok": True, "status": nuevo})
 
 

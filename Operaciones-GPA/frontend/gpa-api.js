@@ -220,7 +220,7 @@ class GpaApi {
   catalogos()                 { return this._fetch("GET", "/catalogos"); }
   async listar(tipo)          { return (await this._fetch("GET", `/${TIPO_PATH[tipo]}`)).items || []; }
   crear(tipo, datos)          { return this._fetch("POST", `/${TIPO_PATH[tipo]}`, datos); }
-  cambiarEstado(tipo, id, st) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st }); }
+  cambiarEstado(tipo, id, st, comentario) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st, comentario: comentario || "" }); }
 
   adminVehiculo(v)    { return this._fetch("POST", "/admin/vehiculo", v); }
   adminResponsable(u) { return this._fetch("POST", "/admin/responsable", u); }
