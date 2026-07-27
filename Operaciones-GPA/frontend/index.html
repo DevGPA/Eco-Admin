@@ -67,6 +67,8 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 .dok{background:${C.greenLt};color:${C.green}}
 .dpe{background:${C.amberLt};color:${C.amber}}
 .drj{background:${C.redLt};color:${C.red}}
+.dpc{background:#EDE7F6;color:#5E35B1}
+.dnl{background:${C.grayLt};color:${C.gray}}
 .dad{background:#EEEDFE;color:#3C3489}
 .dan{background:${C.blueLt};color:${C.blue}}
 .dsu{background:${C.greenLt};color:${C.green}}
@@ -193,8 +195,8 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 // ─── HELPERS ────────────────────────────────────────────────────────
 const rolLabel=r=>r==="admin"?"Administrador":r==="analista"?"Analista":r==="supervisor"?"Supervisor":"Operador";
 const rolBadge=r=>r==="admin"?"dad":r==="analista"?"dan":r==="supervisor"?"dsu":"dop";
-const bcSol=s=>s==="Aprobada"?"dok":s==="Rechazada"?"drj":"dpe";
-const bcMC=s=>s==="Aprobado"?"dok":s==="Rechazado"?"drj":"dpe";
+const bcSol=s=>s==="Aprobada"?"dok":s==="Rechazada"?"drj":s==="Por corregir"?"dpc":s==="Anulado"?"dnl":"dpe";
+const bcMC=s=>s==="Aprobado"?"dok":s==="Rechazado"?"drj":s==="Anulado"?"dnl":"dpe";
 const MX_TZ="America/Mexico_City";const MX_MS=21600000; // UTC-6 fijo (México, sin horario de verano)
 const fdate=s=>{try{return new Date(s).toLocaleDateString("es-MX",{timeZone:MX_TZ})}catch{return s}};
 const fdt=s=>{try{return new Date(s).toLocaleString("es-MX",{timeZone:MX_TZ})}catch{return s}};
@@ -1165,10 +1167,12 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
-  // Asignación: el reporte requiere que la ÚLTIMA solicitud de la unidad esté Aprobada
-  // (aviso con lo visible al usuario; el backend valida contra el historial completo).
-  const ultSol=(items||[]).filter(s=>String(s.vehicleId)===String(veh)&&s.formato!=="reporte").sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
-  const sinAsign=!!vehicle&&(!ultSol||ultSol.status!=="Aprobada");
+  // Asignación (relación 1 a 1): el reporte se liga a la solicitud APROBADA más
+  // reciente de la unidad que aún NO tenga reporte. El backend revalida contra el
+  // historial completo y sella el folio en el reporte.
+  const reportadasIds=new Set((items||[]).filter(r=>r.formato==="reporte"&&r.solicitudId).map(r=>String(r.solicitudId)));
+  const solAsignable=(items||[]).filter(s=>String(s.vehicleId)===String(veh)&&s.formato!=="reporte"&&s.status==="Aprobada"&&!reportadasIds.has(String(s.id))).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
+  const sinAsign=!!vehicle&&!solAsignable;
   // Lectura CRUDA del dispositivo (no editable por el usuario): resuelve
   // {lat,lng,accuracy,capturadoEn} o rechaza. El navegador exige permiso de GPS
   // por seguridad; no hay forma de leer la ubicación sin él.
@@ -1191,7 +1195,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   useEffect(()=>{if(step===2&&!ubic&&!geo)obtenerUbic();},[step]);
   // Monto total = litros × precio/L (automático; no se captura a mano)
   useEffect(()=>{const mm=(parseFloat(litros)||0)*(parseFloat(precioLitro)||0);setMonto(mm?mm.toFixed(2):"");},[litros,precioLitro]);
-  const can1=veh&&km&&!kmBloq&&fotoAntes&&fotoDespues;
+  const can1=veh&&km&&!kmBloq&&fotoAntes&&fotoDespues&&!sinAsign;
   // Candados de la carga: litros ≤ capacidad del tanque de la unidad; precio/L ≤ $100.
   const tanqueCap=vehicle?parseFloat(vehicle.tanque)||0:0;
   const litrosN=parseFloat(litros);
@@ -1219,7 +1223,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
       plataforma:navigator.userAgent||""
     };
     try{
-      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:{lat:fix.lat,lng:fix.lng,direccion},userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente",_auditoria,...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
+      const datos={formato:"reporte",vehicleId:vehicle.id,economico:vehicle.economico,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,areaResponsable:vehicle.responsable,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,km:kmN,fotoAntes,fotoDespues,lleno,fotoBomba,litros:parseFloat(litros)||0,precioLitro:parseFloat(precioLitro)||0,monto:parseFloat(monto)||0,fotoTicket,ubicacion:{lat:fix.lat,lng:fix.lng,direccion},userId:solicitante.id,responsable:solicitante.nombre,mail:solicitante.mail,fotoPersona,firma:sig,obs,status:"Pendiente",...(solAsignable?{solicitudId:solAsignable.id,folioSolicitud:folioDe(solAsignable)}:{}),_auditoria,...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("combustible",datos);
       await api.crear("combustible",subido);
       try{localStorage.removeItem(DKEY);}catch{}
@@ -1235,7 +1239,8 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         <div className="card"><div className="ct">Generales del Vehículo</div>
           <select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
           {vehicle&&<div style={{marginTop:8,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Responsable (área)</span><span>{vehicle.responsable}</span></div><div className="dr"><span>Combustible</span><span>{vehicle.combustible}</span></div><div className="dr"><span>Precio catálogo/L</span><span>${vehicle.precio.toFixed(2)}</span></div><div className="dr"><span>Tanque</span><span>{vehicle.tanque}L</span></div><div className="dr"><span>Producto</span><span>{vehicle.producto}</span></div></div>}
-          {sinAsign&&<div className="wb" style={{marginTop:8}}>⚠️ No se ve una solicitud <b>APROBADA</b> para esta unidad. El reporte de carga requiere asignación: el envío será rechazado hasta que la solicitud esté aprobada. (Si otro usuario ya la tiene aprobada, el sistema lo validará al enviar.)</div>}
+          {sinAsign&&<div className="wb" style={{marginTop:8}}>⚠️ No hay una solicitud <b>APROBADA y sin reporte</b> para esta unidad. El reporte de carga requiere una asignación (una solicitud aprobada = un reporte). No se puede registrar hasta que exista.</div>}
+          {solAsignable&&<div style={{marginTop:8,background:C.blueLt,color:C.blue,borderRadius:6,padding:"7px 10px",fontSize:12}}>🔗 Se vinculará a la solicitud <b>{folioDe(solAsignable)}</b> (aprobada {fdate(solAsignable.fecha)}). Este folio quedará ligado al reporte.</div>}
         </div>
         <div className="card"><div className="ct">Datos del vehículo para la carga</div>
           <label>Kilometraje al cargar combustible</label><input type="number" value={km} onChange={e=>setKm(e.target.value)} placeholder="Ej. 14806"/>
@@ -1289,11 +1294,11 @@ function SolHistory({items,rol,onSelect}){
   const nivelTxt=v=>{const o=TANK_OPTS.find(t=>t.val===v);return o?o.label:(v==null?"":v);};
   const nFotos=s=>((s.fotos&&s.fotos.length)?s.fotos.length:(s.photo?1:0))+[s.fotoAntes,s.fotoDespues,s.fotoBomba,s.fotoTicket,s.fotoPersona].filter(Boolean).length;
   const csv=()=>csvDownload("solicitudes_combustible",
-    ["Folio","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Comentario autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de"],
-    list.map(s=>[folioDe(s),fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.comentarioAut||"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):""]));
+    ["Folio","Folio solicitud","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Comentario autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de"],
+    list.map(s=>[folioDe(s),s.folioSolicitud||"",fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.comentarioAut||"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):(s.reasignadoDe?("#"+(s.reasignadoDe.economico||s.reasignadoDe.vehicleId||"")):"")]));
   return(
     <div>
-      <div className="tr">{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
+      <div className="tr">{["Todos","Pendiente","Por corregir","Aprobada","Rechazada","Anulado"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
       <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
       {list.length===0&&<div className="empty">No hay solicitudes</div>}
       <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.formato==="reporte"?"📋 Reporte":"📝 Solicitud"} · {s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
@@ -1302,26 +1307,27 @@ function SolHistory({items,rol,onSelect}){
 }
 
 // Cambio de unidad de un registro (SOLO admin): corrige capturas hechas en la
-// unidad equivocada. No altera los datos capturados (km, fotos, firmas, estado);
-// el backend recalcula el índice por sucursal y deja rastro en `reasignacion`.
+// unidad equivocada. Crea un registro NUEVO en la unidad correcta (conservando
+// datos y fecha) y deja el viejo ANULADO; ambos cruzan el puente a Fleet Command.
 function ReasignarUnidad({tipoApi,reg,cat,rol,refrescar,showToast,onBack}){
   const[nv,setNv]=useState("");const[busy,setBusy]=useState(false);
-  if(rol!=="admin"||!cat)return null;
+  if(rol!=="admin"||!cat||reg.status==="Anulado")return null;
   const pool=cat.vehicles.filter(v=>esActivoV(v)&&String(v.id)!==String(reg.vehicleId)&&(tipoApi==="SOL"?!esElectrico(v):tipoApi==="CL"?catVeh(v)==="reparto":catVeh(v)==="montacargas"));
   const aplicar=async()=>{
     if(!nv||busy)return;
     const dest=cat.vehicles.find(v=>String(v.id)===String(nv));
-    if(!window.confirm("¿Reasignar este registro de la unidad #"+(reg.economico||reg.vehicleId)+" a la #"+((dest&&dest.economico)||nv)+"?\n\nLos datos capturados (km, fotos, firmas, estado) no cambian; queda rastro de la corrección."))return;
+    if(!window.confirm("¿Reasignar este registro de la unidad #"+(reg.economico||reg.vehicleId)+" a la #"+((dest&&dest.economico)||nv)+"?\n\nSe creará un registro NUEVO en la unidad correcta (con los mismos datos y fecha) y este quedará ANULADO. El cambio se refleja en todas las bases (incl. Fleet Command)."))return;
     setBusy(true);
-    try{await api.adminReasignarUnidad(tipoApi,reg.id,nv);showToast("✓ Registro reasignado a la unidad #"+((dest&&dest.economico)||nv));refrescar&&await refrescar();onBack&&onBack();}
+    try{await api.adminReasignarUnidad(tipoApi,reg.id,nv);showToast("✓ Reasignado: registro nuevo en la unidad #"+((dest&&dest.economico)||nv)+"; el anterior quedó anulado.");refrescar&&await refrescar();onBack&&onBack();}
     catch(e){showToast("⚠️ "+e.message);}
     setBusy(false);
   };
   return(
     <div className="card no-print">
       <div className="ct">Cambiar unidad (corrección de admin)</div>
+      {reg.reasignadoDe&&<div className="wb" style={{marginBottom:8}}>↪ Este registro proviene de una reasignación: antes era la unidad #{reg.reasignadoDe.economico||reg.reasignadoDe.vehicleId} · por {reg.reasignadoDe.por} · {fdt(reg.reasignadoDe.en)}</div>}
       {reg.reasignacion&&<div className="wb" style={{marginBottom:8}}>↪ Reasignado: antes era la unidad #{reg.reasignacion.de?.economico||reg.reasignacion.de?.vehicleId} · por {reg.reasignacion.por} · {fdt(reg.reasignacion.en)}</div>}
-      <div style={{fontSize:11,color:"#888",marginBottom:8}}>Si este registro se capturó en la unidad equivocada, muévelo a la correcta. Los datos capturados no se alteran; el historial y el tablero se actualizan.</div>
+      <div style={{fontSize:11,color:"#888",marginBottom:8}}>Si este registro se capturó en la unidad equivocada, muévelo a la correcta. Se crea un registro NUEVO en la unidad correcta y este queda ANULADO; el historial, el tablero y Fleet Command se actualizan.</div>
       <div style={{display:"flex",gap:8}}>
         <select value={nv} onChange={e=>setNv(e.target.value)} style={{flex:1}}><option value="">— Unidad correcta —</option>{pool.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.sucursal}</option>)}</select>
         <button className="bd" disabled={!nv||busy} onClick={aplicar} style={{whiteSpace:"nowrap"}}>{busy?"Aplicando…":"Reasignar"}</button>
@@ -1330,11 +1336,92 @@ function ReasignarUnidad({tipoApi,reg,cat,rol,refrescar,showToast,onBack}){
   );
 }
 
+// ─── «Por corregir»: campos corregibles por tipo de registro ──────────
+const CAMPOS_CORR_SOL=[
+  {id:"km",label:"Kilometraje",tipo:"num"},
+  {id:"tankBefore",label:"Nivel de tanque",tipo:"nivel"},
+  {id:"fotos",label:"Fotos de evidencia",tipo:"fotos"},
+  {id:"firma",label:"Firma",tipo:"firma"},
+  {id:"obs",label:"Observaciones",tipo:"texto"},
+];
+const CAMPOS_CORR_REP=[
+  {id:"km",label:"Kilometraje",tipo:"num"},
+  {id:"litros",label:"Litros cargados",tipo:"num"},
+  {id:"precioLitro",label:"Precio por litro ($)",tipo:"num"},
+  {id:"lleno",label:"¿Se llenó el tanque?",tipo:"sino"},
+  {id:"fotoAntes",label:"Foto km/medidor ANTES",tipo:"foto"},
+  {id:"fotoDespues",label:"Foto medidor al FINALIZAR",tipo:"foto"},
+  {id:"fotoBomba",label:"Foto de la bomba",tipo:"foto"},
+  {id:"fotoPersona",label:"Foto de quien cargó",tipo:"foto"},
+  {id:"fotoTicket",label:"Foto del ticket",tipo:"foto"},
+  {id:"obs",label:"Observaciones",tipo:"texto"},
+];
+const camposCorrDe=sol=>sol.formato==="reporte"?CAMPOS_CORR_REP:CAMPOS_CORR_SOL;
+
+// Editor de corrección: solo los campos que el autorizador marcó; al enviar el
+// registro vuelve a «Pendiente». Lo usa quien capturó (o un admin).
+function CorregirCombustible({sol,session,rol,cat,refrescar,showToast,onBack}){
+  const campos=(sol.camposCorregir||[]).map(String);
+  const defs=camposCorrDe(sol).filter(c=>campos.includes(c.id));
+  const puedo=rol==="admin"||(session&&sol.accountId===session.email);
+  // Las fotos/firma existentes llegan como URLs prefirmadas (no claves S3): NO se
+  // pre-cargan (se guardarían URLs que expiran). Se exige recaptura del campo marcado.
+  const[val,setVal]=useState(()=>{const o={};defs.forEach(c=>{o[c.id]=(c.tipo==="fotos")?[]:(c.tipo==="foto"||c.tipo==="firma")?null:(sol[c.id]!==undefined?sol[c.id]:(c.tipo==="sino"?"Si":c.tipo==="nivel"?0.25:""));});return o;});
+  const[busy,setBusy]=useState(false);const[forzar,setForzar]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  if(!puedo||!defs.length)return null;
+  const vehicle=(cat?.vehicles||[]).find(v=>String(v.id)===String(sol.vehicleId));
+  const tanqueCap=vehicle?parseFloat(vehicle.tanque)||0:parseFloat(sol.tanque)||0;
+  const set=(id,v)=>setVal(o=>({...o,[id]:v}));
+  // Cada campo marcado debe quedar con valor (las fotos/firma, recapturadas).
+  const completo=defs.every(c=>{const v=val[c.id];if(c.tipo==="fotos")return (v||[]).length>0;if(c.tipo==="foto"||c.tipo==="firma")return !!v;if(c.tipo==="texto")return true;return v!==""&&v!=null;});
+  const submit=async()=>{
+    if(busy||!completo)return;setBusy(true);
+    try{
+      const datos={};defs.forEach(c=>{datos[c.id]=val[c.id];});
+      const subido=await api.subirEvidencias("combustible",datos);
+      await api.corregir(sol.id,subido,forzar);
+      showToast("✓ Corrección enviada. Queda Pendiente de autorización.");
+      await refrescar();onBack&&onBack();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(<div className="card no-print" style={{border:`1px solid #5E35B1`}}>
+    <div className="ct" style={{color:"#5E35B1"}}>Corregir registro (campos marcados)</div>
+    {sol.comentarioAut&&<div className="wb">📝 Indicación: {sol.comentarioAut}</div>}
+    {defs.map(c=><div key={c.id} style={{marginBottom:10}}>
+      <label>{c.label}</label>
+      {c.tipo==="num"&&<input type="number" value={val[c.id]} onChange={e=>set(c.id,e.target.value)}/>}
+      {c.tipo==="texto"&&<textarea rows={2} value={val[c.id]} onChange={e=>set(c.id,e.target.value)}/>}
+      {c.tipo==="sino"&&<div className="rr">{["Si","No"].map(o=><button key={o} className={"rb"+(val[c.id]===o?" O":"")} onClick={()=>set(c.id,o)}>{o}</button>)}</div>}
+      {c.tipo==="nivel"&&<div className="tg">{TANK_OPTS.map(o=><button key={o.val} className={"tb"+(val[c.id]===o.val?" sel":"")} onClick={()=>set(c.id,o.val)}>{o.label}</button>)}</div>}
+      {c.tipo==="foto"&&<FotoCampo val={val[c.id]} set={v=>set(c.id,v)} label={c.label}/>}
+      {c.tipo==="fotos"&&<div>
+        {(val[c.id]||[]).length>0&&<div className="fg" style={{marginBottom:8}}>{(val[c.id]||[]).map((src,i)=><div key={i} className="ft"><img src={src} alt={"evidencia "+(i+1)}/><button className="fx" onClick={()=>set(c.id,(val[c.id]||[]).filter((_,j)=>j!==i))}>×</button></div>)}</div>}
+        <div className="pb"><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>{(val[c.id]||[]).length?"Agregar otra foto":"Toca para capturar"}</div><input type="file" accept="image/*" capture="environment" onChange={e=>{readFile(e,d=>set(c.id,[...(val[c.id]||[]),d]));e.target.value="";}}/></div>
+      </div>}
+      {c.tipo==="firma"&&<div>
+        <canvas ref={sigRef} className="sig" width={340} height={130} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();set(c.id,sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();set(c.id,sigRef.current?.toDataURL());}}/>
+        <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(v=>set(c.id,v))}>Limpiar</button>
+      </div>}
+      {c.id==="litros"&&tanqueCap>0&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Máx. {tanqueCap} L (capacidad del tanque)</div>}
+      {c.id==="precioLitro"&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Máx. $100 por litro</div>}
+    </div>)}
+    {rol==="admin"&&defs.some(c=>c.id==="km")&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:C.red,marginBottom:6}}><input type="checkbox" checked={forzar} onChange={e=>setForzar(e.target.checked)} style={{width:"auto"}}/>Forzar km fuera de rango (corrección de admin)</label>}
+    {defs.some(c=>c.tipo==="foto"||c.tipo==="fotos"||c.tipo==="firma")&&<div style={{fontSize:11,color:"#888",marginBottom:6}}>Las fotos y la firma marcadas deben volver a capturarse.</div>}
+    <button className="bp" disabled={busy||!completo} onClick={submit}>{busy?"Enviando…":"Enviar corrección"}</button>
+  </div>);
+}
+
 function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
   // Autorizan admin/analista/supervisor, pero NADIE (salvo admin) sus propias capturas.
   const canChange=(rol==="admin"||rol==="analista"||rol==="supervisor")&&(rol==="admin"||!session||sol.accountId!==session.email);
   const[busy,setBusy]=useState(false);const[coment,setComent]=useState(sol.comentarioAut||"");
-  const change=async st=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st,coment.trim());showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  // «Por corregir»: el autorizador elige qué campos deben cambiar (solo si NO está autorizado ni anulado).
+  const puedeCorregir=canChange&&sol.status!=="Aprobada"&&sol.status!=="Anulado";
+  const[corrMode,setCorrMode]=useState(false);const[corrSel,setCorrSel]=useState([]);
+  const toggleCampo=id=>setCorrSel(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  const change=async(st,campos)=>{setBusy(true);try{await api.cambiarEstado("combustible",sol.id,st,coment.trim(),campos);showToast("Estado actualizado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   const esRep=sol.formato==="reporte";
   const u=sol.ubicacion;
   const mapsUrl=u?`https://www.google.com/maps?q=${u.lat},${u.lng}`:null;
@@ -1343,7 +1430,7 @@ function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
     <div className="pdf-area" data-pdftitle={esRep?"Reporte de carga de combustible":"Solicitud de combustible"} data-pdfsucursal={sol.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       {esRep?<>
-        <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Generales del Vehículo</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(sol)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span># Económico</span><span>{sol.economico}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sub-marca</span><span>{sol.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Tanque</span><span>{sol.tanque} L</span></div><div className="dr"><span>Responsable (área)</span><span>{sol.areaResponsable}</span></div><div className="dr"><span>Combustible</span><span>{sol.combustible}</span></div><div className="dr"><span>Precio catálogo</span><span>${sol.precio?.toFixed(2)}</span></div><div className="dr"><span>Producto</span><span>{sol.producto}</span></div></div>
+        <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Generales del Vehículo</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(sol)}</span></div>{sol.folioSolicitud&&<div className="dr"><span>Folio solicitud</span><span style={{fontWeight:700,color:C.blue}}>{sol.folioSolicitud}</span></div>}<div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span># Económico</span><span>{sol.economico}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sub-marca</span><span>{sol.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Tanque</span><span>{sol.tanque} L</span></div><div className="dr"><span>Responsable (área)</span><span>{sol.areaResponsable}</span></div><div className="dr"><span>Combustible</span><span>{sol.combustible}</span></div><div className="dr"><span>Precio catálogo</span><span>${sol.precio?.toFixed(2)}</span></div><div className="dr"><span>Producto</span><span>{sol.producto}</span></div></div>
         <div className="card"><div className="ct">Datos de la carga</div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>¿Se llenó el tanque?</span><span>{sol.lleno}</span></div>{sol.fotoAntes&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto km y medidor antes de cargar</div><img src={sol.fotoAntes} style={{width:"100%",borderRadius:8}} alt="antes"/></div>}{sol.fotoDespues&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del medidor al finalizar</div><img src={sol.fotoDespues} style={{width:"100%",borderRadius:8}} alt="despues"/></div>}</div>
         <div className="card"><div className="ct">Datos de la gasolinera</div><div className="dr"><span>Litros cargados</span><span>{sol.litros} L</span></div><div className="dr"><span>Precio por litro</span><span>${sol.precioLitro?.toFixed(2)}</span></div><div className="dr"><span>Monto total</span><span style={{color:C.blue,fontWeight:700}}>${sol.monto?.toLocaleString()}</span></div>{sol.fotoBomba&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto de la bomba al finalizar</div><img src={sol.fotoBomba} style={{width:"100%",borderRadius:8}} alt="bomba"/></div>}{sol.fotoTicket&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del ticket</div><img src={sol.fotoTicket} style={{width:"100%",borderRadius:8}} alt="ticket"/></div>}{u&&<div className="dr" style={{marginTop:6}}><span>Ubicación</span><span>{u.direccion||`${u.lat?.toFixed(5)}, ${u.lng?.toFixed(5)}`}</span></div>}{mapImg&&<img src={mapImg} onError={e=>{e.target.style.display="none";}} style={{width:260,maxWidth:"100%",borderRadius:6,marginTop:6,border:"1px solid #eee"}} alt="mapa de referencia"/>}{mapsUrl&&<div className="no-print"><a href={mapsUrl} target="_blank" rel="noreferrer" style={{fontSize:12,color:C.blue}}>Ver en mapa →</a></div>}</div>
         <div className="card"><div className="ct">Quien realizó la carga</div><div className="dr"><span>Responsable</span><span>{sol.responsable}</span></div><div className="dr"><span>Correo</span><span>{sol.mail}</span></div>{sol.fotoPersona&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto en la bomba</div><img src={sol.fotoPersona} style={{width:"100%",borderRadius:8}} alt="persona"/></div>}{sol.obs&&<div className="dr"><span>Obs.</span><span>{sol.obs}</span></div>}<div style={{marginTop:6,fontSize:11,color:"#888"}}>Notificación: {sol.mail?"logisticaalmacenes@gpa.com.mx":"logística"}</div></div>
@@ -1355,8 +1442,17 @@ function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
       </>}
       {(sol.autorizadoPor||sol.comentarioAut)&&<div className="card"><div className="ct">Autorización</div>{sol.autorizadoPor&&<div className="dr"><span>Autorizó / revisó</span><span>{sol.autorizadoPor}</span></div>}{sol.fechaAut&&<div className="dr"><span>Fecha</span><span>{fdt(sol.fechaAut)}</span></div>}{sol.comentarioAut&&<div className="dr"><span>Comentario</span><span>{sol.comentarioAut}</span></div>}</div>}
       {canChange&&<div className="card no-print"><div className="ct">Cambiar Estado</div>
-        <label>Comentario (opcional)</label><textarea rows={2} value={coment} onChange={e=>setComent(e.target.value)} placeholder="Motivo, aclaración… (se guarda con la autorización)"/>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div></div>}
+        <label>Comentario (opcional)</label><textarea rows={2} value={coment} onChange={e=>setComent(e.target.value)} placeholder="Motivo, aclaración, indicación de corrección… (se guarda con el registro)"/>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>{["Pendiente","Aprobada","Rechazada"].map(st=><button key={st} disabled={busy} style={{flex:1,padding:8,borderRadius:6,border:`1px solid ${st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#ccc"}`,background:sol.status===st?(st==="Aprobada"?C.greenLt:st==="Rechazada"?C.redLt:"#f5f5f5"):"#fff",color:st==="Aprobada"?C.green:st==="Rechazada"?C.red:"#555",cursor:"pointer",fontSize:12,fontWeight:600}} onClick={()=>change(st)}>{st}</button>)}</div>
+        {puedeCorregir&&<div style={{marginTop:10,borderTop:"1px solid #eee",paddingTop:10}}>
+          {!corrMode?<button className="bs" style={{width:"100%",borderColor:"#5E35B1",color:"#5E35B1"}} onClick={()=>setCorrMode(true)}>✎ Marcar «Por corregir»</button>:
+          <div>
+            <div style={{fontSize:12,color:"#555",marginBottom:6}}>Marca los campos que deben corregirse. El capturista podrá editarlos y reenviar (el registro no queda autorizado).</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{camposCorrDe(sol).map(c=><button key={c.id} onClick={()=>toggleCampo(c.id)} style={{padding:"5px 9px",borderRadius:99,fontSize:11,cursor:"pointer",border:`1px solid ${corrSel.includes(c.id)?"#5E35B1":"#ccc"}`,background:corrSel.includes(c.id)?"#EDE7F6":"#fff",color:corrSel.includes(c.id)?"#5E35B1":"#555",fontWeight:600}}>{corrSel.includes(c.id)?"✓ ":""}{c.label}</button>)}</div>
+            <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>{setCorrMode(false);setCorrSel([]);}}>Cancelar</button><button className="bd" style={{flex:1,background:"#5E35B1",borderColor:"#5E35B1"}} disabled={busy||!corrSel.length} onClick={()=>change("Por corregir",corrSel)}>Enviar a corrección ({corrSel.length})</button></div>
+          </div>}
+        </div>}</div>}
+      {sol.status==="Por corregir"&&<CorregirCombustible sol={sol} session={session} rol={rol} cat={cat} refrescar={refrescar} showToast={showToast} onBack={onBack}/>}
       <ReasignarUnidad tipoApi="SOL" reg={sol} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
     </div>
   );
@@ -2033,7 +2129,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
           {rModo==="dia"
             ? <><label>Día</label><input type="date" value={rDia} onChange={e=>setRDia(e.target.value)}/></>
             : <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>}
-          <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Aprobada","Rechazada"].map(x=><option key={x}>{x}</option>)}</select>
+          <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Por corregir","Aprobada","Rechazada","Anulado"].map(x=><option key={x}>{x}</option>)}</select>
           <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
           <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar detalle (CSV)</button>
           <button className="bp" style={{marginTop:6}} disabled={!repFiltrado.length} onClick={descargarPorUnidadCSV}>⬇ Descargar total por unidad (CSV)</button>
@@ -2106,6 +2202,10 @@ const segUltRango=(regs,pred,ini,fin)=>{const g=(regs||[]).filter(r=>{const d=ym
 
 // Calcula el cumplimiento de todos los módulos seleccionados.
 function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys,hoy}){
+  // Los registros ANULADOS (reasignados a otra unidad) no cuentan en NINGÚN módulo:
+  // se reemplazan por el registro nuevo en la unidad correcta.
+  const _viv=r=>!r||r.status!=="Anulado";
+  combustible=(combustible||[]).filter(_viv);checklist=(checklist||[]).filter(_viv);montacargas=(montacargas||[]).filter(_viv);
   const hoyStr=ymd(hoy);const out=[];const inc=k=>!modKeys||modKeys.includes(k);const ahora=hoy.getTime();
   // Fecha de inicio (go-live/reset): no se exige nada cuyo día o plazo sea ANTERIOR a ella.
   const inicio=(cat.config&&cat.config.fechaInicio)||null;
@@ -2197,6 +2297,9 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
 // rango? cumplido (verde) = sí; vencido/rojo = faltó (sin registro). Más problemas del rango.
 // No aplica pendiente/vencido por plazo (eso es el modo período vigente).
 function segModulosRango({cat,combustible,checklist,montacargas,formData,sucs,modKeys,rango}){
+  // Los registros ANULADOS (reasignados) no cuentan en el tablero por rango.
+  const _viv=r=>!r||r.status!=="Anulado";
+  combustible=(combustible||[]).filter(_viv);checklist=(checklist||[]).filter(_viv);montacargas=(montacargas||[]).filter(_viv);
   const d=rango.desde||"0000-00-00",h=rango.hasta||"9999-99-99";
   const enR=f=>{const x=ymd(f);return x>=d&&x<=h;};
   const ult=arr=>arr.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]||null;

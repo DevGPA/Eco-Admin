@@ -119,6 +119,17 @@ export async function archivarCrudo(ev, rawBody) {
 // TODO(Fleet Command): cablear cada rama al process*() existente.
 // Regla de folio: eventoId = ev.folio ("OPS-<registroId>") y fuente:"ops-gpa".
 async function persistir(ev, unidad, evidenciasCopiadas) {
+  // ── Estado ANULADO (reasignación de unidad en Operaciones-GPA) ──
+  // Cuando un admin reasigna un registro, Operaciones-GPA lo RECREA en la unidad
+  // correcta (llega aparte como 'creacion' con folio nuevo) y deja el original en
+  // status "Anulado" (llega aquí como 'cambio_estado'). Hay que dar de baja lógica
+  // el evento OPS-<registroId> anterior, de forma idempotente (reenvío = misma baja).
+  // Aplica a SOL y CL por igual.
+  if (ev.status === 'Anulado') {
+    // TODO(Fleet Command): marcar anulado/cancelado el evento ev.folio en el dominio
+    // (soft-delete lógico), conservando idempotencia por folio. NO reintentar como error.
+    throw new Error(`anular evento ${ev.folio} (reasignado a otra unidad): cablear a la baja lógica de Fleet Command`);
+  }
   if (ev.tipo === 'SOL') {
     // OJO: solicitud y reporte de carga llegan AMBOS como tipo SOL;
     // el discriminador es answers.formato (ver CONTRATO-gpa.ops.v1.md).
@@ -128,7 +139,10 @@ async function persistir(ev, unidad, evidenciasCopiadas) {
       throw new Error('persistir SOL reporte (carga): cablear a process* de Fleet Command');
     }
     // creacion      → processSolicitudGasolina({...})
-    // cambio_estado → actualizar estado de la solicitud (Aprobada/Rechazada)
+    // cambio_estado → actualizar estado de la solicitud. Valores posibles:
+    //   Pendiente | Aprobada | Rechazada | "Por corregir" (estado NO final: el
+    //   registro volverá a Pendiente y luego Aprobada; tratar como retenido, NO
+    //   como aprobado, y NO mandar a DLQ por status desconocido).
     throw new Error('persistir SOL solicitud: cablear a process* de Fleet Command');
   }
   if (ev.tipo === 'CL' && ev.subtipo === 'semanal') {

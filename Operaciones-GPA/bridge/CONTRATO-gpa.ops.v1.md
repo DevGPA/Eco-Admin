@@ -61,7 +61,7 @@ El publisher reintenta ante cualquier respuesta ≠ 2xx.
     "userId": "U-17",
     "accountId": "juan@gpa.com.mx"    // cuenta Cognito que capturó
   },
-  "status": "Pendiente",              // SOL: Pendiente|Aprobada|Rechazada · CL: null
+  "status": "Pendiente",              // SOL: Pendiente|Aprobada|Rechazada|Por corregir|Anulado · CL: Aprobado|Anulado
   "answers": { /* campos de negocio tal como se capturaron (verbatim) */ },
   "evidencias": [                     // claves S3 en el bucket de Operaciones-GPA
     { "campo": "photo",  "key": "SOL/3f2a…c9.jpg" },
@@ -96,6 +96,21 @@ El publisher reintenta ante cualquier respuesta ≠ 2xx.
    - `creacion` — INSERT del registro (captura de campo).
    - `cambio_estado` — cambió `status` (aprobación/rechazo de combustible).
      Parches internos (p. ej. análisis de foto) NO emiten evento.
+   - Valores de `status` que puede traer un `cambio_estado` (evolución aditiva
+     de v1, envelope y firma sin cambios):
+     - **`Por corregir`** — el autorizador devolvió el registro para corregir un
+       campo. Es un estado **NO final**: volverá a `Pendiente` y luego a
+       `Aprobada`. El receptor debe tratarlo como **retenido** (no aprobado) y
+       NO mandarlo a DLQ por status desconocido.
+     - **`Anulado`** — el registro fue **reasignado** a otra unidad en
+       Operaciones-GPA. El receptor debe **anular** (baja lógica, idempotente
+       por folio) el evento `OPS-<registroId>`.
+   - **Reasignación de unidad** = corrección que se propaga como **DOS eventos**:
+     un `creacion` con **folio nuevo** en la unidad correcta (mismos datos y
+     `fechaISO` original; `answers.reasignadoDe` referencia el folio viejo) y un
+     `cambio_estado` → `Anulado` del **folio viejo** (`answers.reasignadoA`
+     referencia el folio nuevo). Al reusar el folio como `eventoId`, la anulación
+     y el alta se aplican de forma idempotente.
 8. **Qué cruza el puente**: `SOL` y `CL` únicamente (variable `BRIDGE_TIPOS`).
    Montacargas y las 27 plantillas de mantenimiento quedan fuera hasta que
    exista módulo consumidor.

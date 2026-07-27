@@ -2,15 +2,17 @@
 # seed/reasignar_unidad.py — Re-atribuir registros de una unidad a otra — GPA Operaciones
 # ─────────────────────────────────────────────────────────────────
 # Caso de uso: por error se capturaron registros bajo la unidad equivocada
-# (p. ej. combustible de la R04 quedó registrado en la 52). Este script mueve
-# esos registros a la unidad correcta, actualizando los datos de unidad que
-# están "pegados" en cada registro y el índice por sucursal (GSI2PK).
+# (p. ej. combustible de la R04 quedó registrado en la 52). Este script reasigna
+# esos registros a la unidad correcta.
 #
-# SOLO toca los campos de IDENTIDAD de la unidad. NO toca los datos del evento
-# (km, litros, monto, precio, producto, tanque, combustible, fotos, firma,
-# fecha, status): esos reflejan la carga real y deben conservarse. Si además
-# quieres copiar las características de la unidad destino (combustible/producto/
-# tanque/precio), usa --incluir-caracteristicas (revisa antes el dry-run).
+# MODELO (espeja la reasignación de la app, db.escritura.reasignar_registro_unidad):
+# por cada registro se CREA uno NUEVO en la unidad correcta (con los mismos datos
+# del evento —km, litros, fotos, firma— y la MISMA fecha/estado originales) y el
+# viejo queda en status "Anulado". Así el puente propaga automáticamente a Fleet
+# Command el alta del nuevo y el «Anulado» del viejo, sin corrección manual.
+# NO se borra nada (prod tiene protección de borrado / PITR). Si además quieres
+# copiar las características de la unidad destino (combustible/producto/tanque/
+# precio) al registro nuevo, usa --incluir-caracteristicas (revisa el dry-run).
 #
 # SEGURO POR DEFECTO: sin --confirm solo simula (dry-run) y no escribe nada.
 # Respalda cada item original (JSONL) antes de modificarlo.
@@ -35,6 +37,65 @@ CAMPOS_IDENTIDAD = ["vehicleId", "economico", "placas", "subMarca",
                     "sucursal", "areaResponsable"]
 # Características de la unidad (opcionales; por defecto NO se tocan).
 CAMPOS_CARACTERISTICAS = ["combustible", "producto", "tanque", "precio"]
+
+# Claves internas / de identidad del registro que NO se copian al registro nuevo.
+_KEYS_DYNAMO = {"PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK", "GSI3SK"}
+_NO_COPIAR = _KEYS_DYNAMO | {"id", "tipo_reg", "fecha", "sucursal", "accountId",
+                             "reasignacion", "reasignadoA", "reasignadoDe"}
+
+
+def _now_iso() -> str:
+    return datetime.now(MX_TZ).isoformat()
+
+
+def _registro_keys(tipo, rid, sucursal, account_id, fecha):
+    return {"PK": f"{tipo}#{rid}", "SK": "META",
+            "GSI1PK": tipo, "GSI1SK": fecha,
+            "GSI2PK": f"{tipo}#{sucursal}", "GSI2SK": fecha,
+            "GSI3PK": f"{tipo}#{account_id}", "GSI3SK": fecha}
+
+
+def reasignar_item(tabla, item: dict, destino: dict, incluir_caracteristicas: bool = False) -> str:
+    """Reasigna como REGISTRO NUEVO (espeja db.escritura.reasignar_registro_unidad):
+    crea un registro nuevo en la unidad destino (datos + fecha/estado originales) y
+    deja el viejo en status "Anulado". Ambas escrituras cruzan el stream → el puente
+    propaga alta(nuevo)+cambio_estado(viejo). Devuelve el id del registro nuevo."""
+    import uuid
+    tipo = str(item.get("tipo_reg") or str(item.get("PK", "")).split("#", 1)[0])
+    negocio = {k: v for k, v in item.items() if k not in _NO_COPIAR}
+    negocio["vehicleId"] = destino["id"]
+    for c in ("economico", "placas", "subMarca", "sucursal"):
+        if destino.get(c) is not None:
+            negocio[c] = destino.get(c)
+    if destino.get("responsable") is not None and "areaResponsable" in item:
+        negocio["areaResponsable"] = destino.get("responsable")
+    if incluir_caracteristicas:
+        for c in CAMPOS_CARACTERISTICAS:
+            if destino.get(c) is not None:
+                negocio[c] = destino.get(c)
+    fecha = item.get("fecha") or _now_iso()
+    sucursal = destino.get("sucursal") or item.get("sucursal") or "SIN_SUCURSAL"
+    account_id = item.get("accountId") or ""
+    new_id = uuid.uuid4().hex[:12]
+    negocio["reasignadoDe"] = {
+        "id": item.get("id"), "folio": f"{tipo}-{item.get('id')}".upper(),
+        "vehicleId": item.get("vehicleId"), "economico": item.get("economico"),
+        "placas": item.get("placas"), "sucursal": item.get("sucursal"),
+        "por": "seed/reasignar_unidad", "en": _now_iso()}
+    nuevo = {**_registro_keys(tipo, new_id, sucursal, account_id, fecha), **negocio,
+             "id": new_id, "tipo_reg": tipo, "fecha": fecha,
+             "sucursal": sucursal, "accountId": account_id}
+    tabla.put_item(Item=nuevo)
+    tabla.update_item(
+        Key={"PK": item["PK"], "SK": item["SK"]},
+        UpdateExpression="SET #s = :s, reasignadoA = :ra",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":s": "Anulado", ":ra": {
+            "id": new_id, "folio": f"{tipo}-{new_id}".upper(),
+            "vehicleId": destino["id"], "economico": destino.get("economico"),
+            "sucursal": sucursal, "por": "seed/reasignar_unidad", "en": _now_iso()}},
+    )
+    return new_id
 
 
 def construir_cambio(item: dict, origen: dict, destino: dict,
@@ -115,18 +176,6 @@ def buscar_registros(tabla, tipo: str, origen_id: str, hasta: str) -> list[dict]
     return out
 
 
-def aplicar_cambio(tabla, item: dict, cambio: dict) -> None:
-    names = {f"#f{i}": k for i, k in enumerate(cambio)}
-    values = {f":v{i}": v for i, (k, v) in enumerate(cambio.items())}
-    sets = ", ".join(f"#f{i} = :v{i}" for i in range(len(cambio)))
-    tabla.update_item(
-        Key={"PK": item["PK"], "SK": item["SK"]},
-        UpdateExpression="SET " + sets,
-        ExpressionAttributeNames=names,
-        ExpressionAttributeValues=values,
-    )
-
-
 def main():
     ap = argparse.ArgumentParser(description="Re-atribuir registros de una unidad a otra — GPA Operaciones")
     ap.add_argument("--stack", default=os.environ.get("STACK_NAME"),
@@ -192,35 +241,45 @@ def main():
     try:
         for it in sorted(registros, key=lambda x: str(x.get("fecha"))):
             cambio = construir_cambio(it, origen, destino, args.incluir_caracteristicas)
-            fid = it.get("id"); folios.append(f"OPS-{fid}")
-            fecha = str(it.get("fecha"))[:19]
+            fid = it.get("id"); fecha = str(it.get("fecha"))[:19]
             formato = it.get("formato") or "solicitud"
-            if not cambio:
+            if str(it.get("status") or "") == "Anulado":
+                sin_cambio += 1
+                print(f"   = {fecha}  id={fid}  ({formato})  ya está ANULADO, se omite")
+                continue
+            if str(it.get("vehicleId")) == str(destino["id"]):
                 sin_cambio += 1
                 print(f"   = {fecha}  id={fid}  ({formato})  ya está en la {args.destino}, sin cambio")
                 continue
+            folios.append(f"OPS-{fid}")
             resumen = "  ".join(f"{k}:{it.get(k)}→{v}" for k, v in cambio.items() if k != "GSI2PK")
-            print(f"   {'○' if dry_run else '✓'} {fecha}  id={fid}  km={it.get('km')}  ({formato})  {resumen}")
-            if not dry_run:
+            if dry_run:
+                print(f"   ○ {fecha}  id={fid}  km={it.get('km')}  ({formato})  → registro NUEVO en {args.destino}; este quedará ANULADO   {resumen}")
+            else:
                 fh.write(json.dumps(it, ensure_ascii=False, default=str) + "\n")
-                aplicar_cambio(tabla, it, cambio)
+                new_id = reasignar_item(tabla, it, destino, args.incluir_caracteristicas)
                 movidos += 1
+                print(f"   ✓ {fecha}  id={fid}→{new_id}  km={it.get('km')}  ({formato})  nuevo en {args.destino}; viejo ANULADO")
     finally:
         if fh:
             fh.close()
 
     print()
     if dry_run:
-        print(f"○ Simulación: se moverían {len(registros) - sin_cambio} registro(s) "
-              f"de la {args.origen} a la {args.destino} ({sin_cambio} ya estaban ok).")
+        print(f"○ Simulación: se reasignarían {len(registros) - sin_cambio} registro(s) "
+              f"de la {args.origen} a la {args.destino} ({sin_cambio} ya estaban ok/anulados).")
+        print("○ Cada uno crea un registro NUEVO en la unidad correcta y deja el viejo ANULADO.")
         print("○ Para ejecutar de verdad agrega: --confirm")
     else:
-        print(f"✓ {movidos} registro(s) re-atribuidos a la {args.destino}. "
+        print(f"✓ {movidos} registro(s) reasignados a la {args.destino} "
+              f"(nuevo en la unidad correcta + viejo ANULADO). "
               f"Respaldo de los originales: {respaldo}")
 
-    # Folios para coordinar la corrección del lado Fleet Command (el puente NO
-    # propaga estas correcciones: solo publica altas y cambios de estado).
-    print("\n── Corregir también en Fleet Command (mismos folios) ──")
+    # El puente propaga AUTOMÁTICAMENTE cada reasignación: alta del registro nuevo
+    # (folio nuevo, unidad correcta) + cambio de estado del viejo a «Anulado».
+    print("\n── Fleet Command ──")
+    print("   El puente propaga solo la reasignación (alta del nuevo + «Anulado» del viejo).")
+    print("   Confirma que estos folios VIEJOS quedaron anulados del lado Fleet Command:")
     print("   " + " ".join(folios))
 
 

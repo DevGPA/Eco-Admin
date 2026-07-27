@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "contrato": "gpa.ops.v1",
+  "tipo": "SOL",
+  "subtipo": null,
+  "evento": "cambio_estado",
+  "registroId": "34354ae5d278",
+  "folio": "OPS-34354ae5d278",
+  "fechaISO": "2026-07-08T15:42:11+00:00",
+  "sucursal": "Guadalajara",
+  "unidad": {
+    "vehicleId": "10",
+    "economico": "10",
+    "placas": "JLL5377"
+  },
+  "responsable": {
+    "nombre": "Operador Guadalajara",
+    "userId": "46",
+    "accountId": "operador.gdl@gpa.com.mx"
+  },
+  "status": "Anulado",
+  "answers": {
+    "subMarca": "Matiz 5 Ptas",
+    "mail": "operador.gdl@gpa.com.mx",
+    "km": 77777,
+    "tankBefore": 0.25,
+    "tankAfter": 1,
+    "necesidad": "Ruta local",
+    "litros": 26.25,
+    "monto": 699.04,
+    "combustible": "Gasolina",
+    "producto": "TOKA COMBUSTIBLE MAGNA CHIP",
+    "precio": 26.63,
+    "tanque": 35,
+    "obs": "",
+    "status": "Anulado",
+    "photo": "SOL/3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f.jpg"
+  },
+  "evidencias": [
+    {
+      "campo": "photo",
+      "key": "SOL/3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f.jpg"
+    }
+  ],
+  "firma": "SOL/9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e.png",
+  "bucketOrigen": "gpa-ops-evidencias-ENV-CUENTA",
+  "emitidoEn": "2026-07-09T00:00:00+00:00"
+}

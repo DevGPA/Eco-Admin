@@ -150,6 +150,26 @@ class TestFiltro(unittest.TestCase):
         r = _record("MODIFY", _img_sol(), _img_sol())
         self.assertIsNone(publisher.filtrar_record(r))
 
+    def test_modify_a_anulado_emite_cambio_estado(self):
+        # Reasignación de unidad: el registro viejo pasa a "Anulado".
+        r = _record("MODIFY", _img_sol("Anulado"), _img_sol("Aprobada"))
+        item, evento = publisher.filtrar_record(r)
+        self.assertEqual(evento, "cambio_estado")
+        self.assertEqual(item["status"], "Anulado")
+
+    def test_insert_reasignado_emite_creacion(self):
+        # El registro NUEVO (unidad correcta) creado por una reasignación es un
+        # INSERT normal → emite "creacion"; lleva rastro reasignadoDe en answers.
+        img = _img_sol("Aprobada")
+        img["PK"] = {"S": "SOL#eeee11112222"}
+        img["id"] = {"S": "eeee11112222"}
+        img["reasignadoDe"] = {"M": {"id": {"S": "34354ae5d278"},
+                                     "folio": {"S": "SOL-34354AE5D278"}}}
+        item, evento = publisher.filtrar_record(_record("INSERT", img))
+        self.assertEqual(evento, "creacion")
+        ev = publisher.construir_evento(item, evento)
+        self.assertEqual(ev["answers"]["reasignadoDe"]["folio"], "SOL-34354AE5D278")
+
     def test_mc_no_cruza_el_puente(self):
         img = _img_sol()
         img["PK"] = {"S": "MC#000000000001"}
@@ -304,6 +324,7 @@ class TestGolden(unittest.TestCase):
             "sol-creacion": _record("INSERT", _img_sol()),
             "sol-reporte-creacion": _record("INSERT", _img_sol_reporte()),
             "sol-cambio-estado": _record("MODIFY", _img_sol("Aprobada"), _img_sol()),
+            "sol-anulado": _record("MODIFY", _img_sol("Anulado"), _img_sol("Aprobada")),
             "cl-semanal-creacion": _record("INSERT", _img_cl()),
         }
         for nombre, rec in casos.items():
@@ -314,7 +335,7 @@ class TestGolden(unittest.TestCase):
             (GOLDEN_DIR / f"{nombre}.json").write_text(
                 json.dumps(ev, ensure_ascii=False, indent=2, default=str),
                 encoding="utf-8")
-        self.assertEqual(len(list(GOLDEN_DIR.glob("*.json"))), 4)
+        self.assertEqual(len(list(GOLDEN_DIR.glob("*.json"))), 5)
 
 
 if __name__ == "__main__":

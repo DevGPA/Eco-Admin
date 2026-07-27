@@ -220,7 +220,9 @@ class GpaApi {
   catalogos()                 { return this._fetch("GET", "/catalogos"); }
   async listar(tipo)          { return (await this._fetch("GET", `/${TIPO_PATH[tipo]}`)).items || []; }
   crear(tipo, datos)          { return this._fetch("POST", `/${TIPO_PATH[tipo]}`, datos); }
-  cambiarEstado(tipo, id, st, comentario) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st, comentario: comentario || "" }); }
+  cambiarEstado(tipo, id, st, comentario, campos) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st, comentario: comentario || "", campos: campos || [] }); }
+  // Corrección de un registro de combustible marcado «Por corregir» (solo los campos autorizados)
+  corregir(id, datos, forzar) { return this._fetch("POST", `/combustible/${id}/corregir`, { datos: datos || {}, forzar: !!forzar }); }
 
   adminVehiculo(v)    { return this._fetch("POST", "/admin/vehiculo", v); }
   adminResponsable(u) { return this._fetch("POST", "/admin/responsable", u); }

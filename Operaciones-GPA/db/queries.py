@@ -102,9 +102,9 @@ def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
                 if not vid or it.get(campo) is None:
                     continue
                 d = m.from_dynamo(it)
-                # Los registros RECHAZADOS no cuentan para los controles de medidor
-                # (km/horas): una captura rechazada no es una lectura válida.
-                if str(d.get("status") or "") in ("Rechazada", "Rechazado"):
+                # Los registros RECHAZADOS o ANULADOS (reasignados) no cuentan para
+                # los controles de medidor (km/horas): no son lecturas válidas.
+                if str(d.get("status") or "") in ("Rechazada", "Rechazado", "Anulado"):
                     continue
                 fecha = str(d.get("fecha") or "")
                 prev = out.get(vid)
@@ -131,10 +131,55 @@ def ultima_solicitud_vehiculo(vid) -> dict | None:
         resp = t.query(**kwargs)
         for it in resp.get("Items", []):
             if str(it.get("vehicleId") or "") == vid and it.get("formato") != "reporte":
-                return _limpiar(m.from_dynamo(it))
+                d = m.from_dynamo(it)
+                # Una solicitud ANULADA (por reasignación) ya no es vigente: se salta.
+                if str(d.get("status") or "") == "Anulado":
+                    continue
+                return _limpiar(d)
         if "LastEvaluatedKey" not in resp:
             return None
         kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+
+
+def solicitud_asignable_vehiculo(vid) -> dict | None:
+    """Solicitud de combustible ASIGNABLE a un reporte de carga: la más reciente
+    de la unidad que esté APROBADA, no sea reporte ni esté Anulada, y que TODAVÍA
+    no tenga un reporte que la referencie (`solicitudId`). Fuerza la relación
+    1 a 1 solicitud↔reporte. Autoritativa (no depende del rol). Recorre el
+    historial completo de SOL para saber qué solicitudes ya fueron reportadas."""
+    if vid in (None, ""):
+        return None
+    t = _t()
+    vid = str(vid)
+    reportadas: set = set()   # ids de solicitudes ya vinculadas por un reporte
+    candidatas: list = []     # solicitudes aprobadas asignables, desc por fecha
+    kwargs = dict(IndexName="tipo-fecha-idx",
+                  KeyConditionExpression=Key("GSI1PK").eq(m.SOL),
+                  ScanIndexForward=False)
+    while True:
+        resp = t.query(**kwargs)
+        for it in resp.get("Items", []):
+            if str(it.get("vehicleId") or "") != vid:
+                continue
+            d = m.from_dynamo(it)
+            if d.get("formato") == "reporte":
+                sid = d.get("solicitudId")
+                if sid:
+                    reportadas.add(str(sid))
+                continue
+            estado = str(d.get("status") or "")
+            if estado == "Anulado":
+                continue
+            if estado == "Aprobada":
+                candidatas.append(d)
+        if "LastEvaluatedKey" not in resp:
+            break
+        kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+    # candidatas viene desc por fecha (más reciente primero)
+    for d in candidatas:
+        if str(d.get("id")) not in reportadas:
+            return _limpiar(d)
+    return None
 
 
 def _limpiar(item: dict) -> dict:

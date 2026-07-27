@@ -23,7 +23,7 @@ from __future__ import annotations
 import json, os, re, logging, traceback
 
 from db import modelos as m
-from db.escritura import (crear_registro, cambiar_estado,
+from db.escritura import (crear_registro, cambiar_estado, corregir_registro,
                           guardar_vehiculo, guardar_responsable,
                           guardar_sucursal, eliminar_sucursal, guardar_config,
                           actualizar_precio_por_combustible,
@@ -31,7 +31,7 @@ from db.escritura import (crear_registro, cambiar_estado,
                           guardar_responsable_alerta, reasignar_registro_unidad)
 from db.queries import (listar_registros, get_registro, cargar_catalogos,
                         get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
-                        ultima_solicitud_vehiculo)
+                        ultima_solicitud_vehiculo, solicitud_asignable_vehiculo)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -174,6 +174,8 @@ def lambda_handler(event, context):
             return _listar(m.SOL, cl)
         if route == "POST /combustible/{id}/estado":
             return _estado(m.SOL, event, cl)
+        if route == "POST /combustible/{id}/corregir":
+            return _corregir(event, cl)
 
         # ── Checklist de reparto ──
         if route == "POST /checklist":
@@ -274,15 +276,26 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
         return _err("El analista no captura registros", 403)
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
-    # Reporte de carga SOLO con asignación: la última solicitud de la unidad
-    # debe estar APROBADA (regla autoritativa; el cliente solo avisa).
+    # Reporte de carga SOLO con asignación: debe existir una solicitud de la
+    # unidad APROBADA y SIN reporte previo (relación 1 a 1). Se vincula por folio
+    # (regla autoritativa; el cliente solo avisa).
     if tipo == m.SOL and datos.get("formato") == "reporte":
-        ult = ultima_solicitud_vehiculo(datos.get("vehicleId"))
-        if not ult or ult.get("status") != "Aprobada":
-            estado = "está RECHAZADA" if (ult or {}).get("status") == "Rechazada" else \
-                     "sigue PENDIENTE de autorización" if ult else "no existe"
-            return _err("No se puede enviar el reporte: la solicitud de combustible de esta unidad "
-                        f"{estado}. Se requiere una solicitud APROBADA (asignación).", 422)
+        asignable = solicitud_asignable_vehiculo(datos.get("vehicleId"))
+        if not asignable:
+            ult = ultima_solicitud_vehiculo(datos.get("vehicleId"))
+            if not ult:
+                motivo = "no existe una solicitud de combustible para esta unidad"
+            elif ult.get("status") == "Rechazada":
+                motivo = "la solicitud está RECHAZADA"
+            elif ult.get("status") != "Aprobada":
+                motivo = "la solicitud sigue PENDIENTE de autorización"
+            else:
+                motivo = "la solicitud aprobada de esta unidad ya tiene un reporte de carga"
+            return _err(f"No se puede enviar el reporte: {motivo}. Se requiere una "
+                        "solicitud APROBADA y sin reporte (asignación).", 422)
+        # Vínculo 1 a 1: el reporte guarda el id y el folio de la solicitud aprobada.
+        datos["solicitudId"] = asignable.get("id")
+        datos["folioSolicitud"] = ("SOL-" + str(asignable.get("id"))).upper()
         # Candados de la carga: litros ≤ capacidad del tanque; precio/L en (0, 100].
         try:
             litros = float(datos.get("litros") or 0)
@@ -334,8 +347,10 @@ def _listar(tipo, cl):
     return _resp({"items": items})
 
 
-# Estados permitidos al autorizar (whitelist; femenino=combustible, masculino=MC/FRM)
-_ESTADOS_OK = ("Pendiente", "Aprobada", "Rechazada", "Aprobado", "Rechazado")
+# Estados permitidos al autorizar (whitelist; femenino=combustible, masculino=MC/FRM).
+# "Por corregir" solo aplica a combustible (SOL); "Anulado" lo fija la reasignación
+# internamente (no por esta vía).
+_ESTADOS_OK = ("Pendiente", "Aprobada", "Rechazada", "Aprobado", "Rechazado", "Por corregir")
 
 
 def _veto_estado(cl, reg) -> str | None:
@@ -368,8 +383,95 @@ def _estado(tipo, event, cl):
     veto = _veto_estado(cl, reg)
     if veto:
         return _err(veto, 403)
-    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"], (b.get("comentario") or "").strip())
+    campos = None
+    if nuevo == "Por corregir":
+        # Solo combustible; solo registros NO autorizados (ni anulados).
+        if tipo != m.SOL:
+            return _err("El estado «Por corregir» solo aplica a combustible.", 400)
+        est_actual = str(reg.get("status") or "")
+        if est_actual == "Aprobada":
+            return _err("No se puede marcar «Por corregir» un registro ya autorizado.", 409)
+        if est_actual == "Anulado":
+            return _err("El registro está anulado.", 409)
+        campos = [str(c) for c in (b.get("campos") or b.get("camposCorregir") or [])
+                  if str(c).strip()]
+        if not campos:
+            return _err("Indica al menos un campo a corregir.", 400)
+    cambiar_estado(tipo, rid, nuevo, cl["nombre"] or cl["email"],
+                   (b.get("comentario") or "").strip(), campos)
     return _resp({"ok": True, "status": nuevo})
+
+
+# Campos derivados que acompañan a un campo corregible (se recalculan en servidor).
+_CORREGIR_DERIVADOS = {
+    "tankBefore":  ("litros", "monto", "necesidad", "tankAfter"),
+    "litros":      ("monto",),
+    "precioLitro": ("monto",),
+}
+
+
+def _corregir(event, cl):
+    """Aplica la corrección de un registro de combustible marcado «Por corregir».
+    La hace quien lo capturó (o un admin); solo edita los campos que el autorizador
+    marcó en `camposCorregir`; al enviar el registro vuelve a «Pendiente»."""
+    if cl["rol"] == "analista":
+        return _err("El analista no captura registros", 403)
+    rid = (event.get("pathParameters") or {}).get("id")
+    if not rid:
+        return _err("Falta id")
+    reg = get_registro(m.SOL, rid)
+    if not reg:
+        return _err("Registro no encontrado", 404)
+    if str(reg.get("status") or "") != "Por corregir":
+        return _err("El registro no está en estado «Por corregir».", 409)
+    if cl["rol"] != "admin" and reg.get("accountId") != cl["email"]:
+        return _err("Solo quien capturó el registro (o un admin) puede corregirlo.", 403)
+    permitidos = {str(c) for c in (reg.get("camposCorregir") or [])}
+    if not permitidos:
+        return _err("El registro no tiene campos marcados para corregir.", 409)
+    for base, comps in _CORREGIR_DERIVADOS.items():
+        if base in permitidos:
+            permitidos.update(comps)
+    b = _body(event)
+    entrada = dict(b.get("datos") or {})
+    parche = {k: v for k, v in entrada.items() if k in permitidos}
+    if not parche:
+        return _err("No se enviaron cambios en los campos marcados.", 400)
+    es_reporte = reg.get("formato") == "reporte"
+    # Revalidación de candados (km / litros ≤ tanque / precio ≤ 100) sobre el combinado.
+    if "km" in parche:
+        combinado = {**reg, **parche, "forzar": b.get("forzar")}
+        err = _validar_medidor(m.SOL, combinado, cl)
+        if err:
+            return _err(err, 422)
+    if es_reporte and ("litros" in parche or "precioLitro" in parche):
+        try:
+            litros = float(parche.get("litros", reg.get("litros")) or 0)
+            precio = float(parche.get("precioLitro", reg.get("precioLitro")) or 0)
+        except (TypeError, ValueError):
+            return _err("Litros o precio por litro inválidos.", 422)
+        if litros <= 0:
+            return _err("Los litros cargados deben ser mayores a 0.", 422)
+        cap = float((get_vehiculo(str(reg.get("vehicleId") or "")) or {}).get("tanque") or 0)
+        if cap > 0 and litros > cap:
+            return _err(f"Los litros cargados ({litros:g} L) exceden la capacidad del "
+                        f"tanque de la unidad ({cap:g} L).", 422)
+        if precio <= 0 or precio > 100:
+            return _err("El precio por litro debe ser mayor a $0 y no exceder $100.", 422)
+        parche["monto"] = round(litros * precio, 2)
+    elif (not es_reporte) and "tankBefore" in parche:
+        try:
+            tank = float(parche.get("tankBefore") or 0)
+        except (TypeError, ValueError):
+            return _err("Nivel de tanque inválido.", 422)
+        cap = float(reg.get("tanque") or 0)
+        precio = float(reg.get("precio") or 0)
+        need = max(0.0, 1 - tank)
+        litros = round(cap * need)
+        parche.update({"litros": litros, "monto": round(litros * precio),
+                       "necesidad": need, "tankAfter": 1})
+    corregir_registro(m.SOL, rid, parche, cl["nombre"] or cl["email"])
+    return _resp({"ok": True, "status": "Pendiente"})
 
 
 # ── Formularios dinámicos (motor de plantillas) ──────────────────

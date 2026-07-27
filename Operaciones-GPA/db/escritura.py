@@ -51,16 +51,50 @@ def crear_registro(tipo: str, datos: dict, sucursal: str, account_id: str) -> di
     return {"id": rid, "fecha": fecha}
 
 
-def cambiar_estado(tipo: str, rid: str, nuevo_estado: str, por: str, comentario: str = "") -> None:
+def cambiar_estado(tipo: str, rid: str, nuevo_estado: str, por: str,
+                   comentario: str = "", campos_corregir=None) -> None:
     """Actualiza el estado de un registro (combustible o montacargas). El
-    comentario del autorizador es opcional; si viene, se guarda en comentarioAut."""
-    expr = "SET #s = :s, autorizadoPor = :p, fechaAut = :f, comentarioAut = :c"
+    comentario del autorizador es opcional; si viene, se guarda en comentarioAut.
+    `campos_corregir` (lista) solo se usa con el estado «Por corregir»: se guarda
+    en `camposCorregir`. En cualquier otro cambio de estado esa marca se ELIMINA
+    (el registro deja de estar en corrección)."""
+    names = {"#s": "status", "#cc": "camposCorregir"}
+    values = {":s": nuevo_estado, ":p": por, ":f": _now_iso(), ":c": comentario or ""}
+    sets = ["#s = :s", "autorizadoPor = :p", "fechaAut = :f", "comentarioAut = :c"]
+    if campos_corregir:
+        values[":cc"] = m.to_dynamo(list(campos_corregir))
+        sets.append("#cc = :cc")
+        expr = "SET " + ", ".join(sets)
+    else:
+        expr = "SET " + ", ".join(sets) + " REMOVE #cc"
     _t().update_item(
         Key={"PK": f"{tipo}#{rid}", "SK": "META"},
         UpdateExpression=expr,
-        ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":s": nuevo_estado, ":p": por,
-                                   ":f": _now_iso(), ":c": comentario or ""},
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
+    )
+
+
+def corregir_registro(tipo: str, rid: str, parche: dict, por: str) -> None:
+    """Aplica la corrección de un registro «Por corregir»: fusiona los campos
+    corregidos, borra la marca de corrección y la autorización previa, y regresa
+    el registro a «Pendiente» para re-autorización, dejando rastro en `correccion`."""
+    datos = {**(parche or {}), "status": "Pendiente",
+             "correccion": {"por": por, "en": _now_iso()}}
+    names, values, sets = {}, {}, []
+    for i, (k, v) in enumerate(datos.items()):
+        names[f"#k{i}"] = k
+        values[f":v{i}"] = m.to_dynamo(v)
+        sets.append(f"#k{i} = :v{i}")
+    # Reset de la marca de corrección y de la autorización previa.
+    names.update({"#cc": "camposCorregir", "#ap": "autorizadoPor",
+                  "#fa": "fechaAut", "#ca": "comentarioAut"})
+    expr = "SET " + ", ".join(sets) + " REMOVE #cc, #ap, #fa, #ca"
+    _t().update_item(
+        Key={"PK": f"{tipo}#{rid}", "SK": "META"},
+        UpdateExpression=expr,
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
     )
 
 
@@ -222,40 +256,69 @@ def guardar_plantilla(p: dict) -> dict:
 
 
 # ── Reasignación de unidad (corrección de admin) ─────────────────
-# Espeja el criterio de seed/reasignar_unidad.py: SOLO cambia la identidad
-# desnormalizada de la unidad + el índice por sucursal; los datos del evento
-# (km, litros, fotos, firmas, fechas, estado) NO se tocan.
+# Identidad desnormalizada de la unidad dentro de un registro.
 _IDENT_REG_A_VEH = {"economico": "economico", "placas": "placas", "subMarca": "subMarca",
                     "sucursal": "sucursal", "areaResponsable": "responsable"}
+# Claves internas / campos de identidad del registro que NO se copian al nuevo.
+_KEYS_DYNAMO = {"PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK", "GSI3SK"}
+_NO_COPIAR = _KEYS_DYNAMO | {"id", "tipo_reg", "fecha", "sucursal", "accountId",
+                             "reasignacion", "reasignadoA", "reasignadoDe"}
 
 
 def reasignar_registro_unidad(tipo: str, rid: str, destino: dict, por: str) -> dict:
-    """Mueve un registro (SOL/CL/MC) a otra unidad del catálogo, dejando rastro
-    en `reasignacion` (unidad anterior, quién y cuándo)."""
+    """Corrección de admin de la unidad de un registro (SOL/CL/MC).
+
+    Reasignar = tratar la corrección como registro NUEVO en TODAS las bases:
+      1) crea un registro NUEVO en la unidad correcta, copiando los datos
+         capturados y PRESERVANDO la fecha, el estado y la autorización del
+         original (id/folio nuevos; rastro en `reasignadoDe`);
+      2) deja el registro VIEJO en estatus «Anulado» (rastro en `reasignadoA`).
+    Ambas escrituras cruzan el stream de DynamoDB → el puente a Fleet Command
+    propaga automáticamente el alta del nuevo (`creacion`) y el cambio de estado
+    del viejo (`cambio_estado`), sin tocar el contrato. NO se borra el viejo
+    (producción tiene protección de borrado / PITR)."""
     t = _t()
     item = t.get_item(Key={"PK": f"{tipo}#{rid}", "SK": "META"}).get("Item")
     if not item:
         raise ValueError("Registro no encontrado")
     if str(item.get("vehicleId")) == str(destino.get("id")):
         raise ValueError("El registro ya pertenece a esa unidad")
-    parche = {"vehicleId": destino["id"]}
+    if str(item.get("status") or "") == "Anulado":
+        raise ValueError("El registro ya está anulado")
+
+    # 1) Registro NUEVO en la unidad correcta (datos capturados + fecha/estado/auth).
+    negocio = {k: v for k, v in item.items() if k not in _NO_COPIAR}
+    negocio["vehicleId"] = destino["id"]
     for campo_reg, campo_veh in _IDENT_REG_A_VEH.items():
-        nuevo = destino.get(campo_veh)
-        if nuevo is None or campo_reg not in item:
-            continue                      # el registro no traía ese campo: no lo inventamos
-        if item.get(campo_reg) != nuevo:
-            parche[campo_reg] = nuevo
-    if destino.get("sucursal") and item.get("GSI2PK"):
-        nuevo_gsi2 = f"{tipo}#{destino['sucursal']}"
-        if item.get("GSI2PK") != nuevo_gsi2:
-            parche["GSI2PK"] = nuevo_gsi2
-    parche["reasignacion"] = {
-        "de": {"vehicleId": item.get("vehicleId"), "economico": item.get("economico"),
-               "placas": item.get("placas"), "sucursal": item.get("sucursal")},
+        val = destino.get(campo_veh)
+        if val is not None:
+            negocio[campo_reg] = val
+    fecha      = item.get("fecha") or _now_iso()
+    sucursal   = destino.get("sucursal") or item.get("sucursal") or "SIN_SUCURSAL"
+    account_id = item.get("accountId") or ""
+    new_id     = uuid.uuid4().hex[:12]
+    negocio["reasignadoDe"] = {
+        "id": rid, "folio": f"{tipo}-{rid}".upper(),
+        "vehicleId": item.get("vehicleId"), "economico": item.get("economico"),
+        "placas": item.get("placas"), "sucursal": item.get("sucursal"),
         "por": por, "en": _now_iso(),
     }
-    merge_registro(tipo, rid, parche)
-    return {"ok": True, "id": rid, "vehicleId": destino["id"]}
+    nuevo_item = {
+        **m.registro_keys(tipo, new_id, sucursal, account_id, fecha),
+        **m.to_dynamo(negocio),
+        "id": new_id, "tipo_reg": tipo, "fecha": fecha,
+        "sucursal": sucursal, "accountId": account_id,
+    }
+    t.put_item(Item=nuevo_item)
+
+    # 2) Anular el registro VIEJO (cambio de status → el puente lo propaga).
+    merge_registro(tipo, rid, {
+        "status": "Anulado",
+        "reasignadoA": {"id": new_id, "folio": f"{tipo}-{new_id}".upper(),
+                        "vehicleId": destino["id"], "economico": destino.get("economico"),
+                        "sucursal": sucursal, "por": por, "en": _now_iso()},
+    })
+    return {"ok": True, "id": new_id, "anuladoId": rid, "vehicleId": destino["id"]}
 
 
 # ── Responsables de alertas del Tablero de Seguimiento ───────────

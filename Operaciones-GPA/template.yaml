@@ -128,6 +128,9 @@ Resources:
         CombustibleEstado:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/combustible/{id}/estado' }
+        CombustibleCorregir:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/combustible/{id}/corregir' }
 
         # ── Checklist de reparto ──
         ChecklistCrear:
