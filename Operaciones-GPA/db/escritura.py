@@ -249,6 +249,9 @@ def guardar_plantilla(p: dict) -> dict:
         "requiereAutorizacion": bool(p.get("requiereAutorizacion", False)),
         # Periodicidad para el Tablero de Seguimiento (mensual por defecto).
         "periodicidad": p.get("periodicidad") or "mensual",
+        # Metas de seguimiento: cuántos se esperan por sucursal {sucursal: cantidad}.
+        # Vacío = 1 por sucursal (comportamiento por defecto del tablero).
+        "metas": p.get("metas") or {},
         "activo": p.get("activo", True),
     }
     _t().put_item(Item={"PK": m.PK_PLANTILLA, "SK": m.sk_plantilla(clave), **m.to_dynamo(item)})

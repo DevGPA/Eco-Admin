@@ -1794,6 +1794,56 @@ function MCDetail({rec,canAuth,cat,rol,refrescar,showToast,onBack}){
   );
 }
 
+// ─── Metas de seguimiento: cuántos formularios (sin unidad) se esperan por
+//     sucursal y con qué período. Tabla editable (solo admin). El Tablero de
+//     Seguimiento la lee como base del cumplimiento (X de N). ───────────────
+function MetasSeguimiento({cat,refrescarCat,showToast}){
+  const sucursales=cat?.sucursales||[];
+  const plts=(cat?.plantillas||[]).filter(p=>p.modulo&&p.modulo!=="responsivas"&&p.activo!==false)
+    .sort((a,b)=>String(a.modulo).localeCompare(String(b.modulo))||String(a.nombre||a.clave).localeCompare(String(b.nombre||b.clave)));
+  const init=()=>{const o={};plts.forEach(p=>{o[p.clave]={periodicidad:p.periodicidad||"mensual",metas:{...(p.metas||{})}};});return o;};
+  const[ed,setEd]=useState(init);const[busy,setBusy]=useState(false);
+  useEffect(()=>{setEd(init());},[cat?.plantillas]);   // resincroniza tras guardar/refrescar
+  const setMeta=(clave,suc,v)=>{const n=v===""?"":Math.max(0,parseInt(v,10)||0);setEd(s=>({...s,[clave]:{...s[clave],metas:{...s[clave].metas,[suc]:n}}}));};
+  const setPer=(clave,v)=>setEd(s=>({...s,[clave]:{...s[clave],periodicidad:v}}));
+  const dirty=p=>{const e=ed[p.clave];if(!e)return false;if((e.periodicidad||"mensual")!==(p.periodicidad||"mensual"))return true;const om=p.metas||{};const ks=new Set([...Object.keys(om),...Object.keys(e.metas||{})]);for(const k of ks){if(Number(om[k]||0)!==Number(e.metas[k]||0))return true;}return false;};
+  const cambiados=plts.filter(dirty);
+  const guardar=async()=>{
+    if(!cambiados.length||busy)return;setBusy(true);
+    try{
+      for(const p of cambiados){const e=ed[p.clave];const metas={};Object.entries(e.metas||{}).forEach(([s,n])=>{const x=parseInt(n,10);if(x>0)metas[s]=x;});
+        await api.adminPlantilla({...p,periodicidad:e.periodicidad,metas});}
+      await refrescarCat();showToast("✓ Metas guardadas ("+cambiados.length+" formulario(s))");
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  if(!plts.length)return <div className="card"><div className="empty">Aún no hay formularios (Sucursales/Seguridad/dinámicos). Créalos en Admin → Formularios.</div></div>;
+  const PER=[["semanal","Semanal"],["mensual","Mensual"],["bimestral","Bimestral"],["trimestral","Trimestral"],["semestral","Semestral"],["anual","Anual"]];
+  return (<div>
+    <div className="card"><div className="ct">Metas de seguimiento — formularios por sucursal</div>
+      <div style={{fontSize:12,color:"#666",lineHeight:1.5}}>Define <b>cuántos</b> registros de cada formulario se esperan por sucursal y con qué <b>período</b>. El Tablero de Seguimiento los mide como <b>X de N</b>. Deja <b>0</b> (o vacío) donde el formulario <b>no aplica</b>. Edítalas al agregar o quitar equipos. Si un formulario no tiene ninguna meta, se espera 1 por sucursal (como hasta ahora).</div>
+    </div>
+    <div className="card" style={{overflowX:"auto"}}>
+      <table style={{borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr>
+          <th style={{textAlign:"left",position:"sticky",left:0,background:"#fff",padding:"6px 8px",borderBottom:"1px solid #ddd"}}>Formulario</th>
+          <th style={{padding:"6px 8px",borderBottom:"1px solid #ddd"}}>Período</th>
+          {sucursales.map(s=><th key={s} style={{padding:"6px 8px",whiteSpace:"nowrap",borderBottom:"1px solid #ddd"}}>{s}</th>)}
+        </tr></thead>
+        <tbody>
+          {plts.map(p=>{const e=ed[p.clave]||{periodicidad:"mensual",metas:{}};const dt=dirty(p);const bg=dt?"#FFFDF0":"#fff";return(
+            <tr key={p.clave} style={{borderTop:"1px solid #eee"}}>
+              <td style={{padding:"6px 8px",position:"sticky",left:0,background:bg}}><div style={{fontWeight:600}}>{p.nombre||p.clave}</div><div style={{fontSize:10,color:"#999"}}>{SEG_MOD_LBL[p.modulo]||p.modulo}</div></td>
+              <td style={{padding:"6px 8px",background:bg}}><select value={e.periodicidad} onChange={ev=>setPer(p.clave,ev.target.value)} style={{width:"auto",padding:"3px 6px",fontSize:12}}>{PER.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></td>
+              {sucursales.map(s=><td key={s} style={{padding:"4px 6px",textAlign:"center",background:bg}}><input type="number" min="0" step="1" value={e.metas[s]??""} onChange={ev=>setMeta(p.clave,s,ev.target.value)} placeholder="0" style={{width:52,textAlign:"center",padding:"3px 4px"}}/></td>)}
+            </tr>);})}
+        </tbody>
+      </table>
+    </div>
+    <button className="bp" disabled={busy||!cambiados.length} onClick={guardar}>{busy?"Guardando…":cambiados.length?("Guardar cambios ("+cambiados.length+")"):"Sin cambios por guardar"}</button>
+  </div>);
+}
+
 // ─── MÓDULO ADMIN ────────────────────────────────────────────────────
 function ModAdmin({cat,refrescarCat,showToast}){
   const[sec,setSec]=useState("vehicles");
@@ -2044,7 +2094,8 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
       {editU&&<UForm u={editU} onClose={()=>setEditU(null)}/>}
       {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
-      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["metas","Metas seguim."],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      {sec==="metas"&&<MetasSeguimiento cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
       {sec==="vehicles"&&<>
         <div className="card"><div className="ct">Actualizar tabla desde Excel</div>
           <button className="bs" style={{width:"100%",marginBottom:8}} disabled={busy} onClick={descargarPlantilla}>⬇ Descargar Excel actual</button>
@@ -2287,7 +2338,18 @@ function segModulos({cat,combustible,checklist,montacargas,formData,sucs,modKeys
     if(!cargado){out.push({key:mk,label,grupo:"form",cargar:true,plantillas:plts,problemas:[],conProblemas:true});return;}
     let cu=0,pe=0,ve=0;const problemas=[];
     const filas=plts.map(p=>{const per=segPeriodoForm(p.periodicidad||"mensual",hoy);const regs=formData[p.clave]||[];
-      const celdas=sucs.map(s=>{const reg=segUltRango(regs,r=>(r.sucursal||"")===s,per.ini,per.fin);let est=estIni(!!reg,per.limite,per.fin);if(est==="cumplido")cu++;else if(est==="vencido")ve++;else if(est==="pendiente")pe++;if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg,plantilla:p,tipo:"form"});return {suc:s,estado:est,reg};});
+      // Meta por sucursal: N esperados. Sin metas → 1 por sucursal (como antes).
+      // Con metas → solo cuentan las sucursales con meta>0; el resto = "no aplica".
+      const metas=p.metas||{};const tiene=Object.keys(metas).some(s=>Number(metas[s])>0);
+      const celdas=sucs.map(s=>{
+        if(tiene&&!(Number(metas[s]||0)>0))return {suc:s,estado:"na",reg:null,meta:0,hechos:0};
+        const enP=regs.filter(r=>(r.sucursal||"")===s&&ymd(r.fecha)>=per.ini&&ymd(r.fecha)<=per.fin);
+        const N=tiene?Number(metas[s]||0):1;const cnt=enP.length;
+        let est=estIni(cnt>=N,per.limite,per.fin);
+        if(est==="cumplido")cu++;else if(est==="vencido")ve++;else if(est==="pendiente")pe++;
+        const reg=enP.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]||null;
+        enP.forEach(r=>{if(r.resultadoNivel==="fuera"||r.resultadoNivel==="atencion")problemas.push({titulo:p.nombre+" · "+s,sub:(r.resultado||(r.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+per.label,reg:r,plantilla:p,tipo:"form"});});
+        return {suc:s,estado:est,reg,meta:N,hechos:cnt};});
       return {plantilla:p,periodoLbl:PERIOD_LBL[p.periodicidad||"mensual"]+" · "+per.label,celdas};});
     out.push({key:mk,label,grupo:"form",periodoLbl:plts.length+" formulario(s) · por sucursal",cols:sucs.map(s=>({key:s,label:s})),filas,resumen:{cumplido:cu,pendiente:pe,vencido:ve,total:cu+pe+ve},problemas,conProblemas:true});
   });
@@ -2322,7 +2384,7 @@ function segModulosRango({cat,combustible,checklist,montacargas,formData,sucs,mo
     const cargado=plts.length===0||plts.every(p=>formData[p.clave]!==undefined);
     if(!cargado){out.push({key:mk,label,grupo:"form",cargar:true,plantillas:plts,problemas:[],conProblemas:true});return;}
     let cu=0,ve=0;const problemas=[];
-    const filas=plts.map(p=>{const regs=formData[p.clave]||[];const celdas=sucs.map(s=>{const rr=regs.filter(r=>(r.sucursal||"")===s&&enR(r.fecha));const hay=rr.length>0;hay?cu++:ve++;const reg=ult(rr);if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+fdate(reg.fecha),reg,plantilla:p,tipo:"form"});return {suc:s,estado:hay?"cumplido":"vencido",reg};});return {plantilla:p,periodoLbl:"Registro en el rango",celdas};});
+    const filas=plts.map(p=>{const regs=formData[p.clave]||[];const metas=p.metas||{};const tiene=Object.keys(metas).some(s=>Number(metas[s])>0);const celdas=sucs.map(s=>{if(tiene&&!(Number(metas[s]||0)>0))return {suc:s,estado:"na",reg:null};const rr=regs.filter(r=>(r.sucursal||"")===s&&enR(r.fecha));const hay=rr.length>0;hay?cu++:ve++;const reg=ult(rr);if(reg&&(reg.resultadoNivel==="fuera"||reg.resultadoNivel==="atencion"))problemas.push({titulo:p.nombre+" · "+s,sub:(reg.resultado||(reg.resultadoNivel==="fuera"?"Fuera de servicio":"Requiere atención"))+" · "+fdate(reg.fecha),reg,plantilla:p,tipo:"form"});return {suc:s,estado:hay?"cumplido":"vencido",reg};});return {plantilla:p,periodoLbl:"Registro en el rango",celdas};});
     out.push({key:mk,label,grupo:"form",periodoLbl:plts.length+" formulario(s) · en el rango",cols:sucs.map(s=>({key:s,label:s})),filas,resumen:res(cu,ve),problemas,conProblemas:true});
   });
   return out;
@@ -2514,7 +2576,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
                 {m.rep.filas.length?<div className="seg-tbl"><table><thead><tr><th className="u">Unidad</th><th className="u">Asignación aprobada</th><th>Reporte</th></tr></thead><tbody>{m.rep.filas.map((f,i)=><tr key={i}><td className="u"><b>{f.unidad}</b>{f.sub&&<div className="sub2">{f.sub}</div>}</td><td className="u" style={{fontSize:11,color:"#888"}}>{f.asignLbl}</td><td><SegCelda estado={f.estado} onClick={f.reg?()=>setDetalle({reg:f.reg,tipo:"combustible"}):null}/></td></tr>)}</tbody></table></div>:<div style={{fontSize:12,color:"#888"}}>Sin asignaciones (solicitudes aprobadas) esta semana — no se pide reporte de carga.</div>}
               </>}
               {m.grupo==="veh"&&(m.filas.length?<TablaVehPC cols={m.cols} filas={m.filas} soloHoy={m.soloHoyCuenta} tipoKey={m.key==="montacargas"?"montacargas":null}/>:<div style={{fontSize:12,color:"#888"}}>Sin unidades en el alcance.</div>)}
-              {m.grupo==="form"&&(m.filas.length?<div className="seg-tbl"><table><thead><tr><th className="u">Formulario</th>{sucs.map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{m.filas.map(f=><tr key={f.plantilla.clave}><td className="u"><b>{f.plantilla.nombre}</b><div className="sub2">{f.periodoLbl}</div></td>{f.celdas.map(c=><td key={c.suc}><SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/></td>)}</tr>)}</tbody></table></div>:<div style={{fontSize:12,color:"#888"}}>Sin formularios en el alcance.</div>)}
+              {m.grupo==="form"&&(m.filas.length?<div className="seg-tbl"><table><thead><tr><th className="u">Formulario</th>{sucs.map(s=><th key={s}>{s}</th>)}</tr></thead><tbody>{m.filas.map(f=><tr key={f.plantilla.clave}><td className="u"><b>{f.plantilla.nombre}</b><div className="sub2">{f.periodoLbl}</div></td>{f.celdas.map(c=><td key={c.suc} style={{textAlign:"center"}}><SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/>{c.meta>0&&<div style={{fontSize:9,color:"#888",marginTop:2}}>{c.hechos}/{c.meta}</div>}</td>)}</tr>)}</tbody></table></div>:<div style={{fontSize:12,color:"#888"}}>Sin formularios en el alcance.</div>)}
               <ProblemasPC m={m}/>
             </>}
           </div>
@@ -2584,7 +2646,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
                 <tbody>{m.rep.filas.map((f,i)=><tr key={i} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 6px"}}><div style={{fontWeight:600}}>{f.unidad}</div><div style={{fontSize:10,color:"#aaa"}}>{f.sub}</div></td><td style={{padding:"5px 6px",fontSize:10,color:"#888"}}>{f.asignLbl}</td><td style={{textAlign:"center",padding:"4px 4px"}}><SegCelda estado={f.estado} onClick={f.reg?()=>setDetalle({reg:f.reg,tipo:"combustible"}):null}/></td></tr>)}</tbody>
               </table></div>}
             </div>}
-            {!m.cargar&&m.grupo==="form"&&m.filas.length>0&&<div>{m.filas.map(f=><div key={f.plantilla.clave} style={{padding:"8px 0",borderTop:".5px solid #f0f0f0"}}><div style={{fontSize:12,fontWeight:600}}>{f.plantilla.nombre}</div><div style={{fontSize:10,color:"#aaa",marginBottom:4}}>{f.periodoLbl}</div><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{f.celdas.map(c=><span key={c.suc} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}>{c.suc} <SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/></span>)}</div></div>)}</div>}
+            {!m.cargar&&m.grupo==="form"&&m.filas.length>0&&<div>{m.filas.map(f=><div key={f.plantilla.clave} style={{padding:"8px 0",borderTop:".5px solid #f0f0f0"}}><div style={{fontSize:12,fontWeight:600}}>{f.plantilla.nombre}</div><div style={{fontSize:10,color:"#aaa",marginBottom:4}}>{f.periodoLbl}</div><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{f.celdas.map(c=><span key={c.suc} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11}}>{c.suc} <SegCelda estado={c.estado} onClick={c.reg?()=>setDetalle({reg:c.reg,plantilla:f.plantilla,tipo:"form"}):null}/>{c.meta>0&&<span style={{fontSize:9,color:"#888"}}>{c.hechos}/{c.meta}</span>}</span>)}</div></div>)}</div>}
             {/* Qué está mal */}
             {!m.cargar&&m.conProblemas&&<div style={{marginTop:10}}>
               {m.problemas.length===0?<div style={{fontSize:12,color:C.green}}>✓ Sin problemas en el período.</div>:
