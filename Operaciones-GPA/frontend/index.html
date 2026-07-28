@@ -1819,7 +1819,7 @@ function MetasSeguimiento({cat,refrescarCat,showToast}){
   };
   if(!plts.length)return <div className="card"><div className="empty">Aún no hay formularios (Sucursales/Seguridad/dinámicos). Créalos en Admin → Formularios.</div></div>;
   const PER=[["semanal","Semanal"],["mensual","Mensual"],["bimestral","Bimestral"],["trimestral","Trimestral"],["semestral","Semestral"],["anual","Anual"]];
-  return (<div>
+  return (<div className="seg-root">
     <div className="card"><div className="ct">Metas de seguimiento — formularios por sucursal</div>
       <div style={{fontSize:12,color:"#666",lineHeight:1.5}}>Define <b>cuántos</b> registros de cada formulario se esperan por sucursal y con qué <b>período</b>. El Tablero de Seguimiento los mide como <b>X de N</b>. Deja <b>0</b> (o vacío) donde el formulario <b>no aplica</b>. Edítalas al agregar o quitar equipos. Si un formulario no tiene ninguna meta, se espera 1 por sucursal (como hasta ahora).</div>
     </div>
