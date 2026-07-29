@@ -218,7 +218,15 @@ class GpaApi {
 
   // ── API de negocio ─────────────────────────────────────────────
   catalogos()                 { return this._fetch("GET", "/catalogos"); }
-  async listar(tipo)          { return (await this._fetch("GET", `/${TIPO_PATH[tipo]}`)).items || []; }
+  // rango {desde,hasta} (YYYY-MM-DD) pide el archivo histórico; {todo:true} trae todo.
+  // Sin rango = ventana por defecto del servidor (últimos VENTANA_DIAS días).
+  async listar(tipo, rango) {
+    const qs = [];
+    if (rango && rango.todo)  qs.push("todo=1");
+    if (rango && rango.desde) qs.push("desde=" + encodeURIComponent(rango.desde));
+    if (rango && rango.hasta) qs.push("hasta=" + encodeURIComponent(rango.hasta));
+    return (await this._fetch("GET", `/${TIPO_PATH[tipo]}` + (qs.length ? "?" + qs.join("&") : ""))).items || [];
+  }
   crear(tipo, datos)          { return this._fetch("POST", `/${TIPO_PATH[tipo]}`, datos); }
   cambiarEstado(tipo, id, st, comentario, campos) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st, comentario: comentario || "", campos: campos || [] }); }
   // Corrección de un registro de combustible marcado «Por corregir» (solo los campos autorizados)
@@ -237,8 +245,12 @@ class GpaApi {
   // ── Motor de formularios dinámicos ─────────────────────────────
   adminModulo(mod)    { return this._fetch("POST", "/admin/modulo", mod); }
   adminPlantilla(p)   { return this._fetch("POST", "/admin/plantilla", p); }
-  async listarFormulario(clave) {
-    return (await this._fetch("GET", `/formulario?clave=${encodeURIComponent(clave)}`)).items || [];
+  async listarFormulario(clave, rango) {
+    let url = `/formulario?clave=${encodeURIComponent(clave)}`;
+    if (rango && rango.todo)  url += "&todo=1";
+    if (rango && rango.desde) url += "&desde=" + encodeURIComponent(rango.desde);
+    if (rango && rango.hasta) url += "&hasta=" + encodeURIComponent(rango.hasta);
+    return (await this._fetch("GET", url)).items || [];
   }
   crearFormulario(plantillaClave, datos) {
     return this._fetch("POST", "/formulario", { plantillaClave, datos });

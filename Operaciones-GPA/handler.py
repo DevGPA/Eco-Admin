@@ -20,7 +20,8 @@
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-import json, os, re, logging, traceback
+import json, os, re, logging, traceback, gzip, base64
+from datetime import date, datetime, timedelta, timezone
 
 from db import modelos as m
 from db.escritura import (crear_registro, cambiar_estado, corregir_registro,
@@ -52,6 +53,13 @@ EMAIL_RIESGO = os.environ.get("EMAIL_RIESGOS", "")
 # Patrón de una clave de evidencia en S3 (para resolver a URL prefirmada al leer)
 _KEY_RE = re.compile(r"^(SOL|CL|MC|FRM)/[0-9a-f]{32}\.(jpg|png|webp)$")
 
+# Ventana por defecto de los listados: solo los últimos N días salvo que se pida
+# un rango explícito (?desde=&hasta=) o todo (?todo=1). A escala evita respuestas
+# enormes (la base crece cada semana).
+_YMD_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+VENTANA_DIAS = int(os.environ.get("VENTANA_DIAS", "45"))
+_MX = timezone(timedelta(hours=-6))   # Ciudad de México (UTC-6 fijo)
+
 
 # ── Respuestas ───────────────────────────────────────────────────
 def _resp(body, status=200):
@@ -61,8 +69,41 @@ def _resp(body, status=200):
             "body": json.dumps(body, ensure_ascii=False, default=str)}
 
 
+def _resp_gz(body, event, status=200):
+    """Como _resp pero comprime con gzip cuando el cliente lo acepta y la respuesta
+    es grande (>50 KB). API Gateway HTTP API v2 no comprime solo; el navegador
+    descomprime transparente (fetch no requiere cambios). Solo para listados."""
+    data = json.dumps(body, ensure_ascii=False, default=str)
+    ae = ((event.get("headers") or {}).get("accept-encoding") or "").lower()
+    if "gzip" in ae and len(data) > 50_000:
+        return {"statusCode": status,
+                "headers": {"Content-Type": "application/json",
+                            "Content-Encoding": "gzip",
+                            "Access-Control-Allow-Origin": ORIGIN},
+                "isBase64Encoded": True,
+                "body": base64.b64encode(gzip.compress(data.encode())).decode()}
+    return _resp(body, status)
+
+
 def _err(msg, status=400):
     return _resp({"error": msg}, status)
+
+
+def _rango_listado(event):
+    """Lee ?desde=&hasta=&todo= y devuelve (desde, hasta_excl) para listar_registros.
+    Sin desde ni todo → ventana por defecto (últimos VENTANA_DIAS días)."""
+    qs = event.get("queryStringParameters") or {}
+    desde = qs.get("desde") or ""
+    hasta = qs.get("hasta") or ""
+    todo = (qs.get("todo") or "") in ("1", "true")
+    if not _YMD_RE.match(desde):
+        desde = ""
+    if not _YMD_RE.match(hasta):
+        hasta = ""
+    if not desde and not todo:
+        desde = (datetime.now(_MX) - timedelta(days=VENTANA_DIAS)).strftime("%Y-%m-%d")
+    hasta_excl = (date.fromisoformat(hasta) + timedelta(days=1)).isoformat() if hasta else None
+    return (desde or None), hasta_excl
 
 
 # ── Claims del JWT de Cognito ────────────────────────────────────
@@ -163,7 +204,11 @@ def lambda_handler(event, context):
         cl = _claims(event)
 
         if route == "GET /catalogos":
-            return _resp(cargar_catalogos())
+            cat = cargar_catalogos()
+            # Config de despliegue (NO se persiste en el item CONFIG): viaja inyectada
+            # para que el frontend sepa la ventana por defecto de los listados.
+            cat.setdefault("config", {})["ventanaDias"] = VENTANA_DIAS
+            return _resp(cat)
 
         # ── Combustible ──
         if route == "POST /combustible":
@@ -171,7 +216,7 @@ def lambda_handler(event, context):
                           notif=(EMAIL_LOGIS, "Nueva solicitud de combustible"),
                           req_meta=_req_meta(event))
         if route == "GET /combustible":
-            return _listar(m.SOL, cl)
+            return _listar(m.SOL, event, cl)
         if route == "POST /combustible/{id}/estado":
             return _estado(m.SOL, event, cl)
         if route == "POST /combustible/{id}/corregir":
@@ -182,14 +227,14 @@ def lambda_handler(event, context):
             return _crear(m.CL, _body(event), cl,
                           notif=(EMAIL_RIESGO, "Nuevo checklist de reparto"))
         if route == "GET /checklist":
-            return _listar(m.CL, cl)
+            return _listar(m.CL, event, cl)
 
         # ── Montacargas ──
         if route == "POST /montacargas":
             return _crear(m.MC, _body(event), cl,
                           notif=(EMAIL_RIESGO, "Nuevo checklist de montacargas"))
         if route == "GET /montacargas":
-            return _listar(m.MC, cl)
+            return _listar(m.MC, event, cl)
         if route == "POST /montacargas/{id}/estado":
             return _estado(m.MC, event, cl)
 
@@ -332,10 +377,11 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
     return _resp({**res, "ok": True})
 
 
-def _listar(tipo, cl):
+def _listar(tipo, event, cl):
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
-    regs = listar_registros(tipo, cl["rol"], cl["sucursales"], cl["email"])
+    desde, hasta_excl = _rango_listado(event)
+    regs = listar_registros(tipo, cl["rol"], cl["sucursales"], cl["email"], desde, hasta_excl)
     # El bloque _auditoria es solo para el back office (y Fleet Command vía el
     # puente, que lo lee del stream): el operador que capturó no lo recibe.
     oculta_aud = cl["rol"] == "operador"
@@ -344,7 +390,7 @@ def _listar(tipo, cl):
         if oculta_aud and isinstance(r, dict) and "_auditoria" in r:
             r = {k: v for k, v in r.items() if k != "_auditoria"}
         items.append(_resolver_urls(r))
-    return _resp({"items": items})
+    return _resp_gz({"items": items}, event)
 
 
 # Estados permitidos al autorizar (whitelist; femenino=combustible, masculino=MC/FRM).
@@ -509,9 +555,10 @@ def _listar_form(event, cl):
     plt = _plantilla_activa(clave)
     if not _modulo_ok(cl, _acepta_modulo(plt.get("modulo"))):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    desde, hasta_excl = _rango_listado(event)
     regs = listar_registros(m.tipo_formulario(plt["clave"]),
-                            cl["rol"], cl["sucursales"], cl["email"])
-    return _resp({"items": [_resolver_urls(r) for r in regs]})
+                            cl["rol"], cl["sucursales"], cl["email"], desde, hasta_excl)
+    return _resp_gz({"items": [_resolver_urls(r) for r in regs]}, event)
 
 
 def _estado_form(event, cl):

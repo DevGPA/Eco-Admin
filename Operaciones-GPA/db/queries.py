@@ -25,7 +25,8 @@ def _items(resp) -> list:
 
 
 # ── Registros, filtrados por rol ─────────────────────────────────
-def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
+def listar_registros(tipo: str, rol: str, sucursales, account_id: str,
+                     desde=None, hasta_excl=None) -> list:
     """
     Devuelve registros de un tipo según el alcance del usuario:
       admin / analista    → todos                          (GSI1)
@@ -33,26 +34,35 @@ def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
       operador            → solo lo que él capturó          (GSI3 por cuenta)
     `sucursales` es una lista; vacía para admin/analista = todas.
     Orden descendente por fecha.
+
+    Ventana de fechas OPCIONAL (`desde`/`hasta_excl` en YYYY-MM-DD): filtra por la
+    sort key del GSI (`fecha`), así que es KeyCondition (eficiente, no filtra en
+    memoria). `hasta_excl` = día SIGUIENTE a "hasta"; como las fechas guardadas
+    traen `T...`, el between/lt nunca incluye ese día. Sin rango = todo el historial.
     """
     t = _t()
-    if rol in ("admin", "analista"):
+
+    def _cf(cond, sk):        # combina la condición de partición con el rango de fecha
+        if desde and hasta_excl:
+            return cond & Key(sk).between(desde, hasta_excl)
+        if desde:
+            return cond & Key(sk).gte(desde)
+        if hasta_excl:
+            return cond & Key(sk).lt(hasta_excl)
+        return cond
+
+    # admin / analista, y supervisor SIN sucursal asignada (convención "vacío =
+    # todas") → GSI1 (todos por tipo).
+    if rol in ("admin", "analista") or (rol == "supervisor" and not sucursales):
         resp = t.query(IndexName="tipo-fecha-idx",
-                       KeyConditionExpression=Key("GSI1PK").eq(tipo),
+                       KeyConditionExpression=_cf(Key("GSI1PK").eq(tipo), "GSI1SK"),
                        ScanIndexForward=False)
         return [_limpiar(i) for i in _items(resp)]
 
     if rol == "operador":
         # El operador solo ve su propio historial de cargas
         resp = t.query(IndexName="cuenta-fecha-idx",
-                       KeyConditionExpression=Key("GSI3PK").eq(f"{tipo}#{account_id}"),
-                       ScanIndexForward=False)
-        return [_limpiar(i) for i in _items(resp)]
-
-    # supervisor SIN sucursal asignada = ve todas (convención "vacío = todas",
-    # igual que en la app). Así el supervisor siempre puede ver el historial.
-    if rol == "supervisor" and not sucursales:
-        resp = t.query(IndexName="tipo-fecha-idx",
-                       KeyConditionExpression=Key("GSI1PK").eq(tipo),
+                       KeyConditionExpression=_cf(Key("GSI3PK").eq(f"{tipo}#{account_id}"), "GSI3SK"),
                        ScanIndexForward=False)
         return [_limpiar(i) for i in _items(resp)]
 
@@ -60,7 +70,7 @@ def listar_registros(tipo: str, rol: str, sucursales, account_id: str) -> list:
     out = []
     for suc in (sucursales or []):
         resp = t.query(IndexName="sucursal-fecha-idx",
-                       KeyConditionExpression=Key("GSI2PK").eq(f"{tipo}#{suc}"),
+                       KeyConditionExpression=_cf(Key("GSI2PK").eq(f"{tipo}#{suc}"), "GSI2SK"),
                        ScanIndexForward=False)
         out.extend(_items(resp))
     out.sort(key=lambda r: r.get("fecha", ""), reverse=True)

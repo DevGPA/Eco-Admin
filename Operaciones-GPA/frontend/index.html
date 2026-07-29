@@ -391,6 +391,16 @@ async function zipPdfsFormularios(plantilla,registros,onProg){
 // Día calendario de CIUDAD DE MÉXICO (YYYY-MM-DD) de cualquier instante/fecha, sin depender
 // de la zona del dispositivo (UTC-6 fijo). Se usa para filtros, historial y cumplimiento.
 const ymd=f=>{if(!f)return"";const d=new Date(new Date(f).getTime()-MX_MS);return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");};
+// Ventana por defecto de los listados: la app trae solo los últimos N días; si un
+// filtro pide fechas más viejas, se consulta el archivo histórico al servidor.
+// VENTANA_DIAS la actualiza App.cargarTodo() con cat.config.ventanaDias.
+let VENTANA_DIAS=45;
+const ventanaInicio=()=>ymd(new Date(Date.now()-VENTANA_DIAS*86400000));
+// Los formularios dinámicos pueden ser hasta ANUALES; el tablero de período
+// vigente necesita todo el período. Son de BAJO volumen, así que se cargan con un
+// rango amplio (cubre el período anual). Combustible/reparto/montacargas usan la
+// ventana normal (sus períodos son ≤ mensual y caben en VENTANA_DIAS).
+const SEG_FORM_INICIO=()=>ymd(new Date(Date.now()-370*86400000));
 const mxDow=f=>new Date(new Date(f).getTime()-MX_MS).getUTCDay(); // 0=Dom..6=Sáb (hora de México)
 const mxDia=(Y,M,d)=>new Date(Date.UTC(Y,M-1,d,18,0,0)); // instante ~mediodía de México del día Y-M-d
 const mxHora=(ds,H)=>{const[y,m,d]=String(ds).split("-").map(Number);return new Date(Date.UTC(y,m-1,d,H+6,0,0));}; // instante de las H:00 (México) del día ds
@@ -554,6 +564,7 @@ function App(){
     try{
       // Los catálogos son esenciales; cárgalos primero.
       const c=await api.catalogos();
+      VENTANA_DIAS=(c.config&&c.config.ventanaDias)||45;   // ventana por defecto del servidor
       setCat(c);
       // Los historiales de cada módulo se cargan por separado: si la cuenta no
       // tiene acceso a alguno (403), NO debe tumbar toda la app (queda vacío).
@@ -569,7 +580,7 @@ function App(){
   useEffect(()=>{if(session)cargarTodo();},[session]);
 
   const refrescar=async tipo=>{try{const items=await api.listar(tipo);setData(d=>({...d,[tipo]:items}));}catch(e){showToast("⚠️ "+e.message);}};
-  const refrescarCat=async()=>{try{setCat(await api.catalogos());}catch(e){showToast("⚠️ "+e.message);}};
+  const refrescarCat=async()=>{try{const c=await api.catalogos();VENTANA_DIAS=(c.config&&c.config.ventanaDias)||45;setCat(c);}catch(e){showToast("⚠️ "+e.message);}};
   const login=async(email,pass)=>{const r=await api.login(email,pass);if(r&&r.challenge)return r;setAlertaOff(false);alertaFormRef.current=null;setSession(api.session);};
   const setNewPassword=async(np)=>{await api.completeNewPassword(np);setSession(api.session);};
   const logout=()=>{api.logout();setSession(null);setCat(null);setAlerta(null);setAlertaOff(false);alertaFormRef.current=null;};
@@ -593,7 +604,7 @@ function App(){
     const contar=fd=>segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd||{},sucs:sucScope,modKeys,hoy})
       .reduce((n,m)=>n+((m.cargar||!m.resumen)?0:m.resumen.vencido),0);
     setAlerta({nombre:session.nombre,tipo:resp.tipo,n:contar(alertaFormRef.current)});
-    if(alertaFormRef.current===null){(async()=>{const fd={};for(const p of (cat.plantillas||[]).filter(x=>x.modulo&&x.modulo!=="responsivas"&&x.activo!==false)){try{fd[p.clave]=await api.listarFormulario(p.clave);}catch(e){fd[p.clave]=[];}}alertaFormRef.current=fd;setAlerta(a=>a?{...a,n:contar(fd)}:a);})();}
+    if(alertaFormRef.current===null){(async()=>{const fd={};for(const p of (cat.plantillas||[]).filter(x=>x.modulo&&x.modulo!=="responsivas"&&x.activo!==false)){try{fd[p.clave]=await api.listarFormulario(p.clave,{desde:SEG_FORM_INICIO()});}catch(e){fd[p.clave]=[];}}alertaFormRef.current=fd;setAlerta(a=>a?{...a,n:contar(fd)}:a);})();}
   },[cat,session,data]);
 
   if(!session)return<Login onLogin={login} onSetNewPassword={setNewPassword}/>;
@@ -923,7 +934,10 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
 // Historial de registros de una plantilla (filtro de fecha + CSV)
 function FormHistory({plantilla,items,loading,onSelect}){
   const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[zip,setZip]=useState(null);
-  const list=(items||[]).filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listarFormulario(plantilla.clave,{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta,plantilla.clave]);
+  const src=ext||items||[];
+  const list=src.filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const csv=()=>csvDownload("form_"+plantilla.clave,["Folio","Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje","Próximo servicio"],list.map(r=>[folioDe(r),fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:"",r.proximoServicio||""]));
   const descargarZip=async()=>{
     if(!list.length||zip)return;
@@ -936,8 +950,10 @@ function FormHistory({plantilla,items,loading,onSelect}){
   return(
     <div>
       <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length}/>
+      {extBusy&&<div className="empty">Consultando archivo histórico…</div>}
+      {ext&&!extBusy&&<div style={{fontSize:11,color:"#888",marginBottom:8}}>📚 Archivo histórico del servidor ({src.length} registros del rango)</div>}
       {list.length>0&&<button className="bs" style={{width:"100%",marginBottom:10}} disabled={!!zip} onClick={descargarZip}>{zip?`Generando PDFs… ${zip.i}/${zip.total}`:`⬇ Todos en PDF (ZIP) · ${list.length}`}</button>}
-      {list.length===0&&<div className="empty">No hay registros</div>}
+      {list.length===0&&!extBusy&&<div className="empty">No hay registros</div>}
       <div className="card">{list.map(r=><div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.sucursal||"—"}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.responsable||r.solicitante||"—"}{r.resultado?<span className={"bdg eb-"+(r.resultadoNivel==="fuera"?"bad":r.resultadoNivel==="atencion"?"warn":"ok")} style={{marginLeft:6}}>{r.resultado}</span>:null}</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span className="lis">{fdt(r.fecha)}</span><button className="bs" style={{fontSize:11,padding:"3px 9px"}} onClick={e=>{e.stopPropagation();csvRegistroForm(plantilla,r);}}>⬇ CSV</button></div></div>)}</div>
     </div>
   );
@@ -1195,7 +1211,11 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   useEffect(()=>{if(step===2&&!ubic&&!geo)obtenerUbic();},[step]);
   // Monto total = litros × precio/L (automático; no se captura a mano)
   useEffect(()=>{const mm=(parseFloat(litros)||0)*(parseFloat(precioLitro)||0);setMonto(mm?mm.toFixed(2):"");},[litros,precioLitro]);
-  const can1=veh&&km&&!kmBloq&&fotoAntes&&fotoDespues&&!sinAsign;
+  // NO se bloquea por sinAsign: un operador solo ve SUS registros, así que puede
+  // no ver la solicitud aprobada que registró otro usuario. La regla la valida el
+  // backend contra TODO el historial (solicitud_asignable_vehiculo); el cliente
+  // solo avisa. Así un usuario distinto al que hizo la solicitud sí puede reportar.
+  const can1=veh&&km&&!kmBloq&&fotoAntes&&fotoDespues;
   // Candados de la carga: litros ≤ capacidad del tanque de la unidad; precio/L ≤ $100.
   const tanqueCap=vehicle?parseFloat(vehicle.tanque)||0:0;
   const litrosN=parseFloat(litros);
@@ -1239,7 +1259,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         <div className="card"><div className="ct">Generales del Vehículo</div>
           <select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
           {vehicle&&<div style={{marginTop:8,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Responsable (área)</span><span>{vehicle.responsable}</span></div><div className="dr"><span>Combustible</span><span>{vehicle.combustible}</span></div><div className="dr"><span>Precio catálogo/L</span><span>${vehicle.precio.toFixed(2)}</span></div><div className="dr"><span>Tanque</span><span>{vehicle.tanque}L</span></div><div className="dr"><span>Producto</span><span>{vehicle.producto}</span></div></div>}
-          {sinAsign&&<div className="wb" style={{marginTop:8}}>⚠️ No hay una solicitud <b>APROBADA y sin reporte</b> para esta unidad. El reporte de carga requiere una asignación (una solicitud aprobada = un reporte). No se puede registrar hasta que exista.</div>}
+          {sinAsign&&<div className="wb" style={{marginTop:8}}>⚠️ En tu vista no aparece una solicitud <b>aprobada y sin reporte</b> para esta unidad. Si otro usuario la registró y ya está aprobada, el sistema lo validará al enviar (puedes continuar). Regla: una solicitud aprobada = un reporte.</div>}
           {solAsignable&&<div style={{marginTop:8,background:C.blueLt,color:C.blue,borderRadius:6,padding:"7px 10px",fontSize:12}}>🔗 Se vinculará a la solicitud <b>{folioDe(solAsignable)}</b> (aprobada {fdate(solAsignable.fecha)}). Este folio quedará ligado al reporte.</div>}
         </div>
         <div className="card"><div className="ct">Datos del vehículo para la carga</div>
@@ -1289,7 +1309,12 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
 
 function SolHistory({items,rol,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
-  const list=items.filter(s=>(f==="Todos"||s.status===f)&&(!fUni||String(s.vehicleId)===fUni)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  // Archivo histórico bajo demanda: si el filtro pide fechas más viejas que la
+  // ventana por defecto del servidor, se consulta ese rango al backend.
+  const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("combustible",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
+  const src=ext||items;
+  const list=src.filter(s=>(f==="Todos"||s.status===f)&&(!fUni||String(s.vehicleId)===fUni)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV COMPLETO: todos los datos capturados en solicitud y reporte (fotos/firma como conteo/Sí-No).
   const nivelTxt=v=>{const o=TANK_OPTS.find(t=>t.val===v);return o?o.label:(v==null?"":v);};
   const nFotos=s=>((s.fotos&&s.fotos.length)?s.fotos.length:(s.photo?1:0))+[s.fotoAntes,s.fotoDespues,s.fotoBomba,s.fotoTicket,s.fotoPersona].filter(Boolean).length;
@@ -1299,8 +1324,10 @@ function SolHistory({items,rol,onSelect}){
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Por corregir","Aprobada","Rechazada","Anulado"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
-      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
-      {list.length===0&&<div className="empty">No hay solicitudes</div>}
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(src)} unidad={fUni} setUnidad={setFUni}/>
+      {extBusy&&<div className="empty">Consultando archivo histórico…</div>}
+      {ext&&!extBusy&&<div style={{fontSize:11,color:"#888",marginBottom:8}}>📚 Archivo histórico del servidor ({src.length} registros del rango)</div>}
+      {list.length===0&&!extBusy&&<div className="empty">No hay solicitudes</div>}
       <div className="card">{list.map(s=><div key={s.id} className="li" onClick={()=>onSelect(s)}><div className="lit"><span className="lim">{s.placas} · #{s.economico}</span><span className={"bdg "+bcSol(s.status)}>{s.status}</span></div><div className="lis">{s.formato==="reporte"?"📋 Reporte":"📝 Solicitud"} · {s.responsable} · {s.sucursal}</div><div className="lis">{fdate(s.fecha)} · {s.litros}L · <span style={{color:C.blue,fontWeight:600}}>${s.monto?.toLocaleString()}</span></div></div>)}</div>
     </div>
   );
@@ -1610,13 +1637,18 @@ function DmgList({value,onChange}){
 
 function CLHistory({items,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
-  const list=items.filter(c=>(f==="Todos"||c.tipo===f)&&(!fUni||String(c.vehicleId)===fUni)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("checklist",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
+  const src=ext||items;
+  const list=src.filter(c=>(f==="Todos"||c.tipo===f)&&(!fUni||String(c.vehicleId)===fUni)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const csv=()=>csvDownload("checklist_reparto",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km"],list.map(c=>[folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km]));
   return(
     <div>
       <div className="tr">{["Todos","semanal","mensual"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="Todos"?"Todos":x==="semanal"?"Semanal":"Mensual"}</button>)}</div>
-      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
-      {list.length===0&&<div className="empty">No hay checklists</div>}
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(src)} unidad={fUni} setUnidad={setFUni}/>
+      {extBusy&&<div className="empty">Consultando archivo histórico…</div>}
+      {ext&&!extBusy&&<div style={{fontSize:11,color:"#888",marginBottom:8}}>📚 Archivo histórico del servidor ({src.length} registros del rango)</div>}
+      {list.length===0&&!extBusy&&<div className="empty">No hay checklists</div>}
       <div className="card">{list.map(c=><div key={c.id} className="li" onClick={()=>onSelect(c)}><div className="lit"><span className="lim">{c.placas} · #{c.economico}</span><span className={"bdg "+(c.tipo==="semanal"?"dpe":"dok")}>{c.tipo==="semanal"?"Semanal":"Mensual"}</span></div><div className="lis"><span style={{color:C.green,fontWeight:600}}>✓ Aprobado</span> · {c.responsable} · {c.sucursal}</div><div className="lis">{fdt(c.fecha)}</div></div>)}</div>
     </div>
   );
@@ -1763,13 +1795,18 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
 
 function MCHistory({items,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
-  const list=items.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!fUni||String(r.vehicleId)===fUni)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("montacargas",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
+  const src=ext||items;
+  const list=src.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!fUni||String(r.vehicleId)===fUni)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const csv=()=>csvDownload("checklist_montacargas",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas"],list.map(r=>[folioDe(r),fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,Object.values(r.resps||{}).filter(v=>v==="P").length]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobado","Rechazado","gas","electrico"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="gas"?"Gas":x==="electrico"?"Eléctrico":x}</button>)}</div>
-      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(items)} unidad={fUni} setUnidad={setFUni}/>
-      {list.length===0&&<div className="empty">No hay registros</div>}
+      <FiltroFechas desde={rDesde} hasta={rHasta} setDesde={setRDesde} setHasta={setRHasta} onCSV={csv} n={list.length} unidades={unidadesDe(src)} unidad={fUni} setUnidad={setFUni}/>
+      {extBusy&&<div className="empty">Consultando archivo histórico…</div>}
+      {ext&&!extBusy&&<div style={{fontSize:11,color:"#888",marginBottom:8}}>📚 Archivo histórico del servidor ({src.length} registros del rango)</div>}
+      {list.length===0&&!extBusy&&<div className="empty">No hay registros</div>}
       <div className="card">{list.map(r=>{const p=Object.values(r.resps||{}).filter(v=>v==="P").length;return(<div key={r.id} className="li" onClick={()=>onSelect(r)}><div className="lit"><span className="lim">{r.placas} · #{r.economico}</span><span className={"bdg "+bcMC(r.status)}>{r.status}</span></div><div className="lis">{r.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"} · {r.sucursal}</div><div className="lis">{fdate(r.fecha)} · Sem {r.semana||"—"}{p>0&&<span style={{color:C.red,fontWeight:600}}> · {p} problema(s)</span>}</div></div>);})}</div>
     </div>
   );
@@ -1995,9 +2032,22 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const[rModo,setRModo]=useState("dia");const[rDia,setRDia]=useState("");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[rEstado,setREstado]=useState("Todos");
   const cargarReporte=async()=>{try{setReporte(await api.listar("combustible"));}catch(e){showToast("⚠️ "+e.message);}};
   useEffect(()=>{if(sec==="reportes"&&reporte===null)cargarReporte();},[sec]);
+  // Archivo histórico bajo demanda: si el día o "Desde" es más viejo que la
+  // ventana por defecto, se consulta ese rango al servidor (repExt).
+  const[repExt,setRepExt]=useState(null);const[repExtBusy,setRepExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;
+    const viejoDia=rModo==="dia"&&rDia&&rDia<ventanaInicio();
+    const viejoRango=rModo==="rango"&&rDesde&&rDesde<ventanaInicio();
+    if(sec==="reportes"&&(viejoDia||viejoRango)){
+      setRepExtBusy(true);
+      const r=rModo==="dia"?{desde:rDia,hasta:rDia}:{desde:rDesde,hasta:rHasta||undefined};
+      api.listar("combustible",r).then(x=>{if(vivo)setRepExt(x);}).catch(()=>{if(vivo)setRepExt(null);}).finally(()=>{if(vivo)setRepExtBusy(false);});
+    }else{setRepExt(null);setRepExtBusy(false);}
+    return()=>{vivo=false;};
+  },[sec,rModo,rDia,rDesde,rHasta]);
   const fechaLocal=ymd;  /* día calendario de México (coincide con lo mostrado) */
   const repSufijo=rModo==="dia"?(rDia||"dia"):((rDesde||"inicio")+"_a_"+(rHasta||"hoy"));
-  const repFiltrado=(reporte||[]).filter(s=>{const d=s.fecha?fechaLocal(s.fecha):"";const okFecha=rModo==="dia"?(!rDia||d===rDia):((!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta));return okFecha&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const repFiltrado=((repExt||reporte)||[]).filter(s=>{const d=s.fecha?fechaLocal(s.fecha):"";const okFecha=rModo==="dia"?(!rDia||d===rDia):((!rDesde||d>=rDesde)&&(!rHasta||d<=rHasta));return okFecha&&(rEstado==="Todos"||s.status===rEstado);}).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   const repMonto=repFiltrado.reduce((a,s)=>a+(s.monto||0),0);
   const repLitros=repFiltrado.reduce((a,s)=>a+(s.litros||0),0);
   const descargarReporteCSV=()=>{
@@ -2181,6 +2231,8 @@ function ModAdmin({cat,refrescarCat,showToast}){
             ? <><label>Día</label><input type="date" value={rDia} onChange={e=>setRDia(e.target.value)}/></>
             : <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>}
           <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Por corregir","Aprobada","Rechazada","Anulado"].map(x=><option key={x}>{x}</option>)}</select>
+          {repExtBusy&&<div className="empty">Consultando archivo histórico…</div>}
+          {repExt&&!repExtBusy&&<div style={{fontSize:11,color:"#888",marginTop:6}}>📚 Archivo histórico del servidor ({repExt.length} registros del rango)</div>}
           <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
           <button className="bp" disabled={!repFiltrado.length} onClick={descargarReporteCSV}>⬇ Descargar detalle (CSV)</button>
           <button className="bp" style={{marginTop:6}} disabled={!repFiltrado.length} onClick={descargarPorUnidadCSV}>⬇ Descargar total por unidad (CSV)</button>
@@ -2504,17 +2556,45 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
   useEffect(()=>{if(!window.matchMedia)return;const mq=window.matchMedia("(min-width:1000px)");const h=e=>setEsPC(e.matches);mq.addEventListener?mq.addEventListener("change",h):mq.addListener(h);return()=>{mq.removeEventListener?mq.removeEventListener("change",h):mq.removeListener(h);};},[]);
   const esForm=mk=>formModKeys.includes(mk);
   const pltsDe=mk=>(cat.plantillas||[]).filter(p=>p.modulo===mk&&p.activo!==false);
-  const cargarModuloUI=async mk=>{setCargando(s=>({...s,[mk]:true}));const res={};for(const p of pltsDe(mk)){if(formData[p.clave]===undefined){try{res[p.clave]=await api.listarFormulario(p.clave);}catch(e){res[p.clave]=[];}}}setFormData(s=>({...s,...res}));setCargando(s=>({...s,[mk]:false}));};
-  const cargarTodos=async()=>{let acc={...formData};for(const mk of formModKeys){if(!puede(mk))continue;for(const p of pltsDe(mk)){if(acc[p.clave]===undefined){try{acc[p.clave]=await api.listarFormulario(p.clave);}catch(e){acc[p.clave]=[];}}}}setFormData(acc);return acc;};
+  const cargarModuloUI=async mk=>{setCargando(s=>({...s,[mk]:true}));const res={};for(const p of pltsDe(mk)){if(formData[p.clave]===undefined){try{res[p.clave]=await api.listarFormulario(p.clave,{desde:SEG_FORM_INICIO()});}catch(e){res[p.clave]=[];}}}setFormData(s=>({...s,...res}));setCargando(s=>({...s,[mk]:false}));};
+  const cargarTodos=async()=>{let acc={...formData};for(const mk of formModKeys){if(!puede(mk))continue;for(const p of pltsDe(mk)){if(acc[p.clave]===undefined){try{acc[p.clave]=await api.listarFormulario(p.clave,{desde:SEG_FORM_INICIO()});}catch(e){acc[p.clave]=[];}}}}setFormData(acc);return acc;};
   // Carga paralela de todos los formularios (para el dashboard de PC, que muestra todo expandido)
-  const cargarTodosPar=async()=>{const claves=[];formModKeys.forEach(mk=>{if(!puede(mk))return;pltsDe(mk).forEach(p=>{if(formData[p.clave]===undefined)claves.push(p.clave);});});if(!claves.length)return;setCargando(s=>({...s,__all:true}));const res=await Promise.all(claves.map(cl=>api.listarFormulario(cl).then(r=>[cl,r]).catch(()=>[cl,[]])));const upd={};res.forEach(([cl,r])=>upd[cl]=r);setFormData(s=>({...s,...upd}));setCargando(s=>({...s,__all:false}));};
+  const cargarTodosPar=async()=>{const claves=[];formModKeys.forEach(mk=>{if(!puede(mk))return;pltsDe(mk).forEach(p=>{if(formData[p.clave]===undefined)claves.push(p.clave);});});if(!claves.length)return;setCargando(s=>({...s,__all:true}));const res=await Promise.all(claves.map(cl=>api.listarFormulario(cl,{desde:SEG_FORM_INICIO()}).then(r=>[cl,r]).catch(()=>[cl,[]])));const upd={};res.forEach(([cl,r])=>upd[cl]=r);setFormData(s=>({...s,...upd}));setCargando(s=>({...s,__all:false}));};
   useEffect(()=>{if(esPC)cargarTodosPar();/* eslint-disable-next-line */},[esPC]);
+  // Consulta por rango del ARCHIVO HISTÓRICO: si "Desde" es más viejo que la
+  // ventana por defecto, se cargan del servidor combustible/checklist/montacargas
+  // y cada plantilla de formularios para ese rango (extData). El período vigente
+  // (sin rango) usa `data`/`formData` de la ventana, sin ir al servidor.
+  const[extData,setExtData]=useState(null);const[extBusy,setExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;
+    if(desde&&desde<ventanaInicio()){
+      setExtBusy(true);
+      (async()=>{
+        const r={desde,hasta:hasta||undefined};
+        const[comb,chk,mc]=await Promise.all([
+          api.listar("combustible",r).catch(()=>[]),
+          api.listar("checklist",r).catch(()=>[]),
+          api.listar("montacargas",r).catch(()=>[]),
+        ]);
+        const claves=[];formModKeys.forEach(mk=>{if(!puede(mk))return;pltsDe(mk).forEach(p=>claves.push(p.clave));});
+        const fdres=await Promise.all(claves.map(cl=>api.listarFormulario(cl,r).then(x=>[cl,x]).catch(()=>[cl,[]])));
+        const fd={};fdres.forEach(([cl,x])=>fd[cl]=x);
+        if(vivo)setExtData({combustible:comb,checklist:chk,montacargas:mc,formData:fd});
+      })().catch(()=>{if(vivo)setExtData(null);}).finally(()=>{if(vivo)setExtBusy(false);});
+    }else{setExtData(null);setExtBusy(false);}
+    return()=>{vivo=false;};
+  },[desde,hasta]);
   const toggleExp=mk=>{const abriendo=!exp[mk];setExp(s=>({...s,[mk]:abriendo}));if(abriendo&&esForm(mk)&&pltsDe(mk).some(p=>formData[p.clave]===undefined))cargarModuloUI(mk);};
   const toggleMod=mk=>setSelMods(s=>s.includes(mk)?s.filter(x=>x!==mk):[...s,mk]);
-  const calcMods=(fd)=>rango
-    ?segModulosRango({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd,sucs,modKeys:selMods,rango})
-    :segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd,sucs,modKeys:selMods,hoy});
-  const mods=useMemo(()=>calcMods(formData),[cat,data,formData,fSuc,selMods,desde,hasta]);
+  const calcMods=(fd)=>{
+    if(rango){
+      // Rango viejo → datos del archivo histórico (extData); rango reciente → ventana.
+      const D=extData||{combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd};
+      return segModulosRango({cat,combustible:D.combustible,checklist:D.checklist,montacargas:D.montacargas,formData:D.formData||fd,sucs,modKeys:selMods,rango});
+    }
+    return segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd,sucs,modKeys:selMods,hoy});
+  };
+  const mods=useMemo(()=>calcMods(formData),[cat,data,formData,extData,fSuc,selMods,desde,hasta]);
   const meta={fecha:ymd(hoy),fechaLbl:hoy.toLocaleDateString("es-MX",{timeZone:MX_TZ}),sucursal:fSuc==="__todas"?"Todas":fSuc,rango:rango?((desde||"inicio")+" a "+(hasta||"hoy")):null};
   const exportar=async fmt=>{if(bajando)return;setBajando(true);showToast("Preparando descarga…");
     try{const fd=await cargarTodos();const full=calcMods(fd);
@@ -2557,6 +2637,8 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
         <div className="seg-frow"><span className="seg-fl">Sucursal</span>{selectSuc}{sucursalesUser&&<span className="seg-lock">🔒 Limitado a tu acceso</span>}<span className="seg-period">{rango?<>Rango <b>{desde||"inicio"} → {hasta||"hoy"}</b></>:<>Período vigente · Hoy <b>{meta.fechaLbl}</b></>}</span></div>
         <div className="seg-frow"><span className="seg-fl">Módulos</span>{chipsMods("seg-mc")}<span style={{fontSize:11,color:"#aaa"}}>(selección múltiple)</span></div>
         <div className="seg-frow"><span className="seg-fl">Fechas</span><input type="date" value={desde} onChange={e=>setDesde(e.target.value)} style={{width:"auto"}}/><span style={{color:"#888"}}>a</span><input type="date" value={hasta} onChange={e=>setHasta(e.target.value)} style={{width:"auto"}}/>{rango?<><span className="seg-lock" style={{background:C.amberLt,color:C.amber}}>Consulta por rango: ✓ hubo registro · ✗ faltó</span><a onClick={()=>{setDesde("");setHasta("");}} style={{color:C.blue,cursor:"pointer",fontSize:12,fontWeight:600}}>Volver al período vigente</a></>:<span style={{fontSize:11,color:"#aaa"}}>opcional — para consultar por fechas</span>}</div>
+        {extBusy&&<div className="seg-frow" style={{color:C.blue,fontSize:12,fontWeight:600}}>📚 Consultando archivo histórico del servidor…</div>}
+        {extData&&!extBusy&&<div className="seg-frow" style={{color:"#888",fontSize:12}}>📚 Rango cargado del archivo histórico del servidor.</div>}
       </div>
       {cargando.__all&&<div className="spin"/>}
       <div className="seg-kpis">

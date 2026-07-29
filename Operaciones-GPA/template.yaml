@@ -43,6 +43,7 @@ Globals:
         EMAIL_RIESGOS:       !Ref EmailRiesgos
         URL_FIRMADA_TTL:     '900'
         USER_POOL_ID:        !Ref CognitoUserPool
+        VENTANA_DIAS:        '45'   # ventana por defecto (días) de los listados
 
 # ═══════════════════════════════════════════════════════════════════
 # PARÁMETROS
