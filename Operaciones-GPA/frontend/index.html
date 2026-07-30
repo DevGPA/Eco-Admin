@@ -248,10 +248,19 @@ const DOMICILIOS={
 // Genera un PDF con diseño corporativo (encabezado GPA + el formato lleno).
 // Toma el contenido del detalle (.pdf-area), quita botones (.no-print) y convierte
 // las imágenes de S3 a dataURL para evitar problemas de CORS al renderizar.
-// Convierte una URL (S3/local) a dataURL; null si falla.
+// Motivos por los que una imagen no se pudo bajar (los junta pdfDeArea para avisar).
+let _pdfFallas=[];
+// Convierte una URL (S3/local) a dataURL; null si falla, anotando el MOTIVO.
+// Distingue los dos casos reales: enlace vencido (403 de S3) vs bloqueado/sin red.
+// Antes, un 403 devolvía el XML de error y se incrustaba como si fuera una imagen.
 async function _aDataURL(url){
-  try{const r=await fetch(url);const b=await r.blob();return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}
-  catch(e){return null;}
+  try{
+    const r=await fetch(url);
+    if(!r.ok){_pdfFallas.push("HTTP "+r.status);return null;}
+    const b=await r.blob();
+    if(b.type&&b.type.indexOf("image/")!==0){_pdfFallas.push("no es imagen ("+b.type+")");return null;}
+    return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>{_pdfFallas.push("lectura fallida");res(null);};fr.readAsDataURL(b);});
+  }catch(e){_pdfFallas.push("bloqueada: "+((e&&e.message)||e));return null;}
 }
 // jsPDF 2.5.1 no embebe WebP: convierte un dataURL WebP a JPEG para el PDF (otros formatos se dejan igual).
 async function _jpegDataURL(dataURL){
@@ -280,9 +289,10 @@ async function pdfDeArea(area){
   // Imágenes → dataURL. Si una NO se puede bajar (típicamente porque la URL firmada
   // de la evidencia ya expiró) se cuenta y se AVISA en el PDF: antes se descartaba en
   // silencio y el PDF salía sin fotos sin que nadie se enterara.
-  let omitidas=0;
+  let omitidas=0;_pdfFallas=[];
   for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else{omitidas++;img.remove();}}
-  if(omitidas)console.warn("PDF: "+omitidas+" imagen(es) no se pudieron incluir (¿URL de evidencia expirada?)");
+  const motivos=[...new Set(_pdfFallas)].join("; ");
+  if(omitidas)console.warn("PDF: "+omitidas+" imagen(es) omitidas. Motivos: "+motivos);
   const logoData=await _logoData();
 
   const doc=new JS({unit:"mm",format:"a4"});
@@ -341,9 +351,15 @@ async function pdfDeArea(area){
     }
   };
   walk(clone);
-  // Aviso visible: si faltaron fotos, que quede constancia en el propio documento.
-  if(omitidas){y+=2;para("⚠️ "+omitidas+" fotografía(s) no se pudieron incluir: el enlace de la evidencia expiró. "
-    +"Recarga la app (o vuelve a abrir el registro) y descarga el PDF de nuevo.",{size:9,bold:true,color:[163,45,45]});}
+  // Aviso visible: si faltaron fotos, que quede constancia en el propio documento,
+  // con el MOTIVO técnico para poder corregir la causa (no solo "expiró").
+  if(omitidas){y+=2;
+    const exp=/HTTP 40[13]/.test(motivos);
+    para("⚠️ "+omitidas+" fotografía(s) no se pudieron incluir."
+      +(exp?" El enlace de la evidencia ya venció: recarga la app (o vuelve a abrir el registro) y descarga el PDF de nuevo."
+           :" La descarga de la imagen fue bloqueada; repórtalo a soporte con este texto.")
+      ,{size:9,bold:true,color:[163,45,45]});
+    para("Detalle técnico: "+motivos,{size:8,color:[140,140,140]});}
   doc._fotosOmitidas=omitidas;
   return doc;
 }
