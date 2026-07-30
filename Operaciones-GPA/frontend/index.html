@@ -273,7 +273,10 @@ async function pdfDeArea(area){
   const suc=area.dataset.pdfsucursal||"";
   const domicilio=DOMICILIOS[suc]||"";
   const clone=area.cloneNode(true);
-  clone.querySelectorAll(".no-print").forEach(n=>n.remove());
+  // .no-print = controles de pantalla. .pdf-omit = fotos de RUTINA de los checklists:
+  // se ven en pantalla pero NO van al PDF, para que el PDF quede compacto y las únicas
+  // fotos sean la EVIDENCIA de los puntos en mal estado (+ km y firma).
+  clone.querySelectorAll(".no-print,.pdf-omit").forEach(n=>n.remove());
   // Imágenes → dataURL (las que no se puedan, se omiten)
   for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else img.remove();}
   const logoData=await _logoData();
@@ -856,6 +859,53 @@ function respuestaTexto(item,reg){
   if(t==="taco")return (v!=null&&v!=="")?"Nivel "+v:"";
   return v==null?"":String(v);
 }
+// ─── Hallazgos («mal estado») de un checklist, con su foto de evidencia ──────
+// Valores que se consideran HALLAZGO en los checklists de reparto y formularios.
+const MAL_VALORES=new Set(["No","Con raspaduras/golpes","Con Raspaduras/Golpes",
+  "Bajo","Muy Bajo","Sin Nivel","Vencido","No cuenta","No hay extinguidor",
+  "Mal estado","Malo","P"]);
+// Ítems INFORMATIVOS: su "No" describe la configuración de la unidad, no un defecto.
+const MAL_IGNORAR=new Set(["pt_int","ct_int"]);
+// Foto(s) de evidencia asociadas a un punto (cuando no siguen el patrón "f_<id>").
+// carrocería: su evidencia son los daños capturados (damage_list "golpes").
+const FOTO_DE_ITEM={carroceria:[],espejos:["f_esp_p","f_esp_c"],luces_d:["f_luces_d","f_luces_t"],
+  refacc:["f_ref"],gato:["f_herr"],llave_cruz:["f_herr"],triangulo:["f_herr"],cables:["f_herr"]};
+const fotosDeItem=(item,a)=>(FOTO_DE_ITEM[item.id]||["f_"+item.id])
+  .map(id=>a[id]).filter(x=>typeof x==="string"&&x);
+// Recorre las secciones de un checklist (reparto o formulario dinámico) y devuelve
+// los puntos en mal estado con su valor, nota y fotos de evidencia.
+// Los TACO (nivel 1-10) NO se evalúan: son una medición, no un pasa/no-pasa (no hay
+// umbral definido por operación); sus valores sí salen en el CSV de resultados.
+function hallazgosSecs(secs,reg){
+  const a=(reg&&reg.answers)||{};const out=[];
+  (secs||[]).forEach(sec=>(sec.items||[]).forEach(item=>{
+    const v=a[item.id],t=item.type;
+    if(t==="damage_list"){(v||[]).forEach((d,i)=>out.push({sec:sec.title,label:(item.label||"Daño")+" #"+(i+1),valor:d.desc||"Daño registrado",sev:"bad",fotos:d.foto?[d.foto]:[]}));return;}
+    if(v==null||v==="")return;
+    if(t==="escala"){const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";if(sev==="ok")return;
+      return void out.push({sec:sec.title,label:item.label,valor:o.t||SEV_BADGE[sev],sev:sev==="bad"?"bad":"warn",nota:a[item.id+"__nota"]||"",fotos:[a[item.id+"__foto"]].filter(Boolean)});}
+    if(t==="opna"){if(v!=="P")return;
+      return void out.push({sec:sec.title,label:item.label,valor:"P — problema",sev:"bad",nota:a[item.id+"__com"]||"",fotos:[a[item.id+"__foto"]].filter(Boolean)});}
+    if(["photo","fotos","taco","text","textarea","number","date","vehiculo","aviso"].includes(t))return;
+    if(MAL_IGNORAR.has(item.id)||!MAL_VALORES.has(String(v)))return;
+    out.push({sec:sec.title,label:item.label,valor:String(v),sev:"bad",fotos:fotosDeItem(item,a)});
+  }));
+  return out;
+}
+// Resumen de hallazgos para una celda de CSV
+const malTxt=h=>h.map(x=>x.label+": "+x.valor+(x.nota?" ("+x.nota+")":"")).join(" | ");
+// Tarjeta de evidencia (se ve en pantalla y es lo único con fotos que va al PDF)
+function CardHallazgos({hall}){
+  if(!hall)return null;
+  if(!hall.length)return <div className="card"><div style={{fontSize:12,color:C.green,fontWeight:600}}>✓ Sin puntos en mal estado en este checklist.</div></div>;
+  return(<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Puntos en mal estado ({hall.length}) — evidencia</div>
+    {hall.map((h,i)=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}>
+      <div className="dr"><span style={{maxWidth:"62%"}}>{h.sec?h.sec+" · ":""}{h.label}</span><span style={{fontWeight:700,color:h.sev==="warn"?C.amber:C.red}}>{h.valor}</span></div>
+      {h.nota&&<div style={{fontSize:12,marginTop:2}}>{h.nota}</div>}
+      {(h.fotos||[]).map((f,j)=><img key={j} src={f} style={{width:"100%",borderRadius:6,marginTop:4}} alt="evidencia"/>)}
+    </div>)}</div>);
+}
+
 // Descarga UN registro dinámico como CSV (metadatos + cada campo con su respuesta)
 function csvRegistroForm(plantilla,reg){
   const nombre=reg.plantillaNombre||(plantilla&&plantilla.nombre)||reg.plantillaClave||"formulario";
@@ -901,6 +951,9 @@ function csvDetalle(){
 // Detalle de un registro dinámico (con PDF corporativo y, si aplica, autorización)
 function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy}){
   const secs=(plantilla&&plantilla.secciones)||[];const st=reg.status||"Aprobado";
+  // Igual que en reparto: los puntos en mal estado (con su foto) encabezan el detalle
+  // y son las únicas fotos que viajan al PDF; las de rutina quedan .pdf-omit.
+  const hall=hallazgosSecs(secs,reg);
   return(
     <div className="pdf-area" data-pdftitle={reg.plantillaNombre||(plantilla&&plantilla.nombre)||"Formulario"} data-pdfsucursal={reg.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
@@ -911,15 +964,16 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
         {reg.autorizadoPor&&<div className="dr"><span>Autorizó</span><span>{reg.autorizadoPor}</span></div>}
       </div>
       {reg.resultado&&<div className={"score-bar"+(reg.resultadoNivel?" "+reg.resultadoNivel:"")}><div className="score-lbl">{reg.resultado}</div>{reg.puntaje!=null&&<div className="score-det">Puntaje {reg.puntaje}/{reg.puntajeMax}</div>}</div>}
+      <CardHallazgos hall={hall}/>
       {secs.map(sec=><div key={sec.id||sec.title} className="card"><div className="ct">{sec.title}</div>{(sec.items||[]).map(item=>{
         if(item.type==="aviso")return<div key={item.id} className="aviso">{item.label&&<div className="aviso-t">{item.label}</div>}<div className="aviso-b">{item.texto||(item.opts||[]).join("\n")}</div></div>;
         const v=reg.answers?.[item.id];
-        if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
-        if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];const efoto=reg.answers?.[item.id+"__foto"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}{efoto&&<img src={efoto} style={{width:"100%",maxWidth:240,borderRadius:6,marginTop:4}} alt="evidencia del daño"/>}</div>;}
-        if(item.type==="fotos"){if(!v||!v.length)return null;return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><div className="fg">{v.map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/></div>)}</div></div>;}
+        if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div className="pdf-omit" style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
+        if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];const efoto=reg.answers?.[item.id+"__foto"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}{efoto&&<img className="pdf-omit" src={efoto} style={{width:"100%",maxWidth:240,borderRadius:6,marginTop:4}} alt="evidencia del daño"/>}</div>;}
+        if(item.type==="fotos"){if(!v||!v.length)return null;return<div key={item.id} className="pdf-omit" style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><div className="fg">{v.map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/></div>)}</div></div>;}
         if(v==null||v==="")return null;
-        if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
-        if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;
+        if(item.type==="photo")return<div key={item.id} className="pdf-omit" style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
+        if(item.type==="damage_list")return<div key={item.id} className="pdf-omit">{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;
         if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;
         return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{String(v)}</span></div>;
       })}</div>)}
@@ -938,7 +992,15 @@ function FormHistory({plantilla,items,loading,onSelect}){
   useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listarFormulario(plantilla.clave,{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta,plantilla.clave]);
   const src=ext||items||[];
   const list=src.filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("form_"+plantilla.clave,["Folio","Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje","Próximo servicio"],list.map(r=>[folioDe(r),fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:"",r.proximoServicio||""]));
+  // CSV = TABLA DE RESULTADOS: una fila por registro y una columna por punto del formulario.
+  const ptos=((plantilla&&plantilla.secciones)||[]).flatMap(sec=>(sec.items||[])
+    .filter(it=>!["photo","fotos","aviso"].includes(it.type)).map(it=>({...it,sec:sec.title})));
+  const csv=()=>csvDownload("form_"+plantilla.clave,
+    ["Folio","Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje","Próximo servicio","Puntos en mal estado","Detalle mal estado",
+      ...ptos.map(p=>p.sec+" · "+p.label)],
+    list.map(r=>{const h=hallazgosSecs((plantilla&&plantilla.secciones)||[],r);
+      return [folioDe(r),fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:"",r.proximoServicio||"",h.length,malTxt(h),
+        ...ptos.map(p=>respuestaTexto(p,r))];}));
   const descargarZip=async()=>{
     if(!list.length||zip)return;
     setZip({i:0,total:list.length});
@@ -1501,6 +1563,15 @@ const MENSUAL_SEC=[
   {id:"cofre",title:"Cofre Abierto",items:[{id:"radiador",label:"Nivel radiador",type:"select",opts:NIVEL_OPTS},{id:"f_radiador",label:"Foto radiador",type:"photo"},{id:"com_radiador",label:"Comentario radiador",type:"text"},{id:"liq_limpiaparab",label:"Nivel limpiaparabrisas",type:"select",opts:NIVEL_OPTS},{id:"f_liq_limpiaparab",label:"Foto limpiaparabrisas",type:"photo"},{id:"aceite_dir",label:"Nivel aceite dirección",type:"select",opts:NIVEL_OPTS},{id:"f_aceite_dir",label:"Foto dirección",type:"photo"},{id:"aceite_motor",label:"Nivel aceite motor",type:"select",opts:NIVEL_OPTS},{id:"f_aceite_motor",label:"Foto motor",type:"photo"},{id:"liq_frenos",label:"Nivel líquido frenos",type:"select",opts:NIVEL_OPTS},{id:"f_liq_frenos",label:"Foto frenos",type:"photo"}]},
 ];
 
+// Columnas de RESULTADOS para el CSV del historial de reparto: unión de los puntos
+// de semanal y mensual (sin las fotos, que no son un resultado), en orden estable.
+// El CSV es la tabla de resultados del checklist, no solo si se elaboró.
+const CL_PUNTOS=(()=>{const out=[],vistos=new Set();
+  [...SEMANAL_SEC,...MENSUAL_SEC].forEach(sec=>(sec.items||[]).forEach(it=>{
+    if(it.type==="photo"||it.type==="fotos"||it.type==="aviso")return;
+    if(vistos.has(it.id))return;vistos.add(it.id);out.push({...it,sec:sec.title});}));
+  return out;})();
+
 function ModChecklist({cat,items,rol,sucursalesUser,session,refrescar,showToast}){
   const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
   const canCreate=rol!=="analista";
@@ -1641,7 +1712,13 @@ function CLHistory({items,onSelect}){
   useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("checklist",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
   const src=ext||items;
   const list=src.filter(c=>(f==="Todos"||c.tipo===f)&&(!fUni||String(c.vehicleId)===fUni)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("checklist_reparto",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km"],list.map(c=>[folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km]));
+  // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto revisado.
+  const csv=()=>csvDownload("checklist_reparto",
+    ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km","Puntos en mal estado","Detalle mal estado",
+      ...CL_PUNTOS.map(p=>p.sec+" · "+p.label)],
+    list.map(c=>{const secs=c.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;const h=hallazgosSecs(secs,c);
+      return [folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km,h.length,malTxt(h),
+        ...CL_PUNTOS.map(p=>respuestaTexto(p,c))];}));
   return(
     <div>
       <div className="tr">{["Todos","semanal","mensual"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="Todos"?"Todos":x==="semanal"?"Semanal":"Mensual"}</button>)}</div>
@@ -1656,12 +1733,17 @@ function CLHistory({items,onSelect}){
 
 function CLDetail({cl,cat,rol,refrescar,showToast,onBack}){
   const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
+  // Puntos en mal estado con su evidencia fotográfica: se muestran arriba y son las
+  // ÚNICAS fotos (junto con km y firma) que van al PDF. Las fotos de rutina quedan
+  // en pantalla marcadas .pdf-omit.
+  const hall=hallazgosSecs(secs,cl);
   return(
     <div className="pdf-area" data-pdftitle="Checklist de reparto" data-pdfsucursal={cl.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><div style={{display:"flex",gap:4}}><span className="bdg dok">✓ Aprobado</span><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(cl)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
+      <CardHallazgos hall={hall}/>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
-      {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id}>{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
+      {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} className="pdf-omit" style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id} className="pdf-omit">{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
       {cl.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{cl.obs}</div></div>}
       {cl.firma&&<div className="card"><div className="ct">Firma</div><img src={cl.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{cl.responsable}</b></div></div>}
       <ReasignarUnidad tipoApi="CL" reg={cl} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
@@ -1793,13 +1875,32 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
   );
 }
 
+// Columnas de RESULTADOS para el CSV de montacargas. Las respuestas se guardan por
+// ÍNDICE (resps[i]) y las listas de gas y eléctrico son distintas, así que la columna
+// se identifica por el TEXTO de la pregunta (unión de ambas listas, sin repetir).
+const MC_PUNTOS=(()=>{const out=[],vistos=new Set();
+  [...ITEMS_GAS,...ITEMS_ELEC].forEach(q=>{if(vistos.has(q))return;vistos.add(q);out.push(q);});
+  return out;})();
+// Respuestas de un registro de montacargas indexadas por texto de pregunta
+const mcRespPorTexto=r=>{const its=r.tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;const m={};
+  its.forEach((q,i)=>{const v=(r.resps||{})[i];if(v!=null&&v!=="")m[q]=v;});return m;};
+const mcProblemas=r=>{const its=r.tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;const out=[];
+  its.forEach((q,i)=>{if((r.resps||{})[i]==="P")out.push(q+((r.coments||{})[i]?" ("+r.coments[i]+")":""));});
+  return out;};
+
 function MCHistory({items,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
   const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
   useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("montacargas",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
   const src=ext||items;
   const list=src.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!fUni||String(r.vehicleId)===fUni)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  const csv=()=>csvDownload("checklist_montacargas",["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas"],list.map(r=>[folioDe(r),fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,Object.values(r.resps||{}).filter(v=>v==="P").length]));
+  // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto (O/P/N-A).
+  const csv=()=>csvDownload("checklist_montacargas",
+    ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas","Detalle problemas",
+      ...MC_PUNTOS],
+    list.map(r=>{const m=mcRespPorTexto(r),pr=mcProblemas(r);
+      return [folioDe(r),fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,pr.length,pr.join(" | "),
+        ...MC_PUNTOS.map(q=>m[q]||"")];}));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Aprobado","Rechazado","gas","electrico"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x==="gas"?"Gas":x==="electrico"?"Eléctrico":x}</button>)}</div>
@@ -1821,7 +1922,7 @@ function MCDetail({rec,canAuth,cat,rol,refrescar,showToast,onBack}){
     <div className="pdf-area" data-pdftitle="Checklist de montacargas" data-pdfsucursal={rec.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(rec)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
-      {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4}}>#{parseInt(i)+1} — {items[parseInt(i)]?.substring(0,55)}...</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
+      {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4,lineHeight:1.4}}>#{parseInt(i)+1} — {items[parseInt(i)]}</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"82%",lineHeight:1.4}}>#{i+1} {item}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
       {rec.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{rec.obs}</div></div>}
       {rec.firma&&<div className="card"><div className="ct">Firma</div><img src={rec.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
