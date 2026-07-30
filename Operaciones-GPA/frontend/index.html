@@ -254,6 +254,16 @@ let _pdfFallas=[];
 // con eso se sabe con CERTEZA si ya estaba vencida al intentar bajarla. Es clave para
 // distinguir "el enlace venció" de "la descarga está bloqueada (permisos/CORS)", que
 // en el navegador producen el mismo error genérico "Failed to fetch".
+// Huella de la URL que falló: de dónde se abrió la app (para comparar con el CORS
+// autorizado del bucket), a qué host se pidió la foto y QUÉ parámetros lleva (solo los
+// nombres, nunca los valores de la firma). Sin esto no se puede saber si el problema es
+// el origen, un enlace sin firmar o un formato de firma distinto al esperado.
+function _diagUrl(url){
+  try{const u=new URL(url,location.href);
+    const ps=[...u.searchParams.keys()].map(k=>k.replace(/^X-Amz-/,"")).join(",");
+    return "origen="+location.origin+" · host="+u.hostname+" · params=["+(ps||"NINGUNO")+"]";
+  }catch(e){return "origen="+location.origin+" · URL ilegible: "+String(url).slice(0,60);}
+}
 function _estadoFirma(url){
   try{
     const q=new URL(url,location.href).searchParams;
@@ -271,11 +281,13 @@ function _estadoFirma(url){
 async function _aDataURL(url){
   try{
     const r=await fetch(url);
-    if(!r.ok){const st=_estadoFirma(url);_pdfFallas.push("HTTP "+r.status+(st?" — "+st:""));return null;}
+    if(!r.ok){const st=_estadoFirma(url);_pdfFallas.push("HTTP "+r.status+(st?" — "+st:"")+" — "+_diagUrl(url));return null;}
     const b=await r.blob();
-    if(b.type&&b.type.indexOf("image/")!==0){_pdfFallas.push("no es imagen ("+b.type+")");return null;}
+    if(b.type&&b.type.indexOf("image/")!==0){_pdfFallas.push("no es imagen ("+b.type+") — "+_diagUrl(url));return null;}
     return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>{_pdfFallas.push("lectura fallida");res(null);};fr.readAsDataURL(b);});
-  }catch(e){const st=_estadoFirma(url);_pdfFallas.push("bloqueada"+(st?" — "+st:": "+((e&&e.message)||e)));return null;}
+  }catch(e){const st=_estadoFirma(url);
+    _pdfFallas.push("bloqueada ("+((e&&e.message)||e)+")"+(st?" — "+st:" — sin datos de firma")+" — "+_diagUrl(url));
+    return null;}
 }
 // jsPDF 2.5.1 no embebe WebP: convierte un dataURL WebP a JPEG para el PDF (otros formatos se dejan igual).
 async function _jpegDataURL(dataURL){
