@@ -277,8 +277,12 @@ async function pdfDeArea(area){
   // se ven en pantalla pero NO van al PDF, para que el PDF quede compacto y las únicas
   // fotos sean la EVIDENCIA de los puntos en mal estado (+ km y firma).
   clone.querySelectorAll(".no-print,.pdf-omit").forEach(n=>n.remove());
-  // Imágenes → dataURL (las que no se puedan, se omiten)
-  for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else img.remove();}
+  // Imágenes → dataURL. Si una NO se puede bajar (típicamente porque la URL firmada
+  // de la evidencia ya expiró) se cuenta y se AVISA en el PDF: antes se descartaba en
+  // silencio y el PDF salía sin fotos sin que nadie se enterara.
+  let omitidas=0;
+  for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else{omitidas++;img.remove();}}
+  if(omitidas)console.warn("PDF: "+omitidas+" imagen(es) no se pudieron incluir (¿URL de evidencia expirada?)");
   const logoData=await _logoData();
 
   const doc=new JS({unit:"mm",format:"a4"});
@@ -337,6 +341,10 @@ async function pdfDeArea(area){
     }
   };
   walk(clone);
+  // Aviso visible: si faltaron fotos, que quede constancia en el propio documento.
+  if(omitidas){y+=2;para("⚠️ "+omitidas+" fotografía(s) no se pudieron incluir: el enlace de la evidencia expiró. "
+    +"Recarga la app (o vuelve a abrir el registro) y descarga el PDF de nuevo.",{size:9,bold:true,color:[163,45,45]});}
+  doc._fotosOmitidas=omitidas;
   return doc;
 }
 
@@ -867,8 +875,9 @@ const MAL_VALORES=new Set(["No","Con raspaduras/golpes","Con Raspaduras/Golpes",
 // Ítems INFORMATIVOS: su "No" describe la configuración de la unidad, no un defecto.
 const MAL_IGNORAR=new Set(["pt_int","ct_int"]);
 // Foto(s) de evidencia asociadas a un punto (cuando no siguen el patrón "f_<id>").
-// carrocería: su evidencia son los daños capturados (damage_list "golpes").
-const FOTO_DE_ITEM={carroceria:[],espejos:["f_esp_p","f_esp_c"],luces_d:["f_luces_d","f_luces_t"],
+// carrocería: las 4 tomas del vehículo (además, cada daño capturado va con su foto).
+const FOTO_DE_ITEM={carroceria:["f_frente_d","f_frente_i","f_tras_d","f_tras_i"],
+  espejos:["f_esp_p","f_esp_c"],luces_d:["f_luces_d","f_luces_t"],
   refacc:["f_ref"],gato:["f_herr"],llave_cruz:["f_herr"],triangulo:["f_herr"],cables:["f_herr"]};
 const fotosDeItem=(item,a)=>(FOTO_DE_ITEM[item.id]||["f_"+item.id])
   .map(id=>a[id]).filter(x=>typeof x==="string"&&x);
@@ -953,7 +962,10 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
   const secs=(plantilla&&plantilla.secciones)||[];const st=reg.status||"Aprobado";
   // Igual que en reparto: los puntos en mal estado (con su foto) encabezan el detalle
   // y son las únicas fotos que viajan al PDF; las de rutina quedan .pdf-omit.
+  // RESPALDO: si hay hallazgos y ninguno trajo foto propia (los ids de foto de las
+  // plantillas vienen del Excel y no siguen convención), las de rutina SÍ van al PDF.
   const hall=hallazgosSecs(secs,reg);
+  const clsRutina=(hall.length&&!hall.some(h=>(h.fotos||[]).length))?"":"pdf-omit";
   return(
     <div className="pdf-area" data-pdftitle={reg.plantillaNombre||(plantilla&&plantilla.nombre)||"Formulario"} data-pdfsucursal={reg.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
@@ -970,9 +982,9 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
         const v=reg.answers?.[item.id];
         if(item.type==="opna"){if(v==null||v==="")return null;const foto=reg.answers?.[item.id+"__foto"],com=reg.answers?.[item.id+"__com"];return<div key={item.id} style={{marginBottom:8}}><div className="dr"><span style={{maxWidth:"70%"}}>{item.label}</span><span style={{fontWeight:700,color:v==="O"?C.green:v==="P"?C.red:"#888"}}>{v}</span></div>{v==="P"&&<div className="pdf-omit" style={{background:"#fafafa",borderRadius:6,padding:8,marginTop:4}}>{com&&<div style={{fontSize:12,marginBottom:4}}>{com}</div>}{foto&&<img src={foto} style={{width:"100%",borderRadius:6}} alt="problema"/>}</div>}</div>;}
         if(item.type==="escala"){if(v==null||v==="")return null;const o=(item.opts||[])[v]||{};const sev=o.sev||"ok";const nota=reg.answers?.[item.id+"__nota"];const efoto=reg.answers?.[item.id+"__foto"];return<div key={item.id} style={{marginBottom:6}}><div className="dr"><span style={{maxWidth:"60%"}}>{item.label}</span><span className={"bdg eb-"+sev}>{o.t||SEV_BADGE[sev]}</span></div>{nota&&<div style={{fontSize:11,color:"#888",marginTop:2}}>Nota: {nota}</div>}{efoto&&<img className="pdf-omit" src={efoto} style={{width:"100%",maxWidth:240,borderRadius:6,marginTop:4}} alt="evidencia del daño"/>}</div>;}
-        if(item.type==="fotos"){if(!v||!v.length)return null;return<div key={item.id} className="pdf-omit" style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><div className="fg">{v.map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/></div>)}</div></div>;}
+        if(item.type==="fotos"){if(!v||!v.length)return null;return<div key={item.id} className={clsRutina} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><div className="fg">{v.map((src,i)=><div key={i} className="ft"><img src={src} alt={"foto "+(i+1)}/></div>)}</div></div>;}
         if(v==null||v==="")return null;
-        if(item.type==="photo")return<div key={item.id} className="pdf-omit" style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
+        if(item.type==="photo")return<div key={item.id} className={clsRutina} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;
         if(item.type==="damage_list")return<div key={item.id} className="pdf-omit">{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;
         if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;
         return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{String(v)}</span></div>;
@@ -1735,15 +1747,17 @@ function CLDetail({cl,cat,rol,refrescar,showToast,onBack}){
   const secs=cl.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;
   // Puntos en mal estado con su evidencia fotográfica: se muestran arriba y son las
   // ÚNICAS fotos (junto con km y firma) que van al PDF. Las fotos de rutina quedan
-  // en pantalla marcadas .pdf-omit.
+  // en pantalla marcadas .pdf-omit. RESPALDO: si hay hallazgos pero ninguno trajo
+  // foto, las de rutina SÍ van al PDF para no dejar el hallazgo sin evidencia.
   const hall=hallazgosSecs(secs,cl);
+  const clsRutina=(hall.length&&!hall.some(h=>(h.fotos||[]).length))?"":"pdf-omit";
   return(
     <div className="pdf-area" data-pdftitle="Checklist de reparto" data-pdfsucursal={cl.sucursal||""}>
       <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><div style={{display:"flex",gap:4}}><span className="bdg dok">✓ Aprobado</span><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(cl)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       <CardHallazgos hall={hall}/>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
-      {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} className="pdf-omit" style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id} className="pdf-omit">{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
+      {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} className={clsRutina} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id} className="pdf-omit">{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
       {cl.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{cl.obs}</div></div>}
       {cl.firma&&<div className="card"><div className="ct">Firma</div><img src={cl.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{cl.responsable}</b></div></div>}
       <ReasignarUnidad tipoApi="CL" reg={cl} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>

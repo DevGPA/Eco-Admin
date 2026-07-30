@@ -41,7 +41,9 @@ Globals:
         ENV:                 !Ref Env
         EMAIL_LOGISTICA:     !Ref EmailLogistica
         EMAIL_RIESGOS:       !Ref EmailRiesgos
-        URL_FIRMADA_TTL:     '900'
+        # 1 h: con 15 min, al armar un PDF rato después de abrir el registro la URL de
+        # la evidencia ya había expirado y las fotos se caían de la descarga.
+        URL_FIRMADA_TTL:     '3600'
         USER_POOL_ID:        !Ref CognitoUserPool
         VENTANA_DIAS:        '45'   # ventana por defecto (días) de los listados
 
