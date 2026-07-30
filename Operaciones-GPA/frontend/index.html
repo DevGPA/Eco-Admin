@@ -250,17 +250,32 @@ const DOMICILIOS={
 // las imágenes de S3 a dataURL para evitar problemas de CORS al renderizar.
 // Motivos por los que una imagen no se pudo bajar (los junta pdfDeArea para avisar).
 let _pdfFallas=[];
+// Una URL firmada de S3 trae su fecha (X-Amz-Date) y su duración (X-Amz-Expires):
+// con eso se sabe con CERTEZA si ya estaba vencida al intentar bajarla. Es clave para
+// distinguir "el enlace venció" de "la descarga está bloqueada (permisos/CORS)", que
+// en el navegador producen el mismo error genérico "Failed to fetch".
+function _estadoFirma(url){
+  try{
+    const q=new URL(url,location.href).searchParams;
+    const d=q.get("X-Amz-Date"),ex=q.get("X-Amz-Expires");
+    if(!d||!ex)return "";                       // no es una URL firmada (p. ej. logo)
+    const t=Date.UTC(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),+d.slice(9,11),+d.slice(11,13),+d.slice(13,15));
+    const vence=t+(+ex)*1000,min=Math.round(Math.abs(Date.now()-vence)/60000);
+    return Date.now()>vence?("enlace VENCIDO hace "+min+" min, duraba "+Math.round(+ex/60)+" min")
+                           :("enlace VIGENTE aún "+min+" min → lo bloquearon los permisos (CORS), no el tiempo");
+  }catch(e){return "";}
+}
 // Convierte una URL (S3/local) a dataURL; null si falla, anotando el MOTIVO.
 // Distingue los dos casos reales: enlace vencido (403 de S3) vs bloqueado/sin red.
 // Antes, un 403 devolvía el XML de error y se incrustaba como si fuera una imagen.
 async function _aDataURL(url){
   try{
     const r=await fetch(url);
-    if(!r.ok){_pdfFallas.push("HTTP "+r.status);return null;}
+    if(!r.ok){const st=_estadoFirma(url);_pdfFallas.push("HTTP "+r.status+(st?" — "+st:""));return null;}
     const b=await r.blob();
     if(b.type&&b.type.indexOf("image/")!==0){_pdfFallas.push("no es imagen ("+b.type+")");return null;}
     return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>{_pdfFallas.push("lectura fallida");res(null);};fr.readAsDataURL(b);});
-  }catch(e){_pdfFallas.push("bloqueada: "+((e&&e.message)||e));return null;}
+  }catch(e){const st=_estadoFirma(url);_pdfFallas.push("bloqueada"+(st?" — "+st:": "+((e&&e.message)||e)));return null;}
 }
 // jsPDF 2.5.1 no embebe WebP: convierte un dataURL WebP a JPEG para el PDF (otros formatos se dejan igual).
 async function _jpegDataURL(dataURL){
@@ -354,10 +369,10 @@ async function pdfDeArea(area){
   // Aviso visible: si faltaron fotos, que quede constancia en el propio documento,
   // con el MOTIVO técnico para poder corregir la causa (no solo "expiró").
   if(omitidas){y+=2;
-    const exp=/HTTP 40[13]/.test(motivos);
+    const venc=/VENCIDO|HTTP 40[13]/.test(motivos);
     para("⚠️ "+omitidas+" fotografía(s) no se pudieron incluir."
-      +(exp?" El enlace de la evidencia ya venció: recarga la app (o vuelve a abrir el registro) y descarga el PDF de nuevo."
-           :" La descarga de la imagen fue bloqueada; repórtalo a soporte con este texto.")
+      +(venc?" El enlace de la evidencia ya había vencido: recarga la app (o vuelve a abrir el registro) y descarga el PDF de nuevo."
+            :" La descarga fue bloqueada aunque el enlace estaba vigente: es un permiso del almacén de evidencias. Repórtalo con este texto.")
       ,{size:9,bold:true,color:[163,45,45]});
     para("Detalle técnico: "+motivos,{size:8,color:[140,140,140]});}
   doc._fotosOmitidas=omitidas;
