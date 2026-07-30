@@ -267,13 +267,41 @@ function _diagUrl(url){
 function _estadoFirma(url){
   try{
     const q=new URL(url,location.href).searchParams;
+    let vence=null,dur=null;
     const d=q.get("X-Amz-Date"),ex=q.get("X-Amz-Expires");
-    if(!d||!ex)return "";                       // no es una URL firmada (p. ej. logo)
-    const t=Date.UTC(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),+d.slice(9,11),+d.slice(11,13),+d.slice(13,15));
-    const vence=t+(+ex)*1000,min=Math.round(Math.abs(Date.now()-vence)/60000);
-    return Date.now()>vence?("enlace VENCIDO hace "+min+" min, duraba "+Math.round(+ex/60)+" min")
-                           :("enlace VIGENTE aún "+min+" min → lo bloquearon los permisos (CORS), no el tiempo");
+    if(d&&ex){                                  // firma moderna (SigV4): fecha + duración
+      const t=Date.UTC(+d.slice(0,4),+d.slice(4,6)-1,+d.slice(6,8),+d.slice(9,11),+d.slice(11,13),+d.slice(13,15));
+      vence=t+(+ex)*1000;dur=+ex;
+    }else if(q.get("Expires")){                 // firma clásica (SigV2): vencimiento absoluto
+      vence=(+q.get("Expires"))*1000;
+    }
+    if(!vence)return "";                        // no es una URL firmada (p. ej. logo)
+    const min=Math.round(Math.abs(Date.now()-vence)/60000);
+    return Date.now()>vence
+      ?("enlace VENCIDO hace "+min+" min"+(dur?", duraba "+Math.round(dur/60)+" min":""))
+      :("enlace VIGENTE aún "+min+" min → no fue el tiempo, revisar permisos");
   }catch(e){return "";}
+}
+// Junta las URLs de evidencia de un registro indexadas por la RUTA del objeto, para
+// poder sustituir un enlace vencido por otro recién firmado (la ruta no cambia).
+function _mapaUrls(obj,acc){
+  acc=acc||{};
+  if(typeof obj==="string"){if(/^https?:\/\//.test(obj)){try{acc[new URL(obj).pathname]=obj;}catch(e){}}return acc;}
+  if(Array.isArray(obj)){obj.forEach(v=>_mapaUrls(v,acc));return acc;}
+  if(obj&&typeof obj==="object"){Object.values(obj).forEach(v=>_mapaUrls(v,acc));return acc;}
+  return acc;
+}
+// Vuelve a pedir el registro al servidor (solo su día) para obtener enlaces de evidencia
+// RECIÉN firmados. Así el PDF sale con fotos aunque el registro se haya abierto hace
+// rato o sea de hace años: es el arreglo de fondo al "no salen las fotos en el PDF".
+async function urlsFrescas(tipo,reg,plantillaClave){
+  try{
+    if(!reg||!reg.fecha||!reg.id)return null;
+    const d=ymd(reg.fecha),r={desde:d,hasta:d};
+    const lista=plantillaClave?await api.listarFormulario(plantillaClave,r):await api.listar(tipo,r);
+    const fresco=(lista||[]).find(x=>String(x.id)===String(reg.id));
+    return fresco?_mapaUrls(fresco):null;
+  }catch(e){return null;}
 }
 // Convierte una URL (S3/local) a dataURL; null si falla, anotando el MOTIVO.
 // Distingue los dos casos reales: enlace vencido (403 de S3) vs bloqueado/sin red.
@@ -301,7 +329,7 @@ async function _logoData(){ if(_logoCache===undefined)_logoCache=await _aDataURL
 // Construye el PDF corporativo a partir de un elemento .pdf-area y DEVUELVE el doc
 // jsPDF (sin guardarlo). Reutilizable para descarga individual y masiva (ZIP).
 // NO usa html2canvas → funciona en iPhone/Android/PC.
-async function pdfDeArea(area){
+async function pdfDeArea(area,frescas){
   if(!area)return null;
   const JS=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;
   if(!JS)return null;
@@ -317,7 +345,10 @@ async function pdfDeArea(area){
   // de la evidencia ya expiró) se cuenta y se AVISA en el PDF: antes se descartaba en
   // silencio y el PDF salía sin fotos sin que nadie se enterara.
   let omitidas=0;_pdfFallas=[];
-  for(const img of [...clone.querySelectorAll("img")]){const s=img.getAttribute("src");let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else{omitidas++;img.remove();}}
+  for(const img of [...clone.querySelectorAll("img")]){let s=img.getAttribute("src");
+    // Si hay enlaces recién firmados, se usa el de esta misma ruta (el vencido falla).
+    if(frescas&&s&&s.indexOf("data:")!==0){try{const pth=new URL(s,location.href).pathname;if(frescas[pth])s=frescas[pth];}catch(e){}}
+    let d=(s&&s.indexOf("data:")===0)?s:await _aDataURL(s);d=await _jpegDataURL(d);if(d)img.setAttribute("src",d);else{omitidas++;img.remove();}}
   const motivos=[...new Set(_pdfFallas)].join("; ");
   if(omitidas)console.warn("PDF: "+omitidas+" imagen(es) omitidas. Motivos: "+motivos);
   const logoData=await _logoData();
@@ -392,10 +423,10 @@ async function pdfDeArea(area){
 }
 
 // Descarga individual: genera el PDF del detalle en pantalla y lo guarda.
-async function descargarPDFCorp(){
+async function descargarPDFCorp(frescas){
   const area=document.querySelector(".pdf-area");
   if(!area)return;
-  const doc=await pdfDeArea(area);
+  const doc=await pdfDeArea(area,frescas);
   if(!doc){window.print();return;}
   const titulo=area.dataset.pdftitle||"Formato GPA";
   const fname=titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10)+".pdf";
@@ -1010,6 +1041,16 @@ function csvDetalle(){
   csvDownload(titulo.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+new Date().toISOString().slice(0,10),["Sección","Campo","Valor"],filas);
 }
 
+// Botón de PDF que primero renueva los enlaces de evidencia: así el documento nunca
+// sale sin fotos por un enlace vencido, sin importar cuándo se abrió el registro.
+function BotonPDF({tipo,reg,plantillaClave}){
+  const[busy,setBusy]=useState(false);
+  const bajar=async()=>{if(busy)return;setBusy(true);
+    try{const f=await urlsFrescas(tipo,reg,plantillaClave);await descargarPDFCorp(f);}
+    finally{setBusy(false);}};
+  return <button className="bs" disabled={busy} onClick={bajar}>{busy?"Generando…":"⬇ PDF"}</button>;
+}
+
 // Detalle de un registro dinámico (con PDF corporativo y, si aplica, autorización)
 function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy}){
   const secs=(plantilla&&plantilla.secciones)||[];const st=reg.status||"Aprobado";
@@ -1021,7 +1062,7 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
   const clsRutina=(hall.length&&!hall.some(h=>(h.fotos||[]).length))?"":"pdf-omit";
   return(
     <div className="pdf-area" data-pdftitle={reg.plantillaNombre||(plantilla&&plantilla.nombre)||"Formulario"} data-pdfsucursal={reg.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><BotonPDF reg={reg} plantillaClave={reg.plantillaClave||(plantilla&&plantilla.clave)}/><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{reg.plantillaNombre||(plantilla&&plantilla.nombre)}</div><span className={"bdg "+bcMC(st)}>{st}</span></div>
         <div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(reg)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(reg.fecha)}</span></div>
         <div className="dr"><span>Sucursal</span><span>{reg.sucursal}</span></div>
@@ -1583,7 +1624,7 @@ function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
   const mapImg=u?`https://staticmap.openstreetmap.de/staticmap.php?center=${u.lat},${u.lng}&zoom=15&size=260x120&markers=${u.lat},${u.lng},red-pushpin`:null;
   return(
     <div className="pdf-area" data-pdftitle={esRep?"Reporte de carga de combustible":"Solicitud de combustible"} data-pdfsucursal={sol.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><BotonPDF tipo="combustible" reg={sol}/><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       {esRep?<>
         <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Generales del Vehículo</div><span className={"bdg "+bcSol(sol.status)}>{sol.status}</span></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(sol)}</span></div>{sol.folioSolicitud&&<div className="dr"><span>Folio solicitud</span><span style={{fontWeight:700,color:C.blue}}>{sol.folioSolicitud}</span></div>}<div className="dr"><span>Fecha</span><span>{fdt(sol.fecha)}</span></div><div className="dr"><span># Económico</span><span>{sol.economico}</span></div><div className="dr"><span>Placas</span><span>{sol.placas}</span></div><div className="dr"><span>Sub-marca</span><span>{sol.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{sol.sucursal}</span></div><div className="dr"><span>Tanque</span><span>{sol.tanque} L</span></div><div className="dr"><span>Responsable (área)</span><span>{sol.areaResponsable}</span></div><div className="dr"><span>Combustible</span><span>{sol.combustible}</span></div><div className="dr"><span>Precio catálogo</span><span>${sol.precio?.toFixed(2)}</span></div><div className="dr"><span>Producto</span><span>{sol.producto}</span></div></div>
         <div className="card"><div className="ct">Datos de la carga</div><div className="dr"><span>Kilometraje</span><span>{sol.km?.toLocaleString()} km</span></div><div className="dr"><span>¿Se llenó el tanque?</span><span>{sol.lleno}</span></div>{sol.fotoAntes&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto km y medidor antes de cargar</div><img src={sol.fotoAntes} style={{width:"100%",borderRadius:8}} alt="antes"/></div>}{sol.fotoDespues&&<div style={{marginTop:6}}><div style={{fontSize:11,color:"#888"}}>Foto del medidor al finalizar</div><img src={sol.fotoDespues} style={{width:"100%",borderRadius:8}} alt="despues"/></div>}</div>
@@ -1807,7 +1848,7 @@ function CLDetail({cl,cat,rol,refrescar,showToast,onBack}){
   const clsRutina=(hall.length&&!hall.some(h=>(h.fotos||[]).length))?"":"pdf-omit";
   return(
     <div className="pdf-area" data-pdftitle="Checklist de reparto" data-pdfsucursal={cl.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><BotonPDF tipo="checklist" reg={cl}/><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</div><div style={{display:"flex",gap:4}}><span className="bdg dok">✓ Aprobado</span><span className={"bdg "+(cl.tipo==="semanal"?"dpe":"dok")}>{cl.tipo==="semanal"?"Semanal":"Mensual"}</span></div></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(cl)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(cl.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{cl.placas} · {cl.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{cl.sucursal}</span></div><div className="dr"><span>Responsable</span><span>{cl.responsable}</span></div><div className="dr"><span>Km</span><span>{cl.km?.toLocaleString()}</span></div></div>
       <CardHallazgos hall={hall}/>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
@@ -1988,7 +2029,7 @@ function MCDetail({rec,canAuth,cat,rol,refrescar,showToast,onBack}){
   const auth=async ok=>{setBusy(true);try{await api.cambiarEstado("montacargas",rec.id,ok?"Aprobado":"Rechazado");showToast(ok?"✓ Checklist aprobado":"✗ Checklist rechazado");await refrescar();onBack();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   return(
     <div className="pdf-area" data-pdftitle="Checklist de montacargas" data-pdfsucursal={rec.sucursal||""}>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><button className="bs" onClick={descargarPDFCorp}>⬇ PDF</button><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><BotonPDF tipo="montacargas" reg={rec}/><button className="bs" onClick={csvDetalle}>⬇ CSV</button></div>
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(rec)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4,lineHeight:1.4}}>#{parseInt(i)+1} — {items[parseInt(i)]}</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"82%",lineHeight:1.4}}>#{i+1} {item}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
