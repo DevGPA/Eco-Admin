@@ -423,6 +423,13 @@ const ymd=f=>{if(!f)return"";const d=new Date(new Date(f).getTime()-MX_MS);retur
 // VENTANA_DIAS la actualiza App.cargarTodo() con cat.config.ventanaDias.
 let VENTANA_DIAS=45;
 const ventanaInicio=()=>ymd(new Date(Date.now()-VENTANA_DIAS*86400000));
+// ¿El rango que pide el usuario SE SALE de la ventana cargada? Entonces hay que ir al
+// archivo del servidor. Cubre los dos casos: "Desde" más viejo que la ventana Y el
+// caso de SOLO "Hasta" (sin Desde), que antes no consultaba nada y devolvía vacío.
+const fueraDeVentana=(desde,hasta)=>(!!desde&&desde<ventanaInicio())||(!desde&&!!hasta);
+// Parámetros para pedir ese rango: sin "desde" el servidor aplicaría su ventana por
+// defecto, así que en ese caso se pide todo el historial hasta la fecha indicada.
+const rangoArchivo=(desde,hasta)=>({desde:desde||undefined,hasta:hasta||undefined,todo:!desde});
 // Los formularios dinámicos pueden ser hasta ANUALES; el tablero de período
 // vigente necesita todo el período. Son de BAJO volumen, así que se cargan con un
 // rango amplio (cubre el período anual). Combustible/reparto/montacargas usan la
@@ -464,6 +471,9 @@ function FiltroFechas({desde,hasta,setDesde,setHasta,onCSV,n,unidades,unidad,set
   return(<div className="card" style={{padding:"10px 12px"}}>
     {unidades&&unidades.length>0&&<><label>Unidad</label><select value={unidad||""} onChange={e=>setUnidad(e.target.value)} style={{marginBottom:8}}><option value="">Todas las unidades ({unidades.length})</option>{unidades.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}</select></>}
     <div className="r2"><div><label>Desde</label><input type="date" value={desde} onChange={e=>setDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={hasta} onChange={e=>setHasta(e.target.value)}/></div></div>
+    {/* La app abre con una ventana de días; sin este aviso, quien consulte algo viejo
+        creería que "no hay registros" en vez de saber que debe indicar la fecha. */}
+    {!desde&&!hasta&&<div style={{fontSize:11,color:"#888",marginTop:6,lineHeight:1.45}}>📅 Se muestran los últimos <b>{VENTANA_DIAS} días</b>. Para consultar registros más antiguos, indica una fecha en <b>Desde</b> (o en Hasta) y se traen del archivo.</div>}
     <button className="bs" style={{width:"100%",marginTop:8}} disabled={!n} onClick={onCSV}>⬇ Descargar CSV ({n})</button>
   </div>);
 }
@@ -1017,7 +1027,7 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
 function FormHistory({plantilla,items,loading,onSelect}){
   const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[zip,setZip]=useState(null);
   const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
-  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listarFormulario(plantilla.clave,{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta,plantilla.clave]);
+  useEffect(()=>{let vivo=true;if(fueraDeVentana(rDesde,rHasta)){setExtBusy(true);api.listarFormulario(plantilla.clave,rangoArchivo(rDesde,rHasta)).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta,plantilla.clave]);
   const src=ext||items||[];
   const list=src.filter(r=>(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV = TABLA DE RESULTADOS: una fila por registro y una columna por punto del formulario.
@@ -1077,7 +1087,7 @@ async function zipPdfsModulo(nombreZip,grupos,onProg){
 // Pestaña de un módulo (integrado «seguridad» o dinámico): lista sus plantillas
 function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,showToast}){
   const[mDesde,setMDesde]=useState("");const[mHasta,setMHasta]=useState("");const[mProg,setMProg]=useState(null);
-  const cargarModuloRegs=async()=>Promise.all((plantillas||[]).map(p=>api.listarFormulario(p.clave).then(rs=>({plantilla:p,registros:(rs||[]).filter(r=>(!mDesde||ymd(r.fecha)>=mDesde)&&(!mHasta||ymd(r.fecha)<=mHasta))})).catch(()=>({plantilla:p,registros:[]}))));
+  const cargarModuloRegs=async()=>Promise.all((plantillas||[]).map(p=>api.listarFormulario(p.clave,fueraDeVentana(mDesde,mHasta)?rangoArchivo(mDesde,mHasta):undefined).then(rs=>({plantilla:p,registros:(rs||[]).filter(r=>(!mDesde||ymd(r.fecha)>=mDesde)&&(!mHasta||ymd(r.fecha)<=mHasta))})).catch(()=>({plantilla:p,registros:[]}))));
   const sufMod=()=>modLabel.replace(/[^a-zA-Z0-9]+/g,"_")+"_"+(mDesde||"inicio")+"_a_"+(mHasta||"hoy");
   const descargarCSVMod=async()=>{if(mProg)return;setMProg({t:"csv"});try{const gs=await cargarModuloRegs();const n=gs.reduce((a,g)=>a+g.registros.length,0);if(!n)showToast("No hay registros en el rango");else{csvModulo(sufMod(),gs);showToast("✓ CSV listo ("+n+" registros)");}}catch(e){showToast("⚠️ "+e.message);}setMProg(null);};
   const descargarZIPMod=async()=>{if(mProg)return;setMProg({t:"zip",i:0,total:0});try{const gs=await cargarModuloRegs();const n=gs.reduce((a,g)=>a+g.registros.length,0);if(!n){showToast("No hay registros en el rango");setMProg(null);return;}await zipPdfsModulo(sufMod(),gs,(i,total)=>setMProg({t:"zip",i,total}));showToast("✓ ZIP listo");}catch(e){showToast("⚠️ "+e.message);}setMProg(null);};
@@ -1105,6 +1115,7 @@ function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>{modLabel}</div>
       {(plantillas&&plantillas.length>0)&&<div className="card"><div className="ct">⬇ Descargar historial del módulo</div>
         <div className="r2"><div><label>Desde</label><input type="date" value={mDesde} onChange={e=>setMDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={mHasta} onChange={e=>setMHasta(e.target.value)}/></div></div>
+        {!mDesde&&!mHasta&&<div style={{fontSize:11,color:"#888",marginTop:6}}>📅 Sin fechas se descargan los últimos <b>{VENTANA_DIAS} días</b>. Indica un rango para traer el archivo histórico.</div>}
         <div style={{display:"flex",gap:8,marginTop:8}}>
           <button className="bs" style={{flex:1}} disabled={!!mProg} onClick={descargarCSVMod}>{mProg&&mProg.t==="csv"?"Generando…":"CSV de todos"}</button>
           <button className="bs" style={{flex:1}} disabled={!!mProg} onClick={descargarZIPMod}>{mProg&&mProg.t==="zip"?`PDFs… ${mProg.i}/${mProg.total}`:"Todos en PDF (ZIP)"}</button>
@@ -1402,7 +1413,7 @@ function SolHistory({items,rol,onSelect}){
   // Archivo histórico bajo demanda: si el filtro pide fechas más viejas que la
   // ventana por defecto del servidor, se consulta ese rango al backend.
   const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
-  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("combustible",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
+  useEffect(()=>{let vivo=true;if(fueraDeVentana(rDesde,rHasta)){setExtBusy(true);api.listar("combustible",rangoArchivo(rDesde,rHasta)).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
   const src=ext||items;
   const list=src.filter(s=>(f==="Todos"||s.status===f)&&(!fUni||String(s.vehicleId)===fUni)&&(!rDesde||ymd(s.fecha)>=rDesde)&&(!rHasta||ymd(s.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV COMPLETO: todos los datos capturados en solicitud y reporte (fotos/firma como conteo/Sí-No).
@@ -1737,7 +1748,7 @@ function DmgList({value,onChange}){
 function CLHistory({items,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
   const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
-  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("checklist",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
+  useEffect(()=>{let vivo=true;if(fueraDeVentana(rDesde,rHasta)){setExtBusy(true);api.listar("checklist",rangoArchivo(rDesde,rHasta)).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
   const src=ext||items;
   const list=src.filter(c=>(f==="Todos"||c.tipo===f)&&(!fUni||String(c.vehicleId)===fUni)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto revisado.
@@ -1921,7 +1932,7 @@ const mcProblemas=r=>{const its=r.tipo==="gas"?ITEMS_GAS:ITEMS_ELEC;const out=[]
 function MCHistory({items,onSelect}){
   const[f,setF]=useState("Todos");const[rDesde,setRDesde]=useState("");const[rHasta,setRHasta]=useState("");const[fUni,setFUni]=useState("");
   const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
-  useEffect(()=>{let vivo=true;if(rDesde&&rDesde<ventanaInicio()){setExtBusy(true);api.listar("montacargas",{desde:rDesde,hasta:rHasta||undefined}).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
+  useEffect(()=>{let vivo=true;if(fueraDeVentana(rDesde,rHasta)){setExtBusy(true);api.listar("montacargas",rangoArchivo(rDesde,rHasta)).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[rDesde,rHasta]);
   const src=ext||items;
   const list=src.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!fUni||String(r.vehicleId)===fUni)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto (O/P/N-A).
@@ -2167,11 +2178,11 @@ function ModAdmin({cat,refrescarCat,showToast}){
   // ventana por defecto, se consulta ese rango al servidor (repExt).
   const[repExt,setRepExt]=useState(null);const[repExtBusy,setRepExtBusy]=useState(false);
   useEffect(()=>{let vivo=true;
-    const viejoDia=rModo==="dia"&&rDia&&rDia<ventanaInicio();
-    const viejoRango=rModo==="rango"&&rDesde&&rDesde<ventanaInicio();
+    const viejoDia=rModo==="dia"&&rDia&&fueraDeVentana(rDia,rDia);
+    const viejoRango=rModo==="rango"&&fueraDeVentana(rDesde,rHasta);
     if(sec==="reportes"&&(viejoDia||viejoRango)){
       setRepExtBusy(true);
-      const r=rModo==="dia"?{desde:rDia,hasta:rDia}:{desde:rDesde,hasta:rHasta||undefined};
+      const r=rModo==="dia"?rangoArchivo(rDia,rDia):rangoArchivo(rDesde,rHasta);
       api.listar("combustible",r).then(x=>{if(vivo)setRepExt(x);}).catch(()=>{if(vivo)setRepExt(null);}).finally(()=>{if(vivo)setRepExtBusy(false);});
     }else{setRepExt(null);setRepExtBusy(false);}
     return()=>{vivo=false;};
@@ -2362,6 +2373,8 @@ function ModAdmin({cat,refrescarCat,showToast}){
             ? <><label>Día</label><input type="date" value={rDia} onChange={e=>setRDia(e.target.value)}/></>
             : <div className="r2"><div><label>Desde</label><input type="date" value={rDesde} onChange={e=>setRDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={rHasta} onChange={e=>setRHasta(e.target.value)}/></div></div>}
           <label>Estado de aprobación</label><select value={rEstado} onChange={e=>setREstado(e.target.value)}>{["Todos","Pendiente","Por corregir","Aprobada","Rechazada","Anulado"].map(x=><option key={x}>{x}</option>)}</select>
+          {rModo==="dia"&&!rDia&&<div style={{fontSize:11,color:"#888",marginTop:6}}>📅 Sin fecha se consideran los últimos <b>{VENTANA_DIAS} días</b>; elige un día para traerlo del archivo.</div>}
+          {rModo==="rango"&&!rDesde&&!rHasta&&<div style={{fontSize:11,color:"#888",marginTop:6}}>📅 Sin fechas se consideran los últimos <b>{VENTANA_DIAS} días</b>; indica un rango para traer el archivo histórico.</div>}
           {repExtBusy&&<div className="empty">Consultando archivo histórico…</div>}
           {repExt&&!repExtBusy&&<div style={{fontSize:11,color:"#888",marginTop:6}}>📚 Archivo histórico del servidor ({repExt.length} registros del rango)</div>}
           <div className="cb" style={{marginTop:10}}><div className="cr"><span>Cargas</span><span>{repFiltrado.length}</span></div><div className="cr"><span>Litros totales</span><span>{repLitros.toLocaleString()} L</span></div><div className="cr" style={{borderTop:`1px solid ${C.blueMd}`,marginTop:6,paddingTop:6,fontSize:15}}><span>Monto total</span><span>${repMonto.toLocaleString()}</span></div></div>
@@ -2698,10 +2711,10 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
   // (sin rango) usa `data`/`formData` de la ventana, sin ir al servidor.
   const[extData,setExtData]=useState(null);const[extBusy,setExtBusy]=useState(false);
   useEffect(()=>{let vivo=true;
-    if(desde&&desde<ventanaInicio()){
+    if(fueraDeVentana(desde,hasta)){
       setExtBusy(true);
       (async()=>{
-        const r={desde,hasta:hasta||undefined};
+        const r=rangoArchivo(desde,hasta);
         const[comb,chk,mc]=await Promise.all([
           api.listar("combustible",r).catch(()=>[]),
           api.listar("checklist",r).catch(()=>[]),
