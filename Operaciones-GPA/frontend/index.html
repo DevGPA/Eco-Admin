@@ -308,7 +308,15 @@ async function urlsFrescas(tipo,reg,plantillaClave){
 // Antes, un 403 devolvía el XML de error y se incrustaba como si fuera una imagen.
 async function _aDataURL(url){
   try{
-    const r=await fetch(url);
+    // cache:"reload" es CLAVE, no una optimización: cuando la foto ya se mostró con una
+    // etiqueta <img>, el navegador guardó esa respuesta SIN encabezados CORS (la etiqueta
+    // no los pide). Un fetch posterior de la MISMA URL se sirve de esa copia, no
+    // encuentra los encabezados y falla con el genérico "Failed to fetch" aunque el
+    // enlace sea válido y el bucket tenga el CORS correcto. Forzar la red hace que S3
+    // vuelva a responder, ahora con los encabezados que el fetch necesita.
+    let r;
+    try{r=await fetch(url,{cache:"reload"});}
+    catch(e0){r=await fetch(url);}      // navegador que no soporte la opción
     if(!r.ok){const st=_estadoFirma(url);_pdfFallas.push("HTTP "+r.status+(st?" — "+st:"")+" — "+_diagUrl(url));return null;}
     const b=await r.blob();
     if(b.type&&b.type.indexOf("image/")!==0){_pdfFallas.push("no es imagen ("+b.type+") — "+_diagUrl(url));return null;}
