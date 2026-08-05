@@ -227,7 +227,7 @@ const readFile=(e,cb)=>{
       let w=img.width,h=img.height;
       if(w>=h&&w>IMG_MAX){h=Math.round(h*IMG_MAX/w);w=IMG_MAX;}
       else if(h>w&&h>IMG_MAX){w=Math.round(w*IMG_MAX/h);h=IMG_MAX;}
-      try{const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL(soportaWebp()?"image/webp":"image/jpeg",IMG_Q));}
+      try{const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);abrirRecorte(c.toDataURL(soportaWebp()?"image/webp":"image/jpeg",IMG_Q),cb);}
       catch{cb(src);}
     };
     img.onerror=()=>cb(src);
@@ -235,6 +235,76 @@ const readFile=(e,cb)=>{
   };
   r.readAsDataURL(f);
 };
+
+// ── Recorte de foto: tras capturar, el usuario deja solo lo necesario. ─────────
+// Overlay imperativo (sin librerías): imagen ajustada + recuadro arrastrable con
+// 4 esquinas (eventos pointer = táctil y ratón). «Recortar» corta del dataURL ya
+// comprimido; «Foto completa» usa la original; «Cancelar» descarta la captura.
+// Se engancha en readFile, así que aplica a TODAS las fotos de la app.
+function abrirRecorte(dataURL,cb){
+  const img=new Image();
+  img.onerror=()=>cb(dataURL);
+  img.onload=()=>{
+    const W0=img.width,H0=img.height;
+    const availW=Math.min(window.innerWidth-24,600),availH=Math.max(window.innerHeight-180,120);
+    const esc=Math.min(availW/W0,availH/H0,1);
+    const W=Math.max(1,Math.round(W0*esc)),H=Math.max(1,Math.round(H0*esc));
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none;padding:12px";
+    ov.innerHTML='<div style="color:#fff;font-size:13px;font-weight:600;margin-bottom:8px">Arrastra el recuadro para dejar solo lo necesario</div>'
+      +'<div id="rc-wrap" style="position:relative;overflow:hidden;border-radius:8px;width:'+W+'px;height:'+H+'px">'
+      +'<img src="'+dataURL+'" style="width:100%;height:100%;display:block;-webkit-user-drag:none" draggable="false"/>'
+      +'<div id="rc-rect" style="position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move"></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:12px;width:100%;max-width:'+Math.max(W,300)+'px">'
+      +'<button id="rc-x" style="flex:1;padding:11px 6px;border-radius:9px;border:1px solid #777;background:transparent;color:#ddd;font-size:13px">Cancelar</button>'
+      +'<button id="rc-full" style="flex:1;padding:11px 6px;border-radius:9px;border:1px solid #aaa;background:#fff;color:#333;font-size:13px">Foto completa</button>'
+      +'<button id="rc-ok" style="flex:1.2;padding:11px 6px;border-radius:9px;border:none;background:#185FA5;color:#fff;font-weight:700;font-size:13px">✓ Recortar</button>'
+      +'</div>';
+    document.body.appendChild(ov);
+    const rect=ov.querySelector("#rc-rect"),wrap=ov.querySelector("#rc-wrap");
+    ["nw","ne","sw","se"].forEach(hn=>{const h=document.createElement("div");h.dataset.h=hn;
+      h.style.cssText="position:absolute;width:32px;height:32px;"+(hn[0]==="n"?"top:-16px;":"bottom:-16px;")+(hn[1]==="w"?"left:-16px;":"right:-16px;")+"touch-action:none";
+      const dot=document.createElement("div");dot.style.cssText="position:absolute;inset:9px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5)";
+      h.appendChild(dot);rect.appendChild(h);});
+    let r={x:Math.round(W*0.07),y:Math.round(H*0.07),w:Math.round(W*0.86),h:Math.round(H*0.86)};
+    const MIN=48;
+    const pinta=()=>{rect.style.left=r.x+"px";rect.style.top=r.y+"px";rect.style.width=r.w+"px";rect.style.height=r.h+"px";};
+    pinta();
+    let drag=null;
+    const pos=ev=>{const b=wrap.getBoundingClientRect();return{x:ev.clientX-b.left,y:ev.clientY-b.top};};
+    ov.addEventListener("pointerdown",ev=>{
+      const t=ev.target;
+      const hn=(t.dataset&&t.dataset.h)||(t.parentElement&&t.parentElement.dataset&&t.parentElement.dataset.h);
+      if(hn){drag={m:"r",hn,p0:pos(ev),r0:{...r}};ev.preventDefault();}
+      else if(t===rect){drag={m:"m",p0:pos(ev),r0:{...r}};ev.preventDefault();}
+    });
+    ov.addEventListener("pointermove",ev=>{
+      if(!drag)return;ev.preventDefault();
+      const p=pos(ev),dx=p.x-drag.p0.x,dy=p.y-drag.p0.y,o=drag.r0;
+      if(drag.m==="m"){r.x=Math.min(Math.max(0,o.x+dx),W-o.w);r.y=Math.min(Math.max(0,o.y+dy),H-o.h);}
+      else{let x1=o.x,y1=o.y,x2=o.x+o.w,y2=o.y+o.h;
+        if(drag.hn[1]==="w")x1=Math.min(Math.max(0,o.x+dx),x2-MIN);else x2=Math.max(Math.min(W,o.x+o.w+dx),x1+MIN);
+        if(drag.hn[0]==="n")y1=Math.min(Math.max(0,o.y+dy),y2-MIN);else y2=Math.max(Math.min(H,o.y+o.h+dy),y1+MIN);
+        r={x:x1,y:y1,w:x2-x1,h:y2-y1};}
+      pinta();
+    });
+    const fin=()=>{drag=null;};
+    ov.addEventListener("pointerup",fin);ov.addEventListener("pointercancel",fin);
+    const cierra=()=>{try{document.body.removeChild(ov);}catch(e){}};
+    ov.querySelector("#rc-x").onclick=()=>cierra();
+    ov.querySelector("#rc-full").onclick=()=>{cierra();cb(dataURL);};
+    ov.querySelector("#rc-ok").onclick=()=>{
+      try{
+        const sx=Math.round(r.x/esc),sy=Math.round(r.y/esc),sw=Math.max(1,Math.round(r.w/esc)),sh=Math.max(1,Math.round(r.h/esc));
+        const c=document.createElement("canvas");c.width=sw;c.height=sh;
+        c.getContext("2d").drawImage(img,sx,sy,sw,sh,0,0,sw,sh);
+        cierra();cb(c.toDataURL(soportaWebp()?"image/webp":"image/jpeg",0.8));
+      }catch(e){cierra();cb(dataURL);}
+    };
+  };
+  img.src=dataURL;
+}
 
 // Domicilios por sucursal (se imprimen en el encabezado del PDF según corresponda)
 const DOMICILIOS={
