@@ -1922,17 +1922,17 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
   const setR=(i,v)=>setResps(r=>({...r,[i]:v}));const setF=(i,v)=>setFotos(f=>({...f,[i]:v}));const setC=(i,v)=>setComents(c=>({...c,[i]:v}));
   const probs=Object.entries(resps).filter(([,v])=>v==="P");
   const todosResp=items.every((_,i)=>resps[i]);  // todas las preguntas O/P/N/A respondidas
-  const canSubmit=!!(eq&&sig&&!horasBloq&&(estatus!=="Activo"||(todosResp&&probs.every(([i])=>fotos[i]&&coments[i]))));
+  const canSubmit=!!(eq&&sig&&parseFloat(horas)>0&&!horasBloq&&(estatus!=="Activo"||(todosResp&&probs.every(([i])=>fotos[i]&&coments[i]))));
   const submit=async()=>{
     if(busy)return;
     if(estatus==="Activo"&&!todosResp){
       const i=items.findIndex((_,k)=>!resps[k]);setMarcar(true);setStep(Math.floor(i/CHUNK)+1);
       return showToast("⚠️ Faltan puntos por responder en el chequeo. Complétalos para enviar.");
     }
-    if(!canSubmit)return showToast("⚠️ Faltan datos (revisa equipo, firma y fotos de los problemas).");
+    if(!canSubmit)return showToast("⚠️ Faltan datos (revisa equipo, horas de trabajo, firma y fotos de los problemas).");
     setBusy(true);
     try{
-      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas)||0,resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático",...(puedeForzar&&forzarHoras&&horasErr?{forzar:true}:{})};
+      const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas),resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático",...(puedeForzar&&forzarHoras&&horasErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("montacargas",datos);
       await api.crear("montacargas",subido);
       showToast("✓ Checklist enviado");await refrescar();onDone();
@@ -1950,14 +1950,14 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
           {vehicle&&<div style={{marginTop:6,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Tipo</span><span>{vehicle.combustible}</span></div></div>}
           <label>Estatus del equipo</label><select value={estatus} onChange={e=>setEstatus(e.target.value)}>{ESTATUS_MC.map(o=><option key={o}>{o}</option>)}</select>
           <label>Fecha de revisión</label><input type="date" value={dia} onChange={e=>setDia(e.target.value)}/>
-          <div className="r2"><div><label>Semana No. (automática)</label><input type="text" value={semana?"Semana "+semana:""} disabled style={{background:"#f5f5f5",color:"#666"}}/></div><div><label>Horas de trabajo</label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
+          <div className="r2"><div><label>Semana No. (automática)</label><input type="text" value={semana?"Semana "+semana:""} disabled style={{background:"#f5f5f5",color:"#666"}}/></div><div><label>Horas de trabajo <span style={{color:C.red}}>*</span></label><input type="number" value={horas} onChange={e=>setHoras(e.target.value)} placeholder="Ej. 1250"/></div></div>
           {lastHoras!=null&&<div style={{fontSize:11,color:"#888",marginTop:3}}>Último registro: {lastHoras} h</div>}
           {horasErr&&<div className="eb">{horasErr}</div>}
           {horasErr&&puedeForzar&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,marginTop:6,color:C.red}}><input type="checkbox" checked={forzarHoras} onChange={e=>setForzarHoras(e.target.checked)} style={{width:"auto"}}/>Forzar captura fuera de rango (corrección de admin)</label>}
           <label>Quien revisa</label><input type="text" value={yo?.nombre||session.nombre} disabled style={{background:"#f5f5f5",color:"#aaa"}}/>
         </div>
         {estatus!=="Activo"&&<div className="wb">⚠️ Equipo inactivo — solo se registran datos generales y firma.</div>}
-        <button className="bp" disabled={!eq||!dia||!!horasBloq} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
+        <button className="bp" disabled={!eq||!dia||!(parseFloat(horas)>0)||!!horasBloq} onClick={()=>setStep(1)} style={{background:color}}>Siguiente →</button>
       </div>}
       {curChunk&&estatus==="Activo"&&<div>
         {marcar&&curChunk.some((_,idx)=>!resps[off+idx])&&<div className="eb" style={{marginBottom:8}}>⚠️ Faltan {curChunk.filter((_,idx)=>!resps[off+idx]).length} punto(s) por responder (marcados en rojo).</div>}

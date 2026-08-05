@@ -116,6 +116,14 @@ def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
                 # los controles de medidor (km/horas): no son lecturas válidas.
                 if str(d.get("status") or "") in ("Rechazada", "Rechazado", "Anulado"):
                     continue
+                # Lecturas en 0 tampoco: eran capturas SIN medidor (el campo era
+                # opcional y se guardaba 0) y bloqueaban las lecturas reales
+                # (p. ej. último 0 h vs 960.8 h reales del horómetro).
+                try:
+                    if float(d[campo]) <= 0:
+                        continue
+                except (TypeError, ValueError):
+                    continue
                 fecha = str(d.get("fecha") or "")
                 prev = out.get(vid)
                 if prev is None or fecha > str(prev["fecha"] or ""):

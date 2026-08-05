@@ -290,7 +290,20 @@ def _validar_medidor(tipo, datos, cl):
         odómetro compartido entre ambos módulos).
       · montacargas (MC) → horas vs últimas horas (solo si el equipo está Activo).
     Un admin puede saltarlo con datos['forzar']=True (corrección).
-    Devuelve mensaje de error o None."""
+    Devuelve mensaje de error o None.
+
+    OBLIGATORIEDAD (autoritativa, antes que cualquier override): km en SOL/CL y
+    horas en MC son capturas OBLIGATORIAS. Un registro sin lectura se guardaba
+    como 0 y ese 0 se volvía el «último», bloqueando después las lecturas reales."""
+    if tipo in (m.SOL, m.CL) and datos.get("km") in (None, ""):
+        return "El kilometraje es obligatorio."
+    if tipo == m.MC:
+        try:
+            horas_ok = float(datos.get("horas") or 0) > 0
+        except (TypeError, ValueError):
+            horas_ok = False
+        if not horas_ok:
+            return "Las horas de trabajo son obligatorias (mayores a 0)."
     if datos.get("forzar") and cl["rol"] == "admin":
         return None                       # override explícito de admin
     vid = str(datos.get("vehicleId") or "")
