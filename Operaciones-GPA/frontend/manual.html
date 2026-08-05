@@ -203,7 +203,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
       <p>Guía completa de la aplicación: combustible, mantenimiento, seguridad, formularios, seguimiento de cumplimiento y administración.</p>
     </div>
     <div class="meta">
-      Versión 1.5 · jul 2026<br/>Aplicación móvil / web (PWA)<br/>Acceso con correo <span class="mono">@gpa.com.mx</span>
+      Versión 1.6 · ago 2026<br/>Aplicación móvil / web (PWA)<br/>Acceso con correo <span class="mono">@gpa.com.mx</span>
     </div>
   </div>
 </header>
@@ -414,7 +414,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
         <li>Envía. Queda en estado <span class="st st-warn">Pendiente</span> hasta que un supervisor o administrador la autorice.</li>
       </ol>
       <p><b>Autorizar</b> <span class="chip rol-sup">Supervisor</span> <span class="chip rol-ana">Analista</span> <span class="chip rol-adm">Administrador</span>: abre la solicitud en el Historial y usa <b>Cambiar Estado</b> → <span class="st st-ok">Aprobada</span> o <span class="st st-bad">Rechazada</span>. Una solicitud <b>aprobada</b> es una <b>asignación</b>: habilita cargar y activa el reporte de carga.</p>
-      <div class="note"><span class="callout-t">Reglas de autorización:</span> nadie puede aprobar sus <b>propias</b> capturas (solo un administrador puede); el supervisor solo autoriza registros de <b>sus sucursales</b>; y el <b>reporte de carga</b> únicamente se puede enviar cuando la solicitud de esa unidad está <b>Aprobada</b> (con asignación).</div>
+      <div class="note"><span class="callout-t">Reglas de autorización:</span> nadie puede aprobar sus <b>propias</b> capturas (solo un administrador puede); el supervisor solo autoriza registros de <b>sus sucursales</b>; y el <b>reporte de carga</b> únicamente se puede enviar cuando la unidad tiene una solicitud <b>Aprobada y sin reporte</b> (una solicitud = un reporte). El reporte queda <b>ligado al folio</b> de esa solicitud (se ve en el detalle, el PDF y el CSV). <b>No es necesario ser quien hizo la solicitud</b>: cualquier usuario con acceso puede llenar el reporte; el sistema valida la asignación al enviar, aunque la solicitud no aparezca en su vista.</div>
 
       <h3>Reporte de carga</h3>
       <p>Es la comprobación de la carga <b>ya realizada</b> (después de cargar). Se capturan: kilometraje, fotos antes/después, foto de la bomba, litros y precio por litro (el <b>monto total se calcula automático</b> = litros × precio, no se escribe a mano), foto del ticket, ubicación GPS automática, la <b>foto de la persona que realiza la carga</b> (recuadro propio, justo antes de la firma) y la firma.</p>
@@ -432,11 +432,22 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
               <div class="s-row"><span>Enviada, en espera de autorización</span><span class="s-bdg s-pe">Pendiente</span></div>
               <div class="s-row"><span>Autorizada (asignación) → reporte en 18 h</span><span class="s-bdg s-ok">Aprobada</span></div>
               <div class="s-row"><span>No procede</span><span class="s-bdg s-rj">Rechazada</span></div>
+              <div class="s-row"><span>Devuelta para corregir un dato</span><span class="s-bdg" style="background:#EDE7F6;color:#5E35B1">Por corregir</span></div>
+              <div class="s-row"><span>Reasignada a otra unidad (la sustituye un registro nuevo)</span><span class="s-bdg" style="background:#F1EFE8;color:#888780">Anulado</span></div>
             </div>
           </div>
-          <div class="cap">El monto total se calcula solo — no se escribe. Abajo, los tres estados de una solicitud de combustible.</div>
+          <div class="cap">El monto total se calcula solo — no se escribe. Abajo, los estados de una solicitud o reporte de combustible.</div>
         </div>
       </div>
+
+      <h3>Corregir una solicitud o un reporte («Por corregir»)</h3>
+      <p>Si un autorizador detecta un dato mal capturado (kilometraje, litros, precio, una foto…), <b>no se rechaza ni se captura de nuevo</b>: se devuelve para corregir.</p>
+      <ol class="steps">
+        <li><b>El autorizador</b> <span class="chip rol-sup">Supervisor</span> <span class="chip rol-ana">Analista</span> <span class="chip rol-adm">Administrador</span> abre el registro, pulsa <b>«Marcar Por corregir»</b> en Cambiar Estado, <b>elige qué campos</b> deben corregirse y puede dejar un comentario con la indicación. Solo aplica a registros <b>no aprobados</b>: una vez <span class="st st-ok">Aprobada</span>, ya no se puede mandar a corregir.</li>
+        <li><b>Quien capturó el registro</b> (o un administrador) lo abre y ve el recuadro morado <b>«Corregir registro»</b> con <b>únicamente</b> los campos marcados: lo demás no se puede tocar. Las fotos o la firma marcadas se vuelven a capturar.</li>
+        <li>Al enviar la corrección, el registro <b>regresa a</b> <span class="st st-warn">Pendiente</span>. <b>Nunca se aprueba en automático:</b> se borra la autorización anterior, queda rastro de quién corrigió y cuándo, y un autorizador debe <b>revisarlo y aprobarlo de nuevo</b> (con las mismas reglas: nadie aprueba lo propio, salvo administrador).</li>
+      </ol>
+      <div class="note"><span class="callout-t">Ojo:</span> el sistema vuelve a validar los candados sobre lo corregido (kilometraje contra el último de la unidad, litros ≤ capacidad del tanque, precio por litro ≤ $100). Mientras el registro esté «Por corregir» o «Pendiente», <b>no cuenta como asignación</b>: no habilita el reporte de carga.</div>
 
       <div class="note"><span class="callout-t">Horarios y plazos (para el Tablero de Seguimiento):</span>
         <ul class="bul" style="margin-bottom:0">
@@ -705,7 +716,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v1.5. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v1.6. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>
