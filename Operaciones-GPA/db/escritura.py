@@ -258,12 +258,87 @@ def guardar_plantilla(p: dict) -> dict:
     return {"ok": True, "clave": clave}
 
 
+# Claves internas de Dynamo (se usan como protegidas en edición y reasignación).
+_KEYS_DYNAMO = {"PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK", "GSI3SK"}
+
+# ── Edición de un registro por un ADMIN (con rastro) ─────────────
+# Campos PROTEGIDOS: la identidad de la unidad tiene su propio flujo (reasignar) y la
+# fecha es el sello del evento; el estado se cambia por su vía (autorización).
+_EDIT_PROTEGIDOS = _KEYS_DYNAMO | {
+    "id", "tipo_reg", "fecha", "accountId", "status",
+    "vehicleId", "economico", "placas", "subMarca", "sucursal", "areaResponsable",
+    "autorizadoPor", "fechaAut", "comentarioAut", "camposCorregir",
+    "reasignacion", "reasignadoA", "reasignadoDe", "correccion", "ediciones",
+    "_auditoria", "plantillaClave", "modulo", "solicitudId", "folioSolicitud",
+}
+
+
+def editar_registro(tipo: str, rid: str, cambios: dict, por: str, detalle=None) -> dict:
+    """Edición de admin de un registro (SOL/CL/MC/FRM#…), conservando su estado.
+
+    `cambios` acepta rutas de uno o dos niveles: "km", "obs", "answers.llantas",
+    "resps.3", "fotos.3". Las de dos niveles se aplican SOBRE EL ITEM CRUDO leído de
+    la base (que trae las CLAVES de S3, no las URLs firmadas que ve el cliente), así
+    que las fotos que no se tocaron conservan su clave y no se corrompen.
+
+    Deja rastro en `ediciones` (últimas 20): quién, cuándo y cada campo con su valor
+    anterior y el nuevo. NO cambia el estado del registro.
+    """
+    if not cambios:
+        raise ValueError("No hay cambios que aplicar")
+    t = _t()
+    item = t.get_item(Key={"PK": f"{tipo}#{rid}", "SK": "META"}).get("Item")
+    if not item:
+        raise ValueError("Registro no encontrado")
+    def _resolver_keep(valor, actual):
+        """En arreglos de fotos, «__keep:i» = conservar la evidencia i del registro
+        original. Evita que el cliente mande de vuelta una URL firmada (que expira) en
+        lugar de la clave del almacén."""
+        if not isinstance(valor, list):
+            return valor
+        base = actual if isinstance(actual, list) else []
+        out = []
+        for v in valor:
+            if isinstance(v, str) and v.startswith("__keep:"):
+                try:
+                    out.append(base[int(v[7:])])
+                except (ValueError, IndexError):
+                    continue
+            else:
+                out.append(v)
+        return out
+
+    nuevos, antes = {}, {}
+    for ruta, valor in cambios.items():
+        partes = str(ruta).split(".", 1)
+        top = partes[0]
+        if top in _EDIT_PROTEGIDOS:
+            raise ValueError(f"El campo '{top}' no se puede editar por esta vía")
+        if len(partes) == 1:
+            antes[ruta] = item.get(top)
+            nuevos[top] = _resolver_keep(valor, item.get(top))
+        else:
+            hijo = partes[1]
+            cont = dict(nuevos.get(top) if top in nuevos else (item.get(top) or {}))
+            antes[ruta] = (item.get(top) or {}).get(hijo)
+            cont[hijo] = _resolver_keep(valor, antes[ruta])
+            nuevos[top] = cont
+    entrada = {
+        "por": por, "en": _now_iso(),
+        "campos": [{"campo": k, "antes": antes.get(k), "despues": cambios[k]} for k in cambios],
+    }
+    if detalle:
+        entrada["detalle"] = detalle          # descripción legible que arma la app
+    historial = list(item.get("ediciones") or [])[-19:] + [entrada]
+    merge_registro(tipo, rid, {**nuevos, "ediciones": historial})
+    return {"ok": True, "id": rid, "campos": len(cambios), "ediciones": len(historial)}
+
+
 # ── Reasignación de unidad (corrección de admin) ─────────────────
 # Identidad desnormalizada de la unidad dentro de un registro.
 _IDENT_REG_A_VEH = {"economico": "economico", "placas": "placas", "subMarca": "subMarca",
                     "sucursal": "sucursal", "areaResponsable": "responsable"}
 # Claves internas / campos de identidad del registro que NO se copian al nuevo.
-_KEYS_DYNAMO = {"PK", "SK", "GSI1PK", "GSI1SK", "GSI2PK", "GSI2SK", "GSI3PK", "GSI3SK"}
 _NO_COPIAR = _KEYS_DYNAMO | {"id", "tipo_reg", "fecha", "sucursal", "accountId",
                              "reasignacion", "reasignadoA", "reasignadoDe"}
 

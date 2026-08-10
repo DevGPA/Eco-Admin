@@ -1034,6 +1034,7 @@ function respuestaTexto(item,reg){
   if(t==="taco")return (v!=null&&v!=="")?"Nivel "+v:"";
   return v==null?"":String(v);
 }
+const edTxt=r=>{const e=(r&&r.ediciones)||[];return e.length?(e.length+" ed. · "+e[e.length-1].por+" "+fdt(e[e.length-1].en)):"";};
 // ─── Hallazgos («mal estado») de un checklist, con su foto de evidencia ──────
 // Valores que se consideran HALLAZGO en los checklists de reparto y formularios.
 const MAL_VALORES=new Set(["No","Con raspaduras/golpes","Con Raspaduras/Golpes",
@@ -1135,7 +1136,7 @@ function BotonPDF({tipo,reg,plantillaClave}){
 }
 
 // Detalle de un registro dinámico (con PDF corporativo y, si aplica, autorización)
-function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy}){
+function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy,rol,cat,refrescar,showToast}){
   const secs=(plantilla&&plantilla.secciones)||[];const st=reg.status||"Aprobado";
   // Igual que en reparto: los puntos en mal estado (con su foto) encabezan el detalle
   // y son las únicas fotos que viajan al PDF; las de rutina quedan .pdf-omit.
@@ -1166,10 +1167,12 @@ function FormDinamicoDetail({reg,plantilla,canAuth,reqAut,onEstado,onBack,busy})
         if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;
         return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{String(v)}</span></div>;
       })}</div>)}
+      <SelloEdicion reg={reg}/>
       {reg.proximoServicio&&<div className="card"><div className="ct">Próximo servicio</div><div className="dr"><span>Fecha de próximo servicio</span><span>{reg.proximoServicio}</span></div></div>}
       {reg.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{reg.obs}</div></div>}
       {reg.firma&&<div className="card"><div className="ct">Firma</div><img src={reg.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{reg.responsable||reg.solicitante}</b></div></div>}
       {reqAut&&canAuth&&st==="Pendiente"&&<div className="no-print" style={{display:"flex",gap:8}}><button className="bp" style={{flex:1,marginTop:0,background:C.green}} disabled={busy} onClick={()=>onEstado("Aprobado")}>✓ Aprobar</button><button className="bd" style={{flex:1}} disabled={busy} onClick={()=>onEstado("Rechazado")}>✗ Rechazar</button></div>}
+      <EditarRegistro tipoApi={"FRM#"+(reg.plantillaClave||(plantilla&&plantilla.clave)||"")} reg={reg} rol={rol} cat={cat} plantilla={plantilla} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
     </div>
   );
 }
@@ -1185,10 +1188,10 @@ function FormHistory({plantilla,items,loading,onSelect}){
   const ptos=((plantilla&&plantilla.secciones)||[]).flatMap(sec=>(sec.items||[])
     .filter(it=>!["photo","fotos","aviso"].includes(it.type)).map(it=>({...it,sec:sec.title})));
   const csv=()=>csvDownload("form_"+plantilla.clave,
-    ["Folio","Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje","Próximo servicio","Puntos en mal estado","Detalle mal estado",
+    ["Folio","Fecha","Sucursal","Responsable","Estado","Resultado","Puntaje","Próximo servicio","Puntos en mal estado","Detalle mal estado","Editado",
       ...ptos.map(p=>p.sec+" · "+p.label)],
     list.map(r=>{const h=hallazgosSecs((plantilla&&plantilla.secciones)||[],r);
-      return [folioDe(r),fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:"",r.proximoServicio||"",h.length,malTxt(h),
+      return [folioDe(r),fdt(r.fecha),r.sucursal,r.responsable||r.solicitante,r.status,r.resultado||"",r.puntaje!=null?r.puntaje+"/"+r.puntajeMax:"",r.proximoServicio||"",h.length,malTxt(h),edTxt(r),
         ...ptos.map(p=>respuestaTexto(p,r))];}));
   const descargarZip=async()=>{
     if(!list.length||zip)return;
@@ -1250,7 +1253,7 @@ function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,
   if(view==="new"&&selP)return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("plantilla")}>← Atrás</button><FormDinamico plantilla={selP} cat={cat} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast} onDone={()=>abrirHist(selP)}/></div>;
   if(view==="detail"&&sel&&selP){
     const cambiar=async st=>{setBusy(true);try{await api.cambiarEstadoFormulario(selP.clave,sel.id,st);showToast("Estado actualizado");await cargar(selP.clave);setView("history");setSel(null);}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
-    return<FormDinamicoDetail reg={sel} plantilla={selP} canAuth={canAuth&&(rol==="admin"||sel.accountId!==session.email)} reqAut={selP.requiereAutorizacion} busy={busy} onEstado={cambiar} onBack={()=>{setView("history");setSel(null);}}/>;
+    return<FormDinamicoDetail reg={sel} plantilla={selP} canAuth={canAuth&&(rol==="admin"||sel.accountId!==session.email)} reqAut={selP.requiereAutorizacion} busy={busy} onEstado={cambiar} rol={rol} cat={cat} refrescar={()=>cargar(selP.clave)} showToast={showToast} onBack={()=>{setView("history");setSel(null);}}/>;
   }
   if(view==="history"&&selP)return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("plantilla")}>← Atrás</button><FormHistory plantilla={selP} items={regs} loading={loading} onSelect={r=>{setSel(r);setView("detail");}}/></div>;
   if(view==="plantilla"&&selP)return(
@@ -1571,8 +1574,8 @@ function SolHistory({items,rol,onSelect}){
   const nivelTxt=v=>{const o=TANK_OPTS.find(t=>t.val===v);return o?o.label:(v==null?"":v);};
   const nFotos=s=>((s.fotos&&s.fotos.length)?s.fotos.length:(s.photo?1:0))+[s.fotoAntes,s.fotoDespues,s.fotoBomba,s.fotoTicket,s.fotoPersona].filter(Boolean).length;
   const csv=()=>csvDownload("solicitudes_combustible",
-    ["Folio","Folio solicitud","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Comentario autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de"],
-    list.map(s=>[folioDe(s),s.folioSolicitud||"",fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.comentarioAut||"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):(s.reasignadoDe?("#"+(s.reasignadoDe.economico||s.reasignadoDe.vehicleId||"")):"")]));
+    ["Folio","Folio solicitud","Fecha","Tipo","Unidad","Placas","Sub-marca","Sucursal","Área responsable","Responsable","Correo","Combustible","Producto","Precio catálogo/L","Tanque (L)","Kilometraje","Nivel antes","¿Se llenó el tanque?","Litros","Precio/L capturado","Monto","Estado","Autorizó","Fecha autorización","Comentario autorización","Observaciones","Ubicación","Fotos","Firma","Reasignado de","Editado"],
+    list.map(s=>[folioDe(s),s.folioSolicitud||"",fdt(s.fecha),s.formato==="reporte"?"Reporte":"Solicitud",s.economico,s.placas,s.subMarca||"",s.sucursal,s.areaResponsable||"",s.responsable,s.mail||"",s.combustible,s.producto||"",s.precio??"",s.tanque??"",s.km??"",s.formato==="reporte"?"":nivelTxt(s.tankBefore),s.lleno||"",s.litros??"",s.precioLitro??"",s.monto??"",s.status,s.autorizadoPor||"",s.fechaAut?fdt(s.fechaAut):"",s.comentarioAut||"",s.obs||"",s.ubicacion?.direccion||"",nFotos(s),s.firma?"Sí":"No",s.reasignacion?("#"+(s.reasignacion.de?.economico||s.reasignacion.de?.vehicleId||"")):(s.reasignadoDe?("#"+(s.reasignadoDe.economico||s.reasignadoDe.vehicleId||"")):""),edTxt(s)]));
   return(
     <div>
       <div className="tr">{["Todos","Pendiente","Por corregir","Aprobada","Rechazada","Anulado"].map(x=><button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
@@ -1692,6 +1695,138 @@ function CorregirCombustible({sol,session,rol,cat,refrescar,showToast,onBack}){
   </div>);
 }
 
+// Sello de edición: constancia visible (y en el PDF) de que un admin corrigió el
+// registro. El detalle completo de cada cambio vive en `ediciones`.
+function SelloEdicion({reg}){
+  const eds=(reg&&reg.ediciones)||[];if(!eds.length)return null;
+  const u=eds[eds.length-1];
+  return(<div className="card" style={{borderLeft:"3px solid "+C.amber}}>
+    <div className="ct" style={{color:C.amber}}>✎ Registro editado</div>
+    <div className="dr"><span>Editado por</span><span>{u.por}</span></div>
+    <div className="dr"><span>Fecha de la edición</span><span>{fdt(u.en)}</span></div>
+    <div className="dr"><span>Campos corregidos</span><span>{u.detalle?[].concat(u.detalle).join(", "):((u.campos||[]).map(c=>c.campo).join(", ")||"—")}</span></div>
+    {eds.length>1&&<div className="dr"><span>Ediciones totales</span><span>{eds.length}</span></div>}
+  </div>);
+}
+
+// ─── Edición de un registro por un ADMIN (con rastro) ────────────────────────
+// Sirve para los cuatro tipos: combustible (SOL), reparto (CL), montacargas (MC) y
+// formularios dinámicos (FRM#clave). Conserva el ESTADO del registro y NO permite
+// tocar la unidad (eso es «Cambiar unidad») ni la fecha del evento.
+// Solo se envían los campos que el admin realmente modificó; las fotos que no se
+// reemplazan no viajan, así que conservan su clave en el almacén (una URL firmada
+// nunca sustituye a la clave). En arreglos de fotos, las que se conservan se marcan
+// «__keep:i» y el servidor las resuelve contra el registro original.
+const EDIT_TOP={
+  CL:[{id:"km",label:"Kilometraje",tipo:"num"},{id:"fotoKm",label:"Foto de kilometraje",tipo:"foto"},{id:"obs",label:"Observaciones",tipo:"texto"}],
+  MC:[{id:"estatus",label:"Estatus del equipo",tipo:"select",opts:ESTATUS_MC},{id:"horas",label:"Horas de trabajo",tipo:"num"},{id:"dia",label:"Fecha de revisión",tipo:"fecha"},{id:"obs",label:"Observaciones",tipo:"texto"}],
+  FRM:[{id:"obs",label:"Observaciones",tipo:"texto"},{id:"proximoServicio",label:"Próximo servicio",tipo:"fecha"}],
+};
+const TIPO_EVID_EDIT={SOL:"combustible",CL:"checklist",MC:"montacargas"};
+
+function EditarRegistro({tipoApi,reg,rol,cat,plantilla,secs,refrescar,showToast,onBack}){
+  const[abierto,setAbierto]=useState(false);
+  const[d,setD]=useState({});
+  const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  if(rol!=="admin")return null;
+  const esFRM=String(tipoApi).startsWith("FRM");
+  const base=esFRM?"FRM":tipoApi;
+  const tops=base==="SOL"?camposCorrDe(reg):(EDIT_TOP[base]||[]);
+  const secciones=secs||(esFRM?((plantilla&&plantilla.secciones)||[]):[]);
+  const itemsMC=base==="MC"?(reg.tipo==="gas"?ITEMS_GAS:ITEMS_ELEC):[];
+  const set=(ruta,v)=>setD(o=>({...o,[ruta]:v}));
+  const val=(ruta,orig)=>d[ruta]!==undefined?d[ruta]:orig;
+  const nCambios=Object.keys(d).length;
+
+  const campo=(ruta,def,actual)=>{
+    const v=val(ruta,actual);
+    if(def.tipo==="num")return <input type="number" step="any" value={v??""} onChange={e=>set(ruta,e.target.value===""?"":parseFloat(e.target.value))}/>;
+    if(def.tipo==="texto")return <textarea rows={2} value={v??""} onChange={e=>set(ruta,e.target.value)}/>;
+    if(def.tipo==="fecha")return <input type="date" value={v??""} onChange={e=>set(ruta,e.target.value)}/>;
+    if(def.tipo==="select")return <select value={v??""} onChange={e=>set(ruta,e.target.value)}><option value="">— Selecciona —</option>{(def.opts||[]).map(o=><option key={o}>{o}</option>)}</select>;
+    if(def.tipo==="sino")return <div className="rr">{["Si","No"].map(o=><button key={o} type="button" className={"rb"+(v===o?" O":"")} onClick={()=>set(ruta,o)}>{o}</button>)}</div>;
+    if(def.tipo==="nivel")return <div className="tg">{TANK_OPTS.map(o=><button key={o.val} type="button" className={"tb"+(v===o.val?" sel":"")} onClick={()=>set(ruta,o.val)}>{o.label}</button>)}</div>;
+    if(def.tipo==="foto")return <FotoCampo val={v} set={x=>set(ruta,x)} label="Toca para reemplazar la foto"/>;
+    if(def.tipo==="fotos"){
+      // Se normaliza a marcas «__keep:i» desde el primer toque: así ni al quitar ni al
+      // agregar se envía una URL firmada en lugar de la clave del almacén.
+      const lista=d[ruta]!==undefined?d[ruta]:((reg[def.id]||[]).map((_,i)=>"__keep:"+i));
+      return(<div>
+        {lista.length>0&&<div className="fg" style={{marginBottom:8}}>{lista.map((src,i)=><div key={i} className="ft"><img src={String(src).indexOf("__keep:")===0?(reg[def.id]||[])[Number(String(src).slice(7))]:src} alt={"foto "+(i+1)}/><button className="fx" onClick={()=>set(ruta,lista.filter((_,j)=>j!==i))}>×</button></div>)}</div>}
+        <div className="pb"><div style={{fontSize:20}}>📷</div><div style={{marginTop:3}}>Agregar foto</div><input type="file" accept="image/*" capture="environment" onChange={e=>{readFile(e,x=>set(ruta,[...lista,x]));e.target.value="";}}/></div>
+      </div>);
+    }
+    if(def.tipo==="firma")return(<div>
+      {typeof v==="string"&&v.indexOf("data:")===0?<img src={v} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma nueva"/>:null}
+      <canvas ref={sigRef} className="sig" width={340} height={130} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();set(ruta,sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();set(ruta,sigRef.current?.toDataURL());}}/>
+      <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(x=>set(ruta,x))}>Limpiar</button>
+    </div>);
+    return <input type="text" value={v??""} onChange={e=>set(ruta,e.target.value)}/>;
+  };
+
+  const guardar=async()=>{
+    if(!nCambios||busy)return;
+    if(!window.confirm("¿Guardar "+nCambios+" cambio(s) en este registro?\n\nEl estado no cambia y queda registrada la edición (quién, cuándo y qué cambió)."))return;
+    setBusy(true);
+    try{
+      const subidos=await api.subirEvidencias(esFRM?"formulario":TIPO_EVID_EDIT[base],d);
+      const detalle=Object.keys(subidos).map(k=>{const et=etiqueta(k);return et?et:k;});
+      await api.adminEditarRegistro(tipoApi,reg.id,subidos,detalle);
+      showToast("✓ Registro editado ("+nCambios+" campo(s))");
+      setD({});setAbierto(false);
+      refrescar&&await refrescar();onBack&&onBack();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  // Etiqueta legible de una ruta, para el rastro de la edición
+  const etiqueta=ruta=>{
+    const t=tops.find(x=>x.id===ruta);if(t)return t.label;
+    if(ruta.indexOf("answers.")===0){const id=ruta.slice(8);
+      for(const sec of secciones)for(const it of (sec.items||[]))if(it.id===id)return (sec.title?sec.title+" · ":"")+it.label;
+      return id;}
+    const mm=/^(resps|fotos|coments)\.(\d+)$/.exec(ruta);
+    if(mm)return "#"+(Number(mm[2])+1)+" "+(itemsMC[Number(mm[2])]||"").slice(0,60)+(mm[1]==="fotos"?" (foto)":mm[1]==="coments"?" (comentario)":"");
+    return ruta;
+  };
+
+  const eds=reg.ediciones||[];
+  return(<div className="card no-print" style={{border:"1px solid "+C.amber}}>
+    <div className="ct" style={{color:C.amber}}>Editar registro (corrección de admin)</div>
+    {eds.length>0&&<div className="wb" style={{marginBottom:8}}>✎ Editado {eds.length} vez(ces). Última: <b>{eds[eds.length-1].por}</b> · {fdt(eds[eds.length-1].en)}{eds[eds.length-1].detalle?" · "+[].concat(eds[eds.length-1].detalle).join(", "):""}</div>}
+    {!abierto?<>
+      <div style={{fontSize:11,color:"#888",marginBottom:8}}>Corrige datos mal capturados sin perder el registro. No cambia el estado, no toca la unidad ni la fecha, y queda constancia de la edición.</div>
+      <button className="bs" style={{width:"100%",borderColor:C.amber,color:C.amber}} onClick={()=>setAbierto(true)}>✎ Editar este registro</button>
+    </>:<>
+      {tops.map(def=><div key={def.id} style={{marginBottom:10}}><label>{def.label}</label>{campo(def.id,def,reg[def.id])}</div>)}
+      {secciones.map(sec=><div key={sec.id||sec.title} style={{marginTop:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.blue,textTransform:"uppercase",marginBottom:6}}>{sec.title}</div>
+        {(sec.items||[]).map(item=><CampoForm key={item.id} item={item}
+          getA={id=>val("answers."+id,(reg.answers||{})[id])}
+          setA={(id,v)=>set("answers."+id,v)}
+          availVeh={(cat&&cat.vehicles)||[]}/>)}
+      </div>)}
+      {base==="MC"&&<div style={{marginTop:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.blue,textTransform:"uppercase",marginBottom:6}}>Chequeo visual ({itemsMC.length} puntos)</div>
+        {itemsMC.map((txt,i)=>{const r=val("resps."+i,(reg.resps||{})[i]);return(
+          <div key={i} style={{borderTop:".5px solid #f0f0f0",padding:"6px 0"}}>
+            <div style={{fontSize:11.5,color:"#555",lineHeight:1.35,marginBottom:4}}>#{i+1} {txt}</div>
+            <div className="rr">{["O","P","N/A"].map(o=><button key={o} type="button" className={"rb"+(r===o?" "+(o==="O"?"O":o==="P"?"P":"NA"):"")} onClick={()=>set("resps."+i,o)}>{o}</button>)}</div>
+            {r==="P"&&<div style={{marginTop:6}}>
+              <FotoCampo val={val("fotos."+i,(reg.fotos||{})[i])} set={x=>set("fotos."+i,x)} label="Foto del problema"/>
+              <textarea rows={2} placeholder="Descripción del problema" value={val("coments."+i,(reg.coments||{})[i])||""} onChange={e=>set("coments."+i,e.target.value)}/>
+            </div>}
+          </div>);})}
+      </div>}
+      <div style={{fontSize:11,color:"#888",margin:"8px 0"}}>Se guardarán <b>{nCambios}</b> campo(s) modificado(s). Lo que no toques queda igual.</div>
+      <div style={{display:"flex",gap:8}}>
+        <button className="bs" onClick={()=>{setD({});setAbierto(false);}}>Cancelar</button>
+        <button className="bd" style={{flex:1,background:C.amber,borderColor:C.amber}} disabled={busy||!nCambios} onClick={guardar}>{busy?"Guardando…":"Guardar cambios ("+nCambios+")"}</button>
+      </div>
+    </>}
+  </div>);
+}
+
 function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
   // Autorizan admin/analista/supervisor, pero NADIE (salvo admin) sus propias capturas.
   const canChange=(rol==="admin"||rol==="analista"||rol==="supervisor")&&(rol==="admin"||!session||sol.accountId!==session.email);
@@ -1719,6 +1854,7 @@ function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
         {((sol.fotos&&sol.fotos.length)||sol.photo)&&<div className="card"><div className="ct">Fotos de Evidencia</div>{(sol.fotos&&sol.fotos.length?sol.fotos:[sol.photo]).map((f,i)=><img key={i} src={f} style={{width:"100%",borderRadius:8,marginTop:i?8:0}} alt={"evidencia "+(i+1)}/>)}</div>}
         {sol.firma&&<div className="card"><div className="ct">Firma</div><img src={sol.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
       </>}
+      <SelloEdicion reg={sol}/>
       {(sol.autorizadoPor||sol.comentarioAut)&&<div className="card"><div className="ct">Autorización</div>{sol.autorizadoPor&&<div className="dr"><span>Autorizó / revisó</span><span>{sol.autorizadoPor}</span></div>}{sol.fechaAut&&<div className="dr"><span>Fecha</span><span>{fdt(sol.fechaAut)}</span></div>}{sol.comentarioAut&&<div className="dr"><span>Comentario</span><span>{sol.comentarioAut}</span></div>}</div>}
       {canChange&&<div className="card no-print"><div className="ct">Cambiar Estado</div>
         <label>Comentario (opcional)</label><textarea rows={2} value={coment} onChange={e=>setComent(e.target.value)} placeholder="Motivo, aclaración, indicación de corrección… (se guarda con el registro)"/>
@@ -1732,6 +1868,7 @@ function SolDetail({sol,rol,session,cat,refrescar,showToast,onBack}){
           </div>}
         </div>}</div>}
       {sol.status==="Por corregir"&&<CorregirCombustible sol={sol} session={session} rol={rol} cat={cat} refrescar={refrescar} showToast={showToast} onBack={onBack}/>}
+      <EditarRegistro tipoApi="SOL" reg={sol} rol={rol} cat={cat} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
       <ReasignarUnidad tipoApi="SOL" reg={sol} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
     </div>
   );
@@ -1904,10 +2041,10 @@ function CLHistory({items,onSelect}){
   const list=src.filter(c=>(f==="Todos"||c.tipo===f)&&(!fUni||String(c.vehicleId)===fUni)&&(!rDesde||ymd(c.fecha)>=rDesde)&&(!rHasta||ymd(c.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto revisado.
   const csv=()=>csvDownload("checklist_reparto",
-    ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km","Puntos en mal estado","Detalle mal estado",
+    ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km","Puntos en mal estado","Detalle mal estado","Editado",
       ...CL_PUNTOS.map(p=>p.sec+" · "+p.label)],
     list.map(c=>{const secs=c.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;const h=hallazgosSecs(secs,c);
-      return [folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km,h.length,malTxt(h),
+      return [folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km,h.length,malTxt(h),edTxt(c),
         ...CL_PUNTOS.map(p=>respuestaTexto(p,c))];}));
   return(
     <div>
@@ -1936,8 +2073,10 @@ function CLDetail({cl,cat,rol,refrescar,showToast,onBack}){
       <CardHallazgos hall={hall}/>
       {cl.fotoKm&&<div className="card"><div className="ct">Foto Kilometraje</div><img src={cl.fotoKm} style={{width:"100%",borderRadius:8}} alt="km"/></div>}
       {secs.map(sec=><div key={sec.id} className="card"><div className="ct">{sec.title}</div>{sec.items.map(item=>{const v=cl.answers?.[item.id];if(!v&&v!==0)return null;if(item.type==="photo")return<div key={item.id} className={clsRutina} style={{marginBottom:8}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{item.label}</div><img src={v} style={{width:"100%",borderRadius:8}} alt={item.label}/></div>;if(item.type==="damage_list")return<div key={item.id} className="pdf-omit">{(v||[]).map((d,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:8,marginBottom:6,border:".5px solid #eee"}}><div style={{fontSize:12,fontWeight:600,marginBottom:4}}>Daño #{i+1}: {d.desc}</div>{d.foto&&<img src={d.foto} style={{width:"100%",borderRadius:6}} alt="daño"/>}</div>)}</div>;if(item.type==="taco")return<div key={item.id} className="dr"><span>{item.label}</span><span>Nivel {v}</span></div>;return<div key={item.id} className="dr"><span style={{maxWidth:"55%"}}>{item.label}</span><span>{v}</span></div>;})}</div>)}
+      <SelloEdicion reg={cl}/>
       {cl.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{cl.obs}</div></div>}
       {cl.firma&&<div className="card"><div className="ct">Firma</div><img src={cl.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/><div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{cl.responsable}</b></div></div>}
+      <EditarRegistro tipoApi="CL" reg={cl} rol={rol} cat={cat} secs={secs} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
       <ReasignarUnidad tipoApi="CL" reg={cl} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
     </div>
   );
@@ -2088,10 +2227,10 @@ function MCHistory({items,onSelect}){
   const list=src.filter(r=>(f==="Todos"||r.status===f||r.tipo===f)&&(!fUni||String(r.vehicleId)===fUni)&&(!rDesde||ymd(r.fecha)>=rDesde)&&(!rHasta||ymd(r.fecha)<=rHasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto (O/P/N-A).
   const csv=()=>csvDownload("checklist_montacargas",
-    ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas","Detalle problemas",
+    ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Estatus","Semana","Horas","Estado","Problemas","Detalle problemas","Editado",
       ...MC_PUNTOS],
     list.map(r=>{const m=mcRespPorTexto(r),pr=mcProblemas(r);
-      return [folioDe(r),fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,pr.length,pr.join(" | "),
+      return [folioDe(r),fdt(r.fecha),r.tipo,r.economico,r.placas,r.sucursal,r.estatus,r.semana,r.horas,r.status,pr.length,pr.join(" | "),edTxt(r),
         ...MC_PUNTOS.map(q=>m[q]||"")];}));
   return(
     <div>
@@ -2116,9 +2255,11 @@ function MCDetail({rec,canAuth,cat,rol,refrescar,showToast,onBack}){
       <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>{rec.tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"}</div><span className={"bdg "+bcMC(rec.status)}>{rec.status}</span></div><div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(rec)}</span></div><div className="dr"><span>Fecha</span><span>{fdt(rec.fecha)}</span></div><div className="dr"><span>Vehículo</span><span>{rec.placas} · {rec.subMarca}</span></div><div className="dr"><span>Sucursal</span><span>{rec.sucursal}</span></div><div className="dr"><span>Estatus equipo</span><span>{rec.estatus}</span></div><div className="dr"><span>Fecha revisión</span><span>{rec.dia}</span></div><div className="dr"><span>Semana</span><span>{rec.semana||"—"}</span></div><div className="dr"><span>Horas</span><span>{rec.horas||"—"}</span></div><div className="dr"><span>Revisado por</span><span>{rec.username}</span></div>{rec.autorizadoPor&&<div className="dr"><span>Autorizado por</span><span>{rec.autorizadoPor}</span></div>}</div>
       {probs.length>0&&<div className="card"><div className="ct" style={{color:C.red}}>⚠️ Problemas Detectados ({probs.length})</div>{probs.map(([i])=><div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:".5px solid #f0c0c0"}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:4,lineHeight:1.4}}>#{parseInt(i)+1} — {items[parseInt(i)]}</div>{rec.fotos?.[i]&&<img src={rec.fotos[i]} style={{width:"100%",borderRadius:8,marginBottom:6}} alt="p"/>}{rec.coments?.[i]&&<div style={{fontSize:12,background:"#fff3f3",padding:"6px 10px",borderRadius:6}}>{rec.coments[i]}</div>}</div>)}</div>}
       <div className="card"><div className="ct">Chequeo Visual Completo</div>{items.map((item,i)=>{const r=rec.resps?.[i];if(!r)return null;const col=r==="O"?C.green:r==="P"?C.red:"#888";return<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:".5px solid #f5f5f5"}}><span style={{color:"#555",maxWidth:"82%",lineHeight:1.4}}>#{i+1} {item}</span><span style={{fontWeight:700,color:col,minWidth:30,textAlign:"right"}}>{r}</span></div>;})}</div>
+      <SelloEdicion reg={rec}/>
       {rec.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:13}}>{rec.obs}</div></div>}
       {rec.firma&&<div className="card"><div className="ct">Firma</div><img src={rec.firma} style={{width:"100%",borderRadius:8,background:"#f9f9f9"}} alt="firma"/></div>}
       <div style={{background:C.greenLt,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.green,marginTop:8,textAlign:"center",fontWeight:600}}>✓ Aprobado (no requiere autorización)</div>
+      <EditarRegistro tipoApi="MC" reg={rec} rol={rol} cat={cat} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
       <ReasignarUnidad tipoApi="MC" reg={rec} cat={cat} rol={rol} refrescar={refrescar} showToast={showToast} onBack={onBack}/>
     </div>
   );
@@ -2906,7 +3047,7 @@ function ModSeguimiento({cat,data,rol,sucursalesUser,userMods,session,refrescar,
   const ProblemasPC=({m})=>(m.conProblemas?(m.problemas.length===0?<div style={{fontSize:12,color:C.green,marginTop:10}}>✓ Sin problemas en el período.</div>:<div className="prb" style={{marginTop:12}}><div style={{fontSize:12,fontWeight:700,color:C.red,marginBottom:6}}>🚩 Qué está mal ({m.problemas.length})</div>{m.problemas.map((p,i)=><div key={i} onClick={()=>p.reg&&setDetalle({reg:p.reg,plantilla:p.plantilla,tipo:p.tipo})} style={{padding:"6px 0",borderTop:i?".5px dashed #f0c0c0":"none",cursor:p.reg?"pointer":"default",display:"flex",justifyContent:"space-between",gap:8}}><span><b style={{color:C.red}}>{p.titulo}</b> <span style={{fontSize:11,color:"#a06"}}>{p.sub}</span></span>{p.reg&&<span style={{fontSize:11,color:C.blue}}>Ver ›</span>}</div>)}</div>):<div style={{marginTop:10,fontSize:12,color:"#888",background:"#f7f9fc",border:"1px dashed #e2e8f0",borderRadius:8,padding:"8px 12px"}}>ℹ️ Los problemas de Reparto se consultan en su tablero dedicado.</div>);
 
   if(detalle){const{reg,plantilla,tipo}=detalle;const cerrar=()=>setDetalle(null);const noop=async()=>{};
-    if(tipo==="form")return<FormDinamicoDetail reg={reg} plantilla={plantilla} canAuth={false} reqAut={false} onEstado={noop} onBack={cerrar}/>;
+    if(tipo==="form")return<FormDinamicoDetail reg={reg} plantilla={plantilla} canAuth={false} reqAut={false} onEstado={noop} showToast={showToast} onBack={cerrar}/>;
     if(tipo==="montacargas")return<MCDetail rec={reg} canAuth={false} cat={cat} rol={rol} refrescar={()=>refrescarTipo("montacargas")} showToast={showToast} onBack={cerrar}/>;
     if(tipo==="combustible")return<SolDetail sol={reg} rol={rol} session={session} cat={cat} refrescar={()=>refrescarTipo("combustible")} showToast={showToast} onBack={cerrar}/>;
     return<div><button className="bs" onClick={cerrar}>← Volver</button><div className="empty">Sin vista de detalle para este registro.</div></div>;

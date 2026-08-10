@@ -24,7 +24,7 @@ import json, os, re, logging, traceback, gzip, base64
 from datetime import date, datetime, timedelta, timezone
 
 from db import modelos as m
-from db.escritura import (crear_registro, cambiar_estado, corregir_registro,
+from db.escritura import (crear_registro, cambiar_estado, corregir_registro, editar_registro,
                           guardar_vehiculo, guardar_responsable,
                           guardar_sucursal, eliminar_sucursal, guardar_config,
                           actualizar_precio_por_combustible,
@@ -271,6 +271,8 @@ def lambda_handler(event, context):
                 return _resp(res)
             if route == "POST /admin/reasignar-unidad":
                 return _reasignar_unidad(_body(event), cl)
+            if route == "POST /admin/editar-registro":
+                return _editar_registro(_body(event), cl)
             return _admin(route, _body(event))
 
         return _err(f"Ruta no encontrada: {route}", 404)
@@ -616,6 +618,61 @@ def _texto_notif(tipo, datos, sucursal, cl, rid, email_dest):
 
 
 # ── Admin ────────────────────────────────────────────────────────
+def _editar_registro(b, cl):
+    """Edición de admin de cualquier registro (checklists, montacargas, formularios y
+    combustible), CONSERVANDO su estado y dejando rastro en `ediciones`.
+
+    No toca la identidad de la unidad (eso es «reasignar») ni la fecha del evento; la
+    lista negra vive en db.escritura._EDIT_PROTEGIDOS. Se revalidan los topes de
+    negocio sobre los valores nuevos: litros ≤ tanque de la unidad y precio/L ≤ $100,
+    y que km/horas sean positivos. NO se compara el km contra el «último» de la unidad
+    porque el registro que se edita suele SER ese último (se compararía contra sí mismo);
+    la corrección la hace un admin y queda auditada."""
+    tipo = str(b.get("tipo") or "")
+    if not (tipo in (m.SOL, m.CL, m.MC) or tipo.startswith("FRM#")):
+        return _err("tipo inválido (SOL/CL/MC/FRM#clave)")
+    rid = str(b.get("id") or "").strip()
+    if not rid:
+        return _err("Falta el id del registro")
+    cambios = dict(b.get("cambios") or {})
+    if not cambios:
+        return _err("No hay cambios que aplicar")
+    reg = get_registro(tipo, rid)
+    if not reg:
+        return _err("Registro no encontrado", 404)
+
+    def _num(ruta, actual):
+        if ruta not in cambios:
+            return actual
+        try:
+            return float(cambios[ruta])
+        except (TypeError, ValueError):
+            raise ValueError(f"El valor de '{ruta}' debe ser numérico")
+    try:
+        if "km" in cambios and not _num("km", 0) > 0:
+            return _err("El kilometraje debe ser mayor a 0.", 422)
+        if tipo == m.MC and "horas" in cambios and not _num("horas", 0) > 0:
+            return _err("Las horas de trabajo deben ser mayores a 0.", 422)
+        if tipo == m.SOL and reg.get("formato") == "reporte":
+            litros = _num("litros", reg.get("litros") or 0)
+            precio = _num("precioLitro", reg.get("precioLitro") or 0)
+            if "litros" in cambios or "precioLitro" in cambios:
+                if litros <= 0:
+                    return _err("Los litros cargados deben ser mayores a 0.", 422)
+                cap = float((get_vehiculo(str(reg.get("vehicleId") or "")) or {}).get("tanque") or 0)
+                if cap > 0 and litros > cap:
+                    return _err(f"Los litros ({litros:g} L) exceden la capacidad del tanque "
+                                f"de la unidad ({cap:g} L).", 422)
+                if precio <= 0 or precio > 100:
+                    return _err("El precio por litro debe ser mayor a $0 y no exceder $100.", 422)
+                cambios["monto"] = round(litros * precio, 2)
+    except ValueError as e:
+        return _err(str(e), 422)
+
+    res = editar_registro(tipo, rid, cambios, cl["nombre"] or cl["email"], b.get("detalle"))
+    return _resp(res)
+
+
 def _reasignar_unidad(b, cl):
     """Corrección de admin: mueve un registro (SOL/CL/MC) a otra unidad.
     Solo cambia la identidad de la unidad en el registro (+ índice por sucursal);

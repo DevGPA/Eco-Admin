@@ -241,6 +241,9 @@ class GpaApi {
   adminCuenta(c)      { return this._fetch("POST", "/admin/cuenta", c); }
   // Corrección de admin: mueve un registro (SOL/CL/MC) a otra unidad
   adminReasignarUnidad(tipo, id, vehicleId) { return this._fetch("POST", "/admin/reasignar-unidad", { tipo, id, vehicleId }); }
+  // Edición de admin de un registro (checklists, montacargas, formularios, combustible).
+  // `cambios` admite rutas anidadas: {"km":123,"answers.llantas":"Bien","resps.3":"P"}
+  adminEditarRegistro(tipo, id, cambios, detalle) { return this._fetch("POST", "/admin/editar-registro", { tipo, id, cambios, detalle }); }
 
   // ── Motor de formularios dinámicos ─────────────────────────────
   adminModulo(mod)    { return this._fetch("POST", "/admin/modulo", mod); }

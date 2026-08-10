@@ -668,7 +668,17 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
       </ol>
       <div class="tip"><span class="callout-t">Ventaja:</span> agregar formularios nuevos <b>no requiere actualizar la app</b> — aparecen solos en su módulo.</div>
 
-      <h3><span class="h3n">11.7</span>Reportes</h3>
+      <h3><span class="h3n">11.7</span>Editar un registro ya enviado <span class="chip rol-adm">Administrador</span></h3>
+      <p>Un administrador puede corregir <b>cualquier registro</b> ya enviado —solicitud o reporte de combustible, checklist de reparto, montacargas y formularios de Seguridad/Sucursales— sin borrarlo ni pedir que se capture de nuevo.</p>
+      <ol class="steps">
+        <li>Abre el registro desde el <b>Historial</b> y baja hasta la tarjeta ámbar <b>«Editar registro (corrección de admin)»</b>.</li>
+        <li>Pulsa <kbd>✎ Editar este registro</kbd>: aparecen todos los datos capturados. Cambia únicamente lo que necesites (kilometraje, horas, respuestas del checklist, litros, precio, observaciones, fotos…). Lo que no toques queda intacto.</li>
+        <li><b>Guardar cambios</b>. El botón indica cuántos campos vas a modificar y pide confirmación.</li>
+      </ol>
+      <div class="note"><span class="callout-t">Qué NO se puede cambiar por esta vía:</span> la <b>unidad</b> del registro (para eso está «Cambiar unidad», que crea el registro en la unidad correcta y anula el anterior), la <b>fecha</b> del evento y el <b>estado</b> (se cambia por autorización). El <b>estado se conserva</b>: si estaba aprobado, sigue aprobado.</div>
+      <div class="note"><span class="callout-t">Queda constancia:</span> el registro muestra el sello <b>«✎ Registro editado»</b> con <b>quién</b>, <b>cuándo</b> y <b>qué campos</b> se corrigieron. Ese sello <b>sale también en el PDF</b>, y los CSV de historial traen una columna <b>«Editado»</b>. Se guarda el valor anterior y el nuevo de cada campo (las últimas 20 ediciones). Se revalidan los topes: litros ≤ capacidad del tanque, precio por litro ≤ $100 y kilometraje/horas mayores a 0.</div>
+
+      <h3><span class="h3n">11.8</span>Reportes</h3>
       <p>Reporte de cargas de combustible por día o rango, con totales por unidad y descarga en CSV.</p>
     </section>
 
