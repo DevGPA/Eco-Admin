@@ -753,7 +753,11 @@ function App(){
   };
   useEffect(()=>{if(session)cargarTodo();},[session]);
 
-  const refrescar=async tipo=>{try{const items=await api.listar(tipo);setData(d=>({...d,[tipo]:items}));}catch(e){showToast("⚠️ "+e.message);}};
+  // Al crear un registro o cambiar su estado también se releen los CATÁLOGOS: el
+  // "último km / últimas horas" por unidad es un DERIVADO de los registros, así que
+  // si no se recargan, el formulario sigue comparando contra una lectura vieja
+  // (p. ej. seguía tomando el km de una solicitud ya rechazada).
+  const refrescar=async tipo=>{try{const items=await api.listar(tipo);setData(d=>({...d,[tipo]:items}));await refrescarCat();}catch(e){showToast("⚠️ "+e.message);}};
   const refrescarCat=async()=>{try{const c=await api.catalogos();VENTANA_DIAS=(c.config&&c.config.ventanaDias)||45;setCat(c);}catch(e){showToast("⚠️ "+e.message);}};
   const login=async(email,pass)=>{const r=await api.login(email,pass);if(r&&r.challenge)return r;setAlertaOff(false);alertaFormRef.current=null;setSession(api.session);};
   const setNewPassword=async(np)=>{await api.completeNewPassword(np);setSession(api.session);};

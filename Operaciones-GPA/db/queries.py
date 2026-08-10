@@ -112,9 +112,11 @@ def ultimo_medidor_por_vehiculo(tipos, campo: str = "km") -> dict:
                 if not vid or it.get(campo) is None:
                     continue
                 d = m.from_dynamo(it)
-                # Los registros RECHAZADOS o ANULADOS (reasignados) no cuentan para
-                # los controles de medidor (km/horas): no son lecturas válidas.
-                if str(d.get("status") or "") in ("Rechazada", "Rechazado", "Anulado"):
+                # Los registros RECHAZADOS, ANULADOS (reasignados) o devueltos POR
+                # CORREGIR no cuentan para los controles de medidor (km/horas): no son
+                # lecturas válidas. Ojo con «Por corregir»: si se devolvió justamente
+                # porque el medidor estaba mal, ese valor no puede ser el «último».
+                if str(d.get("status") or "") in ("Rechazada", "Rechazado", "Anulado", "Por corregir"):
                     continue
                 # Lecturas en 0 tampoco: eran capturas SIN medidor (el campo era
                 # opcional y se guardaba 0) y bloqueaban las lecturas reales
