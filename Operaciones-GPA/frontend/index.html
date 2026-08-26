@@ -2457,12 +2457,27 @@ function ModAdmin({cat,refrescarCat,showToast}){
       showToast("✓ "+secs.reduce((a,s)=>a+s.items.length,0)+" campo(s) en "+secs.length+" sección(es)"+(noSop.length?" · "+noSop.length+" tipo(s) no soportado(s)":""));
     }catch(e){showToast("⚠️ "+e.message);}
   };
-  const guardarPlantilla=()=>{
+  // El error del guardado se muestra DENTRO de la vista previa (persistente): un toast
+  // de 3 s arriba se pierde mientras el usuario mira la ventana, y quedaba la impresión
+  // de que "no pasa nada". Además distingue fallo al GUARDAR de fallo al RECARGAR.
+  const[errPrev,setErrPrev]=useState("");
+  const guardarPlantilla=async()=>{
     if(!preview)return;
-    const clave=slug(fClave||preview.clave);if(!clave)return showToast("⚠️ Falta la clave del formulario");
-    const modulo=fMod||preview.modulo;if(!modulo)return showToast("⚠️ Falta el módulo");
+    setErrPrev("");
+    const clave=slug(fClave||preview.clave);if(!clave)return setErrPrev("Falta la clave del formulario.");
+    const modulo=fMod||preview.modulo;if(!modulo)return setErrPrev("Falta el módulo del formulario.");
     const secciones=preview.secciones.map(s=>({...s,items:s.items.filter(it=>TIPOS_CAMPO.includes(it.type))}));
-    wrap(async()=>{await api.adminPlantilla({clave,modulo,nombre:fNombre||preview.nombre||clave,secciones,requiereFirma:fFirma,requiereAutorizacion:fAut,activo:true});setPreview(null);setShowPrev(false);setFClave("");setFNombre("");showToast("✓ Formulario guardado");});
+    const nCampos=secciones.reduce((a,s)=>a+s.items.length,0);
+    if(!nCampos)return setErrPrev("El formulario quedó sin campos válidos.");
+    setBusy(true);
+    try{
+      await api.adminPlantilla({clave,modulo,nombre:fNombre||preview.nombre||clave,secciones,requiereFirma:fFirma,requiereAutorizacion:fAut,activo:true});
+    }catch(e){setErrPrev(String((e&&e.message)||e));setBusy(false);return;}
+    setPreview(null);setShowPrev(false);setFClave("");setFNombre("");
+    showToast("✓ Formulario guardado ("+nCampos+" campos)");
+    try{await refrescarCat();}
+    catch(e){showToast("⚠️ Se guardó, pero no se pudo recargar la lista. Recarga la app.");}
+    setBusy(false);
   };
   const togglePlantilla=p=>wrap(()=>api.adminPlantilla({...p,activo:!(p.activo!==false)}));
   // ── Reporte de cargas de combustible ──
@@ -2645,6 +2660,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
           {preview._noSop&&preview._noSop.length>0&&<div className="wb" style={{marginBottom:8}}>Tipos no soportados (se omitirán): {preview._noSop.join(", ")}</div>}
           <div style={{fontSize:11,color:"#666",marginBottom:10}}>Así se verá el formulario. Revisa los campos y guarda.</div>
           <FormDinamico plantilla={preview} cat={cat} rol="admin" sucursalesUser={null} session={{email:"preview",nombre:"Vista previa",sucursal:cat.sucursales[0]||""}} showToast={showToast} onDone={()=>{}}/>
+          {errPrev&&<div className="eb" style={{marginTop:10,fontSize:12}}>⚠️ <b>No se pudo guardar:</b> {errPrev}</div>}
           <div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={()=>setShowPrev(false)}>Cerrar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={guardarPlantilla}>✓ Guardar formulario</button></div>
         </div></div>}
         <div className="card"><div className="ct">Cargar formulario desde Excel</div>
