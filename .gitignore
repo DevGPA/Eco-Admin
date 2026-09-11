@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.aws-sam/
+frontend/config.js
+.env
+*.zip

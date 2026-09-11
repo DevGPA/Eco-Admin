@@ -1,0 +1,3 @@
+# Dependencias Python - GPA Alta de Clientes
+# boto3 ya viene en el runtime de Lambda; se fija para builds reproducibles.
+boto3==1.34.144

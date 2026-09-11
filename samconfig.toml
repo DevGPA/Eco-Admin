@@ -1,0 +1,49 @@
+# samconfig.toml — GPA Alta de Clientes
+# Configuración de despliegue por ambiente. Uso:
+#   sam deploy --config-env dev
+#
+# El aislamiento entre proyectos lo da el stack_name, no la rama de git.
+version = 0.1
+
+[default.global.parameters]
+stack_name = "gpa-alta-clientes-dev"
+
+# ─── DEV ─────────────────────────────────────────────────────────
+[dev.deploy.parameters]
+stack_name          = "gpa-alta-clientes-dev"
+region              = "us-east-1"
+resolve_s3          = true
+confirm_changeset   = false
+capabilities        = "CAPABILITY_IAM"
+parameter_overrides = "Env=dev"
+
+[dev.build.parameters]
+cached   = true
+parallel = true
+
+# ─── STAGING ─────────────────────────────────────────────────────
+[staging.deploy.parameters]
+stack_name          = "gpa-alta-clientes-staging"
+region              = "us-east-1"
+resolve_s3          = true
+confirm_changeset   = true
+capabilities        = "CAPABILITY_IAM"
+parameter_overrides = "Env=staging"
+
+[staging.build.parameters]
+cached   = true
+parallel = true
+
+# ─── PROD ────────────────────────────────────────────────────────
+# En prod, AllowedOrigin debe ser el dominio real del portal, no '*'.
+[prod.deploy.parameters]
+stack_name          = "gpa-alta-clientes-prod"
+region              = "us-east-1"
+resolve_s3          = true
+confirm_changeset   = true
+capabilities        = "CAPABILITY_IAM"
+parameter_overrides = "Env=prod"
+
+[prod.build.parameters]
+cached   = true
+parallel = true

@@ -1,0 +1,441 @@
+# template.yaml
+# AWS SAM — GPA Alta de Clientes (portal de expedientes)
+# ─────────────────────────────────────────────────────────────────
+# Qué se despliega:
+#   - Lambda        gpa-alta-clientes-{env}
+#   - API Gateway   HTTP API v2 — Cognito JWT por omisión, con rutas públicas
+#                   para el portal del cliente (liga + clave, sin cuenta)
+#   - DynamoDB      gpa_alta_clientes_{env}  (single-table, 3 GSIs)
+#   - S3            documentos del expediente, privado, con URL prefirmada
+#   - Cognito       UserPool + Client + 4 grupos (roles internos de GPA)
+#   - CloudWatch    Log Group
+#   (El frontend se hospeda en AWS Amplify — ver amplify.yml)
+#
+# Regla que manda sobre el diseño: el CLIENTE NUNCA TIENE CUENTA. Entra con una
+# liga con token y una clave que se le entrega por otro canal. Las rutas
+# /portal/* son públicas en API Gateway y la Lambda valida token + clave.
+#
+# Deploy:
+#   sam build
+#   sam deploy --guided --config-env dev     (primera vez)
+#   sam deploy --config-env dev              (siguientes)
+# ─────────────────────────────────────────────────────────────────
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GPA Alta de Clientes · Portal de expedientes de alta y crédito
+  Infraestructura: Lambda · API Gateway HTTP API · DynamoDB · S3 · Cognito
+
+Globals:
+  Function:
+    Runtime:       python3.12
+    Architectures: [arm64]
+    MemorySize:    512
+    Timeout:       30
+    Environment:
+      Variables:
+        DYNAMO_TABLE:   !Ref CasosTable
+        DOCS_BUCKET:    !Sub gpa-alta-docs-${Env}-${AWS::AccountId}
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+        USER_POOL_ID:   !Ref CognitoUserPool
+        ENV:            !Ref Env
+        PORTAL_URL:     !Ref PortalUrl
+
+Parameters:
+
+  Env:
+    Type:          String
+    AllowedValues: [dev, staging, prod]
+    Default:       dev
+    Description:   Ambiente de despliegue
+
+  AllowedOrigin:
+    Type:    String
+    Default: '*'
+    Description: >
+      Origen CORS. En prod poner el dominio de Amplify (https://...amplifyapp.com)
+      o el dominio propio. Con '*' cualquier sitio puede llamar a la API.
+
+  PortalUrl:
+    Type:    String
+    Default: ''
+    Description: >
+      Dirección pública del portal, para armar la liga que se le manda al cliente.
+      Ej.: https://alta.gpa.com.mx  (vacío = se arma desde el navegador)
+
+  VigenciaLigaDias:
+    Type:    Number
+    Default: 15
+    MinValue: 1
+    MaxValue: 90
+    Description: Días que vive una liga de invitación antes de vencer.
+
+Conditions:
+  IsProd: !Equals [!Ref Env, prod]
+
+Resources:
+
+  # ═══════════════════════════════════════════════════════════════
+  # 1. LAMBDA
+  # ═══════════════════════════════════════════════════════════════
+  AltaFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub gpa-alta-clientes-${Env}
+      Description:  GPA Alta de Clientes — pre-solicitudes, portal del cliente, revisión y firmas
+      Handler:      handler.lambda_handler
+      CodeUri:      ./
+      Layers:
+        - !Ref DependenciasLayer
+      Environment:
+        Variables:
+          VIGENCIA_LIGA_DIAS: !Ref VigenciaLigaDias
+      Events:
+
+        # ── Públicas: sin cuenta, sin contraseña ──────────────────
+        Health:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /health, Auth: { Authorizer: NONE } }
+        Catalogos:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /catalogos, Auth: { Authorizer: NONE } }
+        PortalEntrar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/entrar, Auth: { Authorizer: NONE } }
+        PortalGuardar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/guardar, Auth: { Authorizer: NONE } }
+        PortalUrlSubida:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/url-subida, Auth: { Authorizer: NONE } }
+        PortalAdjuntar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/adjuntar, Auth: { Authorizer: NONE } }
+        PortalEnviar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/enviar, Auth: { Authorizer: NONE } }
+
+        # ── Internas: Cognito ─────────────────────────────────────
+        CasosListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /casos }
+        CasoCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /casos }
+        CasoDetalle:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: '/casos/{folio}' }
+        CasoBitacora:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: '/casos/{folio}/bitacora' }
+        CasoClave:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/clave' }
+        CasoRevision:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/revision' }
+        CasoDevolver:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/devolver' }
+        CasoAutorizacion:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/autorizacion' }
+        CasoFirmar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/firmar' }
+        CasoRechazar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/rechazar' }
+        UsuariosListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /usuarios }
+        UsuarioGuardar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /usuarios }
+        Firmantes:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /firmantes }
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CasosTable
+        - S3CrudPolicy:
+            BucketName: !Sub gpa-alta-docs-${Env}-${AWS::AccountId}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt CognitoUserPool.Arn
+
+      Tags:
+        Proyecto: GPA-AltaClientes
+        Env:      !Ref Env
+
+    Metadata:
+      BuildMethod: python3.12
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. LAYER
+  # ═══════════════════════════════════════════════════════════════
+  DependenciasLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:   !Sub gpa-alta-deps-${Env}
+      Description: Dependencias Python — GPA Alta de Clientes
+      ContentUri:  ./layer/
+      CompatibleRuntimes: [python3.12]
+      CompatibleArchitectures: [arm64]
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. API GATEWAY
+  # ═══════════════════════════════════════════════════════════════
+  AltaHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Env
+      Description: GPA Alta de Clientes — HTTP API
+      Auth:
+        DefaultAuthorizer: CognitoJWT
+        Authorizers:
+          CognitoJWT:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              audience:
+                - !Ref CognitoUserPoolClient
+              issuer: !Sub
+                - https://cognito-idp.${AWS::Region}.amazonaws.com/${PoolId}
+                - PoolId: !Ref CognitoUserPool
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowHeaders: [Content-Type, Authorization]
+        AllowMethods: [GET, POST, OPTIONS]
+        MaxAge: 300
+      # Las rutas del portal son públicas: el límite frena intentos de adivinar claves.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: !If [IsProd, 60, 20]
+        ThrottlingRateLimit:  !If [IsProd, 30, 10]
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. DYNAMODB — single-table
+  # ═══════════════════════════════════════════════════════════════
+  # Caso:      PK=CASO#{folio}  SK=META
+  #   GSI1 tipo-fecha-idx    GSI1PK=CASO          GSI1SK={creado}   (bandeja)
+  #   GSI2 token-idx         GSI2PK=TOKEN#{tok}   GSI2SK=META       (portal)
+  #   GSI3 estado-fecha-idx  GSI3PK=EST#{estado}  GSI3SK={creado}   (filtros)
+  # Bitácora:  PK=CASO#{folio}  SK=LOG#{iso}#{n}
+  # Contador:  PK=CONFIG        SK=CONTADOR#{aaaamm}
+  # ═══════════════════════════════════════════════════════════════
+  CasosTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy:      !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName:   !Sub gpa_alta_clientes_${Env}
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      DeletionProtectionEnabled: !If [IsProd, true, false]
+      AttributeDefinitions:
+        - { AttributeName: PK,     AttributeType: S }
+        - { AttributeName: SK,     AttributeType: S }
+        - { AttributeName: GSI1PK, AttributeType: S }
+        - { AttributeName: GSI1SK, AttributeType: S }
+        - { AttributeName: GSI2PK, AttributeType: S }
+        - { AttributeName: GSI2SK, AttributeType: S }
+        - { AttributeName: GSI3PK, AttributeType: S }
+        - { AttributeName: GSI3SK, AttributeType: S }
+      KeySchema:
+        - { AttributeName: PK, KeyType: HASH }
+        - { AttributeName: SK, KeyType: RANGE }
+      GlobalSecondaryIndexes:
+        - IndexName: tipo-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI1PK, KeyType: HASH }
+            - { AttributeName: GSI1SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: token-idx
+          KeySchema:
+            - { AttributeName: GSI2PK, KeyType: HASH }
+            - { AttributeName: GSI2SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+        - IndexName: estado-fecha-idx
+          KeySchema:
+            - { AttributeName: GSI3PK, KeyType: HASH }
+            - { AttributeName: GSI3SK, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+      Tags:
+        - { Key: Proyecto, Value: GPA-AltaClientes }
+        - { Key: Env,      Value: !Ref Env }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 5. S3 — documentos del expediente
+  # ═══════════════════════════════════════════════════════════════
+  # Lleva INE, actas, poderes y estados de cuenta: privado, cifrado y sin
+  # acceso público. Solo la Lambda puede firmar URLs temporales.
+  DocsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy:      !If [IsProd, Retain, Delete]
+    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    Properties:
+      BucketName: !Sub gpa-alta-docs-${Env}-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls:       true
+        BlockPublicPolicy:     true
+        IgnorePublicAcls:      true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT]
+            AllowedOrigins: [!Ref AllowedOrigin]
+            MaxAge:         3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchivarDocumentos
+            Status: Enabled
+            Transitions:
+              - { TransitionInDays: 180, StorageClass: STANDARD_IA }
+          - Id: LimpiarVersionesViejas
+            Status: Enabled
+            NoncurrentVersionExpiration: { NoncurrentDays: 365 }
+      Tags:
+        - { Key: Proyecto, Value: GPA-AltaClientes }
+        - { Key: Env,      Value: !Ref Env }
+
+  # Deja por escrito que nadie entra al bucket sin cifrado en tránsito.
+  DocsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DocsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: SoloHTTPS
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${DocsBucket}'
+              - !Sub 'arn:aws:s3:::${DocsBucket}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': false }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 6. COGNITO — SOLO usuarios internos de GPA
+  # ═══════════════════════════════════════════════════════════════
+  # El cliente externo no aparece aquí: no tiene cuenta ni la necesita.
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub gpa-alta-users-${Env}
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true      # nadie se registra solo
+      Policies:
+        PasswordPolicy:
+          MinimumLength:    10
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers:   true
+          RequireSymbols:   false
+          TemporaryPasswordValidityDays: 7
+      MfaConfiguration: 'OFF'
+      Schema:
+        - { Name: email, Required: true, Mutable: true }
+        - Name: nombre
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '80' }
+        - Name: n1
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '1' }
+        - Name: n2
+          AttributeDataType: String
+          Mutable: true
+          StringAttributeConstraints: { MinLength: '0', MaxLength: '1' }
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - { Name: verified_email, Priority: 1 }
+      UserPoolTags:
+        Proyecto: GPA-AltaClientes
+        Env:      !Ref Env
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName:     !Sub gpa-alta-client-${Env}
+      UserPoolId:     !Ref CognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      ReadAttributes:  [email, 'custom:nombre', 'custom:n1', 'custom:n2']
+      WriteAttributes: [email, 'custom:nombre']
+      AccessTokenValidity:  8
+      IdTokenValidity:      8
+      RefreshTokenValidity: 15
+      TokenValidityUnits: { AccessToken: hours, IdToken: hours, RefreshToken: days }
+      PreventUserExistenceErrors: ENABLED
+
+  GrupoAdmin:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: admin, UserPoolId: !Ref CognitoUserPool, Description: 'Administrador — todo, incluido el panel de usuarios', Precedence: 1 }
+  GrupoComite:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: comite, UserPoolId: !Ref CognitoUserPool, Description: 'Comité de Crédito — crea, revisa y autoriza', Precedence: 5 }
+  GrupoVentas:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: ventas, UserPoolId: !Ref CognitoUserPool, Description: 'Ventas — crea y revisa, sin autorizar', Precedence: 10 }
+  GrupoConsulta:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: { GroupName: consulta, UserPoolId: !Ref CognitoUserPool, Description: 'Consulta — solo ver', Precedence: 20 }
+
+  # ═══════════════════════════════════════════════════════════════
+  # 7. CLOUDWATCH
+  # ═══════════════════════════════════════════════════════════════
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:    !Sub /aws/lambda/gpa-alta-clientes-${Env}
+      RetentionInDays: !If [IsProd, 90, 14]
+
+Outputs:
+  ApiUrl:
+    Description: URL base de la API. Ponla en Amplify como variable API_URL.
+    Value: !Sub https://${AltaHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
+  DocsBucketName:
+    Description: Bucket privado de los documentos del expediente
+    Value: !Ref DocsBucket
+  TableName:
+    Value: !Ref CasosTable
+  UserPoolId:
+    Description: Ponlo en Amplify como POOL_ID
+    Value: !Ref CognitoUserPool
+  UserPoolClientId:
+    Description: Ponlo en Amplify como CLIENT_ID
+    Value: !Ref CognitoUserPoolClient
+  Region:
+    Value: !Ref AWS::Region

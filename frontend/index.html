@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<title>Alta de Clientes · GPA</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<header class="topbar" id="topbar" hidden>
+  <div class="brand">
+    <span class="brand-mark">GPA</span>
+    <span class="brand-name" id="brand-name">Alta de Clientes</span>
+  </div>
+  <div class="subnav" id="subnav"></div>
+  <div class="row" id="sesion-box"></div>
+</header>
+
+<main id="app">
+  <div class="wrap" style="padding-top:60px; text-align:center">
+    <p class="dim">Cargando…</p>
+  </div>
+</main>
+
+<footer class="foot" id="foot" hidden>
+  Formatos <span class="mono">PNO-VE01-F3</span> (Alta de Cliente Distribuidor) y
+  <span class="mono">CYC-FT-001 Rev.03</span> (Solicitud de Crédito).
+  Régimen fiscal según el catálogo <span class="mono">c_RegimenFiscal</span> del SAT.
+</footer>
+
+<!-- config.js lo genera Amplify en cada despliegue (ver amplify.yml).
+     Para probar en local: copie config.example.js a config.js y llene los datos. -->
+<script src="config.js"></script>
+<script src="gpa-api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
