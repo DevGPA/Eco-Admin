@@ -11,6 +11,11 @@
 #   - CloudWatch    Log Group
 #   (El frontend se hospeda en AWS Amplify — ver amplify.yml)
 #
+# NO hay capa de dependencias a proposito: la unica libreria que usa el codigo
+# es boto3, que ya viene en el runtime de Lambda. Una capa solo para eso agrega
+# un paso de build que falla cuando la maquina que compila no tiene la version
+# exacta de Python, y obliga a cuadrar arquitecturas sin ganar nada.
+#
 # Regla que manda sobre el diseño: el CLIENTE NUNCA TIENE CUENTA. Entra con una
 # liga con token y una clave que se le entrega por otro canal. Las rutas
 # /portal/* son públicas en API Gateway y la Lambda valida token + clave.
@@ -29,7 +34,7 @@ Description: >
 
 Globals:
   Function:
-    Runtime:       python3.12
+    Runtime:       python3.13
     Architectures: [arm64]
     MemorySize:    512
     Timeout:       30
@@ -88,8 +93,6 @@ Resources:
       Description:  GPA Alta de Clientes — pre-solicitudes, portal del cliente, revisión y firmas
       Handler:      handler.lambda_handler
       CodeUri:      ./
-      Layers:
-        - !Ref DependenciasLayer
       Environment:
         Variables:
           VIGENCIA_LIGA_DIAS: !Ref VigenciaLigaDias
@@ -184,25 +187,10 @@ Resources:
         Env:      !Ref Env
 
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
 
   # ═══════════════════════════════════════════════════════════════
-  # 2. LAYER
-  # ═══════════════════════════════════════════════════════════════
-  DependenciasLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName:   !Sub gpa-alta-deps-${Env}
-      Description: Dependencias Python — GPA Alta de Clientes
-      ContentUri:  ./layer/
-      CompatibleRuntimes: [python3.12]
-      CompatibleArchitectures: [arm64]
-      RetentionPolicy: Delete
-    Metadata:
-      BuildMethod: python3.12
-
-  # ═══════════════════════════════════════════════════════════════
-  # 3. API GATEWAY
+  # 2. API GATEWAY
   # ═══════════════════════════════════════════════════════════════
   AltaHttpApi:
     Type: AWS::Serverless::HttpApi
@@ -232,7 +220,7 @@ Resources:
         ThrottlingRateLimit:  !If [IsProd, 30, 10]
 
   # ═══════════════════════════════════════════════════════════════
-  # 4. DYNAMODB — single-table
+  # 3. DYNAMODB — single-table
   # ═══════════════════════════════════════════════════════════════
   # Caso:      PK=CASO#{folio}  SK=META
   #   GSI1 tipo-fecha-idx    GSI1PK=CASO          GSI1SK={creado}   (bandeja)
@@ -286,7 +274,7 @@ Resources:
         - { Key: Env,      Value: !Ref Env }
 
   # ═══════════════════════════════════════════════════════════════
-  # 5. S3 — documentos del expediente
+  # 4. S3 — documentos del expediente
   # ═══════════════════════════════════════════════════════════════
   # Lleva INE, actas, poderes y estados de cuenta: privado, cifrado y sin
   # acceso público. Solo la Lambda puede firmar URLs temporales.
@@ -343,7 +331,7 @@ Resources:
               Bool: { 'aws:SecureTransport': false }
 
   # ═══════════════════════════════════════════════════════════════
-  # 6. COGNITO — SOLO usuarios internos de GPA
+  # 5. COGNITO — SOLO usuarios internos de GPA
   # ═══════════════════════════════════════════════════════════════
   # El cliente externo no aparece aquí: no tiene cuenta ni la necesita.
   CognitoUserPool:
@@ -416,7 +404,7 @@ Resources:
     Properties: { GroupName: consulta, UserPoolId: !Ref CognitoUserPool, Description: 'Consulta — solo ver', Precedence: 20 }
 
   # ═══════════════════════════════════════════════════════════════
-  # 7. CLOUDWATCH
+  # 6. CLOUDWATCH
   # ═══════════════════════════════════════════════════════════════
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
