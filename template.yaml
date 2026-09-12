@@ -62,7 +62,9 @@ Parameters:
     Default: ''
     Description: >
       Dirección pública del portal, para armar la liga que se le manda al cliente.
-      Ej.: https://alta.gpa.com.mx  (vacío = se arma desde el navegador)
+      La definitiva es https://altaclientes.gpa.com.mx (requiere el DNS de IT).
+      Vacío = la liga se arma con la dirección desde la que se abrió el navegador,
+      que durante las pruebas es la de amplifyapp.com.
 
   VigenciaLigaDias:
     Type:    Number

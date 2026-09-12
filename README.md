@@ -139,15 +139,47 @@ La primera vez que entre, el sistema le pedirá elegir su propia contraseña.
 **Qué debe ver:** una dirección tipo `https://dev.xxxxx.amplifyapp.com`. Ábrala:
 debe aparecer la pantalla de acceso de GPA.
 
-**7. Cerrar el paso abierto (importante)**
+**7. Apuntar el dominio de GPA**
 
-Mientras `AllowedOrigin` sea `*`, cualquier sitio puede llamar a la API. Con la
-dirección de Amplify a la mano, ciérrelo:
+La dirección definitiva del portal es **`altaclientes.gpa.com.mx`**.
+
+Amplify regala una dirección tipo `https://alta-clientes.d1a2b3c4.amplifyapp.com`, que
+sirve para probar pero **no para mandársela a un cliente**: una liga que pide INE, acta
+constitutiva y estados de cuenta desde un dominio desconocido parece justo lo que un
+cliente prudente debería ignorar, y los filtros de correo la marcan como sospechosa.
+
+1. En Amplify: **Hosting → Custom domains → Add domain** y escriba `gpa.com.mx`.
+2. En *Subdomains*: prefijo `altaclientes`, rama `alta-clientes`.
+3. Amplify le mostrará **dos registros DNS**: uno para validar el certificado y otro
+   que apunta el subdominio. Cópielos tal cual.
+4. **Esto lo hace IT:** agregar esos dos registros donde se administra `gpa.com.mx`.
+   Es lo único que no se puede hacer desde AWS.
+5. Espere. Normalmente tarda menos de una hora; puede tardar hasta 24.
+
+**Qué debe ver:** en Amplify, el dominio pasa de *Pending verification* a **Available**,
+y `https://altaclientes.gpa.com.mx` abre el portal con candado de seguridad.
+
+6. Cuando ya funcione, agregue en Amplify una variable más y vuelva a desplegar:
+
+   | Variable | Valor |
+   |---|---|
+   | `PORTAL_URL` | `https://altaclientes.gpa.com.mx` |
+
+   Sin esa variable, las ligas se arman con la dirección de `amplifyapp.com`.
+   Con ella quedan así: `https://altaclientes.gpa.com.mx/?t=k7m2-9fqx-4tz8`
+
+**8. Cerrar el paso abierto (importante)**
+
+Mientras `AllowedOrigin` sea `*`, cualquier sitio puede llamar a la API. Ciérrelo con la
+dirección definitiva:
 
 ```bash
 sam deploy --config-env dev --no-confirm-changeset \
-  --parameter-overrides Env=dev AllowedOrigin=https://dev.xxxxx.amplifyapp.com
+  --parameter-overrides Env=dev AllowedOrigin=https://altaclientes.gpa.com.mx
 ```
+
+Hágalo **después** de que el dominio esté funcionando. Si lo cierra antes, la dirección
+de `amplifyapp.com` deja de servir y se queda sin manera de entrar.
 
 **Cómo verificar que quedó bien**
 

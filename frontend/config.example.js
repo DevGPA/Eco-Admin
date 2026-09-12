@@ -7,6 +7,6 @@ window.GPA_CONFIG = {
   region:    "us-east-1",
   poolId:    "us-east-1_XXXXXXXXX",
   clientId:  "XXXXXXXXXXXXXXXXXXXXXXXXXX",
-  portalUrl: "",   // vacío = la liga se arma con la dirección del navegador
+  portalUrl: "https://altaclientes.gpa.com.mx",  // vacío = se arma con la dirección del navegador
   env:       "dev",
 };

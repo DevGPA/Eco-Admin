@@ -7,7 +7,8 @@
 #   API_URL     = https://xxxx.execute-api.us-east-1.amazonaws.com/dev   (Output ApiUrl)
 #   POOL_ID     = us-east-1_XXXXXXXXX                                    (Output UserPoolId)
 #   CLIENT_ID   = XXXXXXXXXXXXXXXXXXXXXXXXXX                             (Output UserPoolClientId)
-#   PORTAL_URL  = https://dev.xxxx.amplifyapp.com   (opcional; vacío = se arma sola)
+#   PORTAL_URL  = https://altaclientes.gpa.com.mx   (la dirección definitiva del portal;
+#                 déjela vacía mientras IT no haya apuntado el DNS)
 #   APP_ENV     = dev | prod
 #   (AWS_REGION lo pone Amplify por su cuenta)
 #
