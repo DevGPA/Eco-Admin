@@ -439,6 +439,76 @@ function vistaBandeja() {
     "</tbody></table></div></div></div>";
 }
 
+/** Secciones del formulario. No se eligen: el tipo de solicitud las trae todas. */
+function listaModulos(T) {
+  return T.modulos.map(function (id) {
+    var m = modulo(id);
+    return '<div class="modrow on"><span class="palomita">✓</span>' +
+      '<span><span class="t">' + esc(m.nombre) + '</span>' +
+      '<span class="d">' + esc(m.desc) + "</span></span></div>";
+  }).join("");
+}
+
+/** Documentos del tipo. Los de persona moral se descuentan según el régimen. */
+function listaDocumentos(T, persona) {
+  return T.docs.map(function (id) {
+    var d = doc(id);
+    var noAplica = d.pm && persona === "Física";
+    return '<div class="docpick ' + (noAplica ? "off" : "") + '">' +
+      '<span class="palomita">' + (noAplica ? "—" : "✓") + "</span><span>" + esc(d.n) +
+      (noAplica ? '<span class="dim"> · no aplica a persona física</span>' : "") + "</span></div>";
+  }).join("");
+}
+
+function textoPersona(n) {
+  var r = regimen(n.regimen);
+  return "Persona <b>" + esc(personaDe(n.regimen, n.rfc).toLowerCase()) + "</b>" +
+    (r && r.t === "FM" ? ", determinada por la longitud del RFC" : "") + ".";
+}
+
+/** Refresca SOLO lo que depende del RFC y del régimen.
+ *
+ *  Nunca llama a render(): redibujar el formulario completo destruye el campo
+ *  donde la persona está escribiendo y le quita el foco, obligando a hacer clic
+ *  después de cada letra.
+ */
+function actualizaPorRfc() {
+  var n = S.nueva;
+  if (!n) return;
+  var T = CAT.tipos[n.tipo];
+  var persona = personaDe(n.regimen, n.rfc);
+
+  var hint = $("#persona-hint");
+  if (hint) hint.innerHTML = textoPersona(n);
+
+  var caja = $("#conflicto-rfc");
+  if (caja) {
+    var texto = conflictoRfc(n.regimen, n.rfc);
+    caja.innerHTML = texto
+      ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(texto) + "</span></div>"
+      : "";
+  }
+
+  var lista = $("#lista-docs");
+  if (lista) lista.innerHTML = listaDocumentos(T, persona);
+
+  var conteo = $("#conteo-docs");
+  if (conteo) {
+    var cuantos = T.docs.filter(function (id) {
+      var d = doc(id);
+      return !(d.pm && persona === "Física");
+    }).length;
+    conteo.textContent = cuantos + " documento" + (cuantos === 1 ? "" : "s");
+  }
+
+  var boton = $("#btn-generar");
+  if (boton) {
+    boton.disabled = !(String(n.razon_social || "").trim() &&
+                       String(n.rfc || "").trim() &&
+                       String(n.correo || "").trim());
+  }
+}
+
 function vistaNueva() {
   var n = S.nueva;
   var T = CAT.tipos[n.tipo];
@@ -456,24 +526,10 @@ function vistaNueva() {
       "</select></div>";
   }
 
-  var mods = T.modulos.map(function (id) {
-    var m = modulo(id);
-    var on = !!n.modulos[id];
-    return '<label class="modrow ' + (on ? "on" : "") + '">' +
-      '<input type="checkbox" data-mod="' + id + '" ' + (on ? "checked" : "") + ">" +
-      '<span><span class="t">' + esc(m.nombre) + '</span><span class="d">' + esc(m.desc) + "</span></span></label>";
-  }).join("");
-
-  var docs = T.docs.map(function (id) {
+  var nDocs = T.docs.filter(function (id) {
     var d = doc(id);
-    var bloqueado = d.pm && persona === "Física";
-    return '<label class="docpick ' + (bloqueado ? "off" : "") + '">' +
-      '<input type="checkbox" data-doc="' + id + '" ' + (n.docs[id] && !bloqueado ? "checked" : "") +
-      " " + (bloqueado ? "disabled" : "") + "><span>" + esc(d.n) +
-      (bloqueado ? '<span class="dim"> · solo persona moral</span>' : "") + "</span></label>";
-  }).join("");
-
-  var nDocs = T.docs.filter(function (id) { var d = doc(id); return n.docs[id] && !(d.pm && persona === "Física"); }).length;
+    return !(d.pm && persona === "Física");
+  }).length;
   var listo = String(n.razon_social || "").trim() && String(n.rfc || "").trim() && String(n.correo || "").trim();
 
   var panel;
@@ -528,21 +584,23 @@ function vistaNueva() {
       CAT.regimenes.map(function (r) {
         return '<option value="' + r.c + '" ' + (n.regimen === r.c ? "selected" : "") + ">" + r.c + " — " + esc(r.n) + "</option>";
       }).join("") + "</select>" +
-      '<span class="dim">Persona <b>' + esc(persona.toLowerCase()) + "</b>" +
-      (regimen(n.regimen) && regimen(n.regimen).t === "FM" ? ", determinada por la longitud del RFC" : "") + ".</span></div>" +
+      '<span class="dim" id="persona-hint">' + textoPersona(n) + "</span></div>" +
       selec("sucursal", "Sucursal que atiende", "f-third", CAT.cat.sucursal) +
       selec("giro", "Giro principal", "f-third", CAT.cat.giro) +
       selec("clasificacion", "Clasificación", "f-third", CAT.cat.clasificacion) +
       campo("contacto", "Persona de contacto", "f-third") +
       campo("correo", 'Correo del contacto <span class="req">*</span>', "f-half") +
       campo("celular", "Celular del contacto", "f-half", "mono") + "</div>" +
+      '<div id="conflicto-rfc">' +
       (conflicto ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(conflicto) + "</span></div>" : "") +
-      "</div>" +
+      "</div></div>" +
       '<div class="card pad stack"><div class="spread"><div class="eyebrow">3 · Qué se le pide</div>' +
-      '<span class="dim">' + nDocs + " documento" + (nDocs === 1 ? "" : "s") + "</span></div>" +
-      '<div class="stack" style="gap:8px">' + mods + "</div><hr class=\"sep\">" +
-      '<div class="eyebrow">Documentos</div><div>' + docs + "</div>" +
-      '<p class="dim" style="margin:0">Los de persona moral se apagan solos según el régimen fiscal.</p></div>' +
+      '<span class="dim" id="conteo-docs">' + nDocs + " documento" + (nDocs === 1 ? "" : "s") + "</span></div>" +
+      '<p class="dim" style="margin:0">Esto no se elige: cada tipo de solicitud trae sus secciones ' +
+      "y sus documentos completos.</p>" +
+      '<div class="stack" style="gap:8px">' + listaModulos(T) + "</div><hr class=\"sep\">" +
+      '<div class="eyebrow">Documentos</div><div id="lista-docs">' + listaDocumentos(T, persona) + "</div>" +
+      '<p class="dim" style="margin:0">Los de persona moral se descuentan solos según el régimen fiscal.</p></div>' +
     "</div>" +
     '<div class="card pad stack"><div class="eyebrow">4 · Envío al cliente</div>' + panel + "</div></div></div>";
 }
@@ -762,14 +820,11 @@ function render() {
 // Acciones
 // ═══════════════════════════════════════════════════════════════
 function nuevaVacia(tipo) {
+  // Sin módulos ni documentos: los fija el servidor según el tipo de solicitud.
   var T = CAT.tipos[tipo || "alta"];
-  var mods = {}, docs = {};
-  T.modulos.forEach(function (id) { mods[id] = true; });
-  T.docs.forEach(function (id) { docs[id] = true; });
   return { tipo: T.id, razon_social: "", nombre_comercial: "", rfc: "", regimen: "601",
            contacto: "", correo: "", celular: "", sucursal: CAT.cat.sucursal[0],
-           giro: CAT.cat.giro[0], clasificacion: CAT.cat.clasificacion[0],
-           modulos: mods, docs: docs };
+           giro: CAT.cat.giro[0], clasificacion: CAT.cat.clasificacion[0] };
 }
 
 var irA = conError(function (vista, folio) {
@@ -880,7 +935,18 @@ document.addEventListener("click", function (ev) {
   if (d.ir) { irA(d.ir); return; }
   if (d.abrir) { irA("expediente", d.abrir); return; }
   if (t.matches("tr[data-folio]")) { irA("expediente", d.folio); return; }
-  if (d.tipo) { S.nueva = nuevaVacia(d.tipo); S.ligaNueva = null; render(); return; }
+  if (d.tipo) {
+    // Cambiar de tipo NO debe borrar lo que ya se capturó del cliente.
+    var previo = S.nueva || {};
+    S.nueva = nuevaVacia(d.tipo);
+    ["razon_social", "nombre_comercial", "rfc", "regimen", "contacto", "correo",
+     "celular", "sucursal", "giro", "clasificacion"].forEach(function (k) {
+      if (previo[k]) S.nueva[k] = previo[k];
+    });
+    S.ligaNueva = null;
+    render();
+    return;
+  }
   if (d.borrador) { S.borrador = S.borrador === d.borrador ? "" : d.borrador; render(); return; }
   if (d.copiar) {
     copiar(d.copiar === "liga" ? S.ligaNueva.liga : S.ligaNueva.clave,
@@ -896,7 +962,7 @@ document.addEventListener("click", function (ev) {
         tipo: n.tipo, razonSocial: n.razon_social, nombreComercial: n.nombre_comercial,
         rfc: n.rfc, regimen: n.regimen, contacto: n.contacto, correo: n.correo,
         celular: n.celular, sucursal: n.sucursal, giro: n.giro, clasificacion: n.clasificacion,
-        modulos: n.modulos, docs: n.docs,
+        // No se mandan módulos ni documentos: los fija el servidor según el tipo.
       }).then(function (r) {
         var base = (window.GPA_CONFIG && window.GPA_CONFIG.portalUrl) || (location.origin + location.pathname.replace(/[^/]*$/, ""));
         var liga = base.replace(/\/$/, "") + "/?t=" + r.caso.token;
@@ -972,19 +1038,15 @@ document.addEventListener("input", function (ev) {
   var el = ev.target, d = el.dataset || {};
   if (d.nueva) {
     S.nueva[d.nueva] = el.value;
-    if (d.nueva === "rfc") render();           // el RFC decide persona en regímenes mixtos
-    else {
-      var b = $("#btn-generar");
-      if (b) b.disabled = !(String(S.nueva.razon_social).trim() && String(S.nueva.rfc).trim() && String(S.nueva.correo).trim());
-    }
+    // Aquí NO se llama a render(). Redibujar el formulario destruye el campo que
+    // se está escribiendo y le quita el foco: obligaba a hacer clic tras cada letra.
+    actualizaPorRfc();
   }
 });
 
 document.addEventListener("change", function (ev) {
   var el = ev.target, d = el.dataset || {};
-  if (d.mod) { S.nueva.modulos[d.mod] = el.checked; render(); return; }
-  if (d.doc) { S.nueva.docs[d.doc] = el.checked; render(); return; }
-  if (d.nueva === "regimen") { S.nueva.regimen = el.value; render(); return; }
+  if (d.nueva === "regimen") { S.nueva.regimen = el.value; actualizaPorRfc(); return; }
   if (d.firmasel) { S.firmaSel[d.firmasel] = el.value; return; }
   if (el.id === "privacidad") { var b = $("#btn-enviar-portal"); if (b) b.disabled = !el.checked; return; }
 

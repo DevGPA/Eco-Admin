@@ -67,12 +67,12 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
     if "@" not in correo:
         raise ReglaRota("Falta un correo válido del contacto.")
 
-    # Solo se guardan módulos y documentos que pertenezcan al tipo elegido:
-    # así un alta nunca puede terminar pidiendo estados de cuenta bancarios.
-    modulos = {mid: bool((datos.get("modulos") or {}).get(mid)) for mid in tipo["modulos"]}
-    docs = {did: bool((datos.get("docs") or {}).get(did)) for did in tipo["docs"]}
-    if not any(modulos.values()):
-        raise ReglaRota("Encienda al menos un módulo del formulario.")
+    # Los módulos y documentos NO se eligen: cada tipo de solicitud trae los suyos
+    # completos. Un alta pide sus 5 documentos y un crédito sus 13, siempre.
+    # Lo único que se descuenta es lo que solo aplica a persona moral, y eso lo
+    # decide el régimen fiscal, no quien captura. Se ignora lo que mande la pantalla.
+    modulos = {mid: True for mid in tipo["modulos"]}
+    docs = {did: True for did in tipo["docs"]}
 
     folio = siguiente_folio()
     token = nuevo_token()

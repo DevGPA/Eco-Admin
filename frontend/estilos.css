@@ -345,3 +345,13 @@ label.subir{display:inline-flex; align-items:center; cursor:pointer; flex:none}
 
 /* Tabla sin renglones: el aviso ocupa todo el ancho. */
 table.grid-t td[colspan]{text-align:center; padding:26px 12px}
+
+/* Palomita de las listas informativas de módulos y documentos.
+   Ya no son casillas: el tipo de solicitud los trae todos, no se eligen. */
+.palomita{
+  flex:none; width:16px; text-align:center; font-weight:600;
+  color:var(--ok); font-size:13px; line-height:1.5;
+}
+.docpick.off .palomita, .docpick.off{color:var(--ink-3)}
+.modrow{cursor:default}
+.docpick{cursor:default}

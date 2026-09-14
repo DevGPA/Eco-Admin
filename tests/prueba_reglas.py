@@ -90,6 +90,22 @@ caso_cred, clave_cred = e.crear_caso(nueva("credito"), ADMIN)
 ok(len(caso_cred["docs"]) == 13, "un crédito guarda sus 13 documentos")
 ok(caso_cred["folio"] != caso_alta["folio"], "los folios no se repiten")
 
+# Los documentos y secciones NO se eligen: van completos por tipo de solicitud.
+recortado = nueva("credito")
+recortado["docs"] = {"csf": True}                 # la pantalla manda solo uno
+recortado["modulos"] = {"fiscal": True}           # y una sola sección
+caso_r, _ = e.crear_caso(recortado, ADMIN)
+ok(set(caso_r["docs"]) == set(c.TIPOS["credito"]["docs"]) and all(caso_r["docs"].values()),
+   "aunque la pantalla mande 1 documento, el servidor pone los 13 del tipo")
+ok(set(caso_r["modulos"]) == set(c.TIPOS["credito"]["modulos"]) and all(caso_r["modulos"].values()),
+   "y las 3 secciones completas, no la que mandó la pantalla")
+vacio = nueva("alta")
+vacio["docs"] = {}
+vacio["modulos"] = {}
+caso_v, _ = e.crear_caso(vacio, ADMIN)
+ok(all(caso_v["docs"].values()) and len(caso_v["docs"]) == 5,
+   "y si no manda ninguno, tampoco: un alta siempre pide sus 5")
+
 rompe(lambda: e.crear_caso({**nueva(), "rfc": "ABC"}, VENTAS), "12 caracteres", "rechaza un RFC corto")
 rompe(lambda: e.crear_caso({**nueva(), "correo": "no-es-correo"}, VENTAS), "correo", "rechaza un correo inválido")
 rompe(lambda: e.crear_caso({**nueva(), "razonSocial": ""}, VENTAS), "razón social", "rechaza sin razón social")
