@@ -37,16 +37,10 @@ var S = {
 };
 
 // ── utilidades ───────────────────────────────────────────────────
-/** Logo de GPA: circulo marino, onda de agua en teal y las siglas.
- *  Es el mismo de Motor de Fletes, para que los sistemas se vean de la misma casa. */
-function logoGPA(tam) {
-  var t = tam || 52;
-  return '<svg class="logo-suelto" style="width:' + t + 'px;height:' + t + 'px" ' +
-    'viewBox="0 0 36 36" fill="none" role="img" aria-label="GPA">' +
-    '<circle cx="18" cy="18" r="17" fill="#1C2535" stroke="rgba(58,173,173,.4)" stroke-width="1"/>' +
-    '<path d="M4 22 Q9 17 14 22 Q19 27 24 22 Q29 17 34 22" stroke="#3AADAD" stroke-width="1.5" fill="none" opacity=".6"/>' +
-    '<text x="18" y="19" text-anchor="middle" font-family="Nunito,Arial" font-weight="900" font-size="11" fill="white">GPA</text>' +
-    '</svg>';
+/** Logo de GPA. Es el archivo real de la empresa, el mismo de Operaciones. */
+function logoGPA(ancho) {
+  return '<span class="logo-suelto" style="width:' + (ancho || 110) + 'px">' +
+    '<img src="logo.png" alt="General de Productos para el Agua"></span>';
 }
 
 function esc(s) {
@@ -724,7 +718,7 @@ function vistaExpediente() {
       '<p class="dim" style="margin:2px 0 0"><span class="mono">' + esc(c.rfc) + "</span> · " +
       (r ? esc(r.c + " " + r.n) : "") + " · persona " + esc(String(c.persona || "").toLowerCase()) +
       " · " + esc(c.sucursal || "") + "</p></div>" +
-      '<div style="text-align:right"><div style="font-family:Nunito,sans-serif; font-size:26px; font-weight:600">' +
+      '<div style="text-align:right"><div style="font-size:26px; font-weight:700">' +
       av.pct + '%</div><div class="dim">' + av.hechos + " de " + av.total + " puntos</div></div></div>" +
       '<div class="progress"><i style="width:' + av.pct + '%"></i></div>' +
       (c.conflictoRfc ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(c.conflictoRfc) + "</span></div>" : "") +

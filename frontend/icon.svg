@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="GPA Alta de Clientes">
-  <rect width="64" height="64" rx="12" fill="#0A6A9E"/>
-  <path d="M32 13c-7 9-11 14.5-11 19.5a11 11 0 0 0 22 0C43 27.5 39 22 32 13z" fill="#fff" opacity=".95"/>
-  <path d="M25 47h14M25 52h9" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".85"/>
-</svg>

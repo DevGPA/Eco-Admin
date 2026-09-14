@@ -1,63 +1,66 @@
 /* estilos.css — GPA Alta de Clientes
    ─────────────────────────────────────────────────────────────────
-   Imagen corporativa de GPA, la misma de Motor de Fletes: azul marino #1C2535
-   con teal #3AADAD, tipografias Nunito y Nunito Sans.
+   Imagen corporativa de GPA, la misma de Operaciones: azul #185FA5 y el logo
+   real de la empresa, con tipografias del sistema (sin fuentes externas).
    Tres estados de tema: claro por omision, oscuro por preferencia del sistema
    y oscuro forzado. Los colores semanticos (ok / aviso / alto) son aparte.
    ───────────────────────────────────────────────────────────────── */
 
 :root{
-  /* Imagen corporativa GPA, la misma de Motor de Fletes */
-  --navy:#1C2535; --navy-2:#243045; --teal:#3AADAD;
-  --ground:#F5F6F8; --surface:#FFFFFF; --surface-2:#FAFBFC; --surface-3:#EDEFF3;
-  --ink:#1C2535; --ink-2:#4A5A6E; --ink-3:#7A8A9A;
-  --line:#D0D6E0; --line-2:#E5E9EF;
-  /* El teal de marca (#3AADAD) no alcanza contraste para texto sobre blanco:
-     para leer se usa una version mas oscura, y el de marca queda en filos y adornos. */
-  --accent:#1F7A7A; --accent-ink:#FFFFFF; --accent-soft:#E3F4F4; --accent-line:#8FCACA;
-  /* Los botones principales van en azul marino con texto blanco, como en Motor de Fletes. */
-  --btn-bg:#1C2535; --btn-ink:#FFFFFF; --btn-hover:#243045;
-  --ok:#15795A; --ok-soft:#DCF0E7;
-  --warn:#9A6410; --warn-soft:#FBEEDA;
-  --stop:#C5403F; --stop-soft:#FAE5E4;
-  --shadow:0 1px 2px rgba(28,37,53,.06), 0 10px 28px -14px rgba(28,37,53,.22);
+  /* Imagen corporativa GPA, la misma de Operaciones (Sistema de Gestion). */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --brand:#185FA5; --brand-2:#134C84; --brand-md:#378ADD;
+  --ground:#F5F6FA; --surface:#FFFFFF; --surface-2:#FAFBFC; --surface-3:#ECEFF4;
+  --ink:#222222; --ink-2:#555555; --ink-3:#888780;
+  --line:#E0E0E0; --line-2:#EDEEF1;
+  --accent:#185FA5; --accent-ink:#FFFFFF; --accent-soft:#E6F1FB; --accent-line:#378ADD;
+  --btn-bg:#185FA5; --btn-ink:#FFFFFF; --btn-hover:#134C84;
+  --ok:#2E6B30; --ok-soft:#EDF7EE;
+  --warn:#854F0B; --warn-soft:#FAEEDA;
+  --stop:#A32D2D; --stop-soft:#FCEBEB;
+  --shadow:0 1px 2px rgba(34,34,34,.06), 0 10px 28px -14px rgba(24,95,165,.2);
   --radius:10px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --navy:#1C2535; --navy-2:#243045; --teal:#3AADAD;
-    --ground:#0E1520; --surface:#18212F; --surface-2:#1D2735; --surface-3:#243045;
-    --ink:#E8EDF3; --ink-2:#A8B6C4; --ink-3:#7A8A9A;
-    --line:#2E3A4B; --line-2:#222C3A;
-    --accent:#5FC7C7; --accent-ink:#0E1520; --accent-soft:#17323A; --accent-line:#2F5F63;
-    --btn-bg:#3AADAD; --btn-ink:#0E1520; --btn-hover:#4FC0C0;
-    --ok:#54C297; --ok-soft:#113025;
-    --warn:#DDA94A; --warn-soft:#32270F;
-    --stop:#E8807F; --stop-soft:#3A1E1E;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --brand:#185FA5; --brand-2:#134C84; --brand-md:#378ADD;
+    --ground:#0F141C; --surface:#18202B; --surface-2:#1D2734; --surface-3:#253242;
+    --ink:#E8EDF3; --ink-2:#AEB9C6; --ink-3:#8791A0;
+    --line:#2C3947; --line-2:#212B38;
+    --accent:#6FB0EA; --accent-ink:#0F141C; --accent-soft:#16304A; --accent-line:#377AB5;
+    --btn-bg:#2E7BC4; --btn-ink:#FFFFFF; --btn-hover:#3A8AD6;
+    --ok:#62B765; --ok-soft:#142A16;
+    --warn:#D9A24B; --warn-soft:#332611;
+    --stop:#E07F7F; --stop-soft:#361B1B;
     --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 28px -14px rgba(0,0,0,.7);
   }
 }
 :root[data-theme="dark"]{
-  --navy:#1C2535; --navy-2:#243045; --teal:#3AADAD;
-  --ground:#0E1520; --surface:#18212F; --surface-2:#1D2735; --surface-3:#243045;
-  --ink:#E8EDF3; --ink-2:#A8B6C4; --ink-3:#7A8A9A;
-  --line:#2E3A4B; --line-2:#222C3A;
-  --accent:#5FC7C7; --accent-ink:#0E1520; --accent-soft:#17323A; --accent-line:#2F5F63;
-  --btn-bg:#3AADAD; --btn-ink:#0E1520; --btn-hover:#4FC0C0;
-  --ok:#54C297; --ok-soft:#113025;
-  --warn:#DDA94A; --warn-soft:#32270F;
-  --stop:#E8807F; --stop-soft:#3A1E1E;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --brand:#185FA5; --brand-2:#134C84; --brand-md:#378ADD;
+  --ground:#0F141C; --surface:#18202B; --surface-2:#1D2734; --surface-3:#253242;
+  --ink:#E8EDF3; --ink-2:#AEB9C6; --ink-3:#8791A0;
+  --line:#2C3947; --line-2:#212B38;
+  --accent:#6FB0EA; --accent-ink:#0F141C; --accent-soft:#16304A; --accent-line:#377AB5;
+  --btn-bg:#2E7BC4; --btn-ink:#FFFFFF; --btn-hover:#3A8AD6;
+  --ok:#62B765; --ok-soft:#142A16;
+  --warn:#D9A24B; --warn-soft:#332611;
+  --stop:#E07F7F; --stop-soft:#361B1B;
   --shadow:0 1px 2px rgba(0,0,0,.45), 0 10px 28px -14px rgba(0,0,0,.7);
 }
 
 *{box-sizing:border-box}
 body{
   margin:0; background:var(--ground); color:var(--ink);
-  font-family:'Nunito Sans','Segoe UI',system-ui,sans-serif;
+  font-family:var(--font);
   font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3,h4{font-family:'Nunito','Segoe UI',system-ui,sans-serif; margin:0; text-wrap:balance; letter-spacing:-.01em}
-.mono{font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums}
+h1,h2,h3,h4{font-family:var(--font); margin:0; text-wrap:balance; letter-spacing:-.01em}
+.mono{font-family:var(--mono); font-variant-numeric:tabular-nums}
 button{font:inherit; color:inherit; cursor:pointer}
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
@@ -69,10 +72,10 @@ button{font:inherit; color:inherit; cursor:pointer}
 }
 .brand{display:flex; align-items:center; gap:10px; margin-right:auto}
 .brand-mark{
-  font-family:'Nunito',sans-serif; font-weight:700; font-size:13px; letter-spacing:.08em;
+  font-family:var(--font); font-weight:700; font-size:13px; letter-spacing:.08em;
   background:var(--accent); color:var(--accent-ink); padding:5px 8px; border-radius:5px; display:inline-block;
 }
-.brand-name{font-family:'Nunito',sans-serif; font-weight:600; font-size:16px}
+.brand-name{font-family:var(--font); font-weight:600; font-size:16px}
 .sesion{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-3)}
 .sesion select{
   font:inherit; font-size:12.5px; color:var(--ink); background:var(--surface-2);
@@ -81,11 +84,11 @@ button{font:inherit; color:inherit; cursor:pointer}
 .seg{display:flex; background:var(--surface-3); border-radius:8px; padding:3px; gap:3px}
 .seg button{
   border:0; background:transparent; padding:6px 14px; border-radius:6px;
-  font-family:'Nunito',sans-serif; font-weight:500; font-size:13.5px; color:var(--ink-2);
+  font-family:var(--font); font-weight:500; font-size:13.5px; color:var(--ink-2);
 }
 .seg button[aria-selected="true"]{background:var(--surface); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .chip-proto{
-  font-family:'Nunito',sans-serif; font-size:11px; font-weight:600; letter-spacing:.06em;
+  font-family:var(--font); font-size:11px; font-weight:600; letter-spacing:.06em;
   text-transform:uppercase; color:var(--warn); background:var(--warn-soft);
   border:1px solid color-mix(in srgb, var(--warn) 35%, transparent);
   padding:4px 9px; border-radius:5px;
@@ -104,7 +107,7 @@ main{padding:24px 20px 56px}
 .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
 .spread{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap}
 .eyebrow{
-  font-family:'Nunito',sans-serif; font-size:11px; font-weight:600; letter-spacing:.1em;
+  font-family:var(--font); font-size:11px; font-weight:600; letter-spacing:.1em;
   text-transform:uppercase; color:var(--ink-3);
 }
 .muted{color:var(--ink-2)}
@@ -113,7 +116,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 
 .btn{
   border:1px solid var(--line); background:var(--surface); color:var(--ink);
-  padding:9px 15px; border-radius:7px; font-family:'Nunito',sans-serif; font-weight:500; font-size:14px;
+  padding:9px 15px; border-radius:7px; font-family:var(--font); font-weight:500; font-size:14px;
 }
 .btn:hover{background:var(--surface-2)}
 .btn-primary{background:var(--btn-bg); border-color:var(--btn-bg); color:var(--btn-ink)}
@@ -126,7 +129,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .btn-stop[aria-pressed="true"]{background:var(--stop); color:var(--surface); border-color:var(--stop)}
 
 .pill{
-  display:inline-flex; align-items:center; gap:5px; font-family:'Nunito',sans-serif;
+  display:inline-flex; align-items:center; gap:5px; font-family:var(--font);
   font-size:11.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
   padding:3px 8px; border-radius:100px; white-space:nowrap;
 }
@@ -140,7 +143,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .p-autorizada{background:var(--ok-soft); color:var(--ok)}
 .p-rechazada{background:var(--stop-soft); color:var(--stop)}
 .tag{
-  display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
+  display:inline-block; font-family:var(--mono); font-size:10.5px;
   border:1px solid var(--line); color:var(--ink-3); padding:1px 5px; border-radius:4px; white-space:nowrap;
 }
 .tag-alta{border-color:var(--accent-line); color:var(--accent)}
@@ -169,7 +172,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .fijos .fila:last-child{border-bottom:0}
 .fijos .fila span:first-child{color:var(--ink-3); font-size:13px; flex:none; max-width:46%}
 .fijos .fila span:last-child{text-align:right; font-weight:600}
-.candado{font-size:11px; color:var(--ink-3); font-family:'Nunito',sans-serif; letter-spacing:.04em; text-transform:uppercase}
+.candado{font-size:11px; color:var(--ink-3); font-family:var(--font); letter-spacing:.04em; text-transform:uppercase}
 
 .browser{max-width:660px; margin:0 auto; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface); box-shadow:var(--shadow)}
 .browser-bar{display:flex; align-items:center; gap:10px; background:var(--surface-3); border-bottom:1px solid var(--line); padding:9px 12px}
@@ -177,7 +180,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .dots i{width:9px; height:9px; border-radius:50%; background:var(--line); display:block}
 .urlbar{
   flex:1; background:var(--surface); border:1px solid var(--line); border-radius:100px;
-  padding:4px 12px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-2);
+  padding:4px 12px; font-family:var(--mono); font-size:11.5px; color:var(--ink-2);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .urlbar b{color:var(--ink); font-weight:500}
@@ -188,7 +191,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .steps{display:flex; margin-bottom:22px; border-bottom:1px solid var(--line-2)}
 .step{
   flex:1; display:flex; align-items:center; gap:8px; padding:0 4px 10px;
-  font-family:'Nunito',sans-serif; font-size:12.5px; font-weight:500; color:var(--ink-3);
+  font-family:var(--font); font-size:12.5px; font-weight:500; color:var(--ink-3);
   border-bottom:2px solid transparent; margin-bottom:-1px;
 }
 .step b{
@@ -208,7 +211,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .doc.flag{border-color:var(--stop); background:var(--stop-soft)}
 .doc-ic{
   width:30px; height:30px; border-radius:6px; flex:none; display:grid; place-items:center;
-  background:var(--surface-3); color:var(--ink-3); font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:500;
+  background:var(--surface-3); color:var(--ink-3); font-family:var(--mono); font-size:9.5px; font-weight:500;
 }
 .doc.attached .doc-ic{background:var(--ok-soft); color:var(--ok)}
 .doc.flag .doc-ic{background:var(--stop); color:var(--surface)}
@@ -221,7 +224,7 @@ hr.sep{border:0; border-top:1px solid var(--line-2); margin:0}
 .tablewrap{overflow-x:auto}
 table.grid-t{width:100%; border-collapse:collapse; font-size:14px}
 table.grid-t th{
-  text-align:left; font-family:'Nunito',sans-serif; font-size:11px; font-weight:600;
+  text-align:left; font-family:var(--font); font-size:11px; font-weight:600;
   letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3);
   padding:0 12px 8px; border-bottom:1px solid var(--line); white-space:nowrap;
 }
@@ -233,18 +236,18 @@ tr.clickable:hover{background:var(--surface-2)}
 
 .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:1px; background:var(--line-2); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
 .tile{background:var(--surface); padding:14px 16px}
-.tile .k{font-family:'Nunito',sans-serif; font-size:26px; font-weight:600; line-height:1.1; font-variant-numeric:tabular-nums}
+.tile .k{font-family:var(--font); font-size:26px; font-weight:600; line-height:1.1; font-variant-numeric:tabular-nums}
 .tile .l{font-size:12.5px; color:var(--ink-3); margin-top:2px}
 
 .liga{
   display:flex; align-items:center; background:var(--surface-2);
   border:1px dashed var(--accent-line); border-radius:8px; padding:11px 13px;
-  font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--accent);
+  font-family:var(--mono); font-size:13px; color:var(--accent);
   overflow-x:auto; white-space:nowrap;
 }
 .clave{
   background:var(--surface-2); border:1px dashed var(--warn); border-radius:8px;
-  padding:12px 14px; font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:500;
+  padding:12px 14px; font-family:var(--mono); font-size:22px; font-weight:500;
   letter-spacing:.14em; color:var(--warn); text-align:center;
 }
 .draft{background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:14px; font-size:13.5px; white-space:pre-wrap; color:var(--ink-2); overflow-wrap:anywhere}
@@ -254,7 +257,7 @@ tr.clickable:hover{background:var(--surface-2)}
 .banner-stop{background:var(--stop-soft); color:var(--stop)}
 .banner-warn{background:var(--warn-soft); color:var(--warn)}
 .banner-info{background:var(--accent-soft); color:var(--accent)}
-.banner b{font-family:'Nunito',sans-serif}
+.banner b{font-family:var(--font)}
 
 .toast{
   position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
@@ -263,7 +266,7 @@ tr.clickable:hover{background:var(--surface-2)}
 }
 footer.foot{max-width:1180px; margin:0 auto; padding:0 20px 40px; color:var(--ink-3); font-size:13px}
 .subnav{display:flex; gap:6px; margin-bottom:18px; flex-wrap:wrap}
-.subnav button{border:1px solid var(--line); background:var(--surface); padding:7px 13px; border-radius:100px; font-family:'Nunito',sans-serif; font-size:13.5px; color:var(--ink-2)}
+.subnav button{border:1px solid var(--line); background:var(--surface); padding:7px 13px; border-radius:100px; font-family:var(--font); font-size:13.5px; color:var(--ink-2)}
 .subnav button[aria-current="true"]{background:var(--ink); color:var(--ground); border-color:var(--ink)}
 .subnav button:disabled{opacity:.4; cursor:not-allowed}
 .cols{display:grid; grid-template-columns:1.35fr .95fr; gap:18px; align-items:start}
@@ -271,7 +274,7 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 20px 40px; color:var(--in
 .modrow{display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; cursor:pointer}
 .modrow.on{border-color:var(--accent-line); background:var(--accent-soft)}
 .modrow input{margin-top:3px; accent-color:var(--accent); flex:none}
-.modrow .t{font-family:'Nunito',sans-serif; font-weight:600; font-size:14px}
+.modrow .t{font-family:var(--font); font-weight:600; font-size:14px}
 .modrow .d{display:block; font-size:12.5px; color:var(--ink-2); margin-top:2px}
 .docpick{display:flex; align-items:flex-start; gap:9px; padding:7px 2px; font-size:13.5px; border-bottom:1px solid var(--line-2); cursor:pointer}
 .docpick:last-child{border-bottom:0}
@@ -289,11 +292,11 @@ footer.foot{max-width:1180px; margin:0 auto; padding:0 20px 40px; color:var(--in
 .firma.lista{background:var(--ok-soft); border-color:color-mix(in srgb, var(--ok) 40%, transparent)}
 .firma .n{
   width:26px; height:26px; border-radius:50%; flex:none; display:grid; place-items:center;
-  background:var(--surface-3); color:var(--ink-3); font-family:'Nunito',sans-serif; font-size:12px; font-weight:600;
+  background:var(--surface-3); color:var(--ink-3); font-family:var(--font); font-size:12px; font-weight:600;
 }
 .firma.lista .n{background:var(--ok); color:var(--surface)}
 .firma-body{flex:1; min-width:150px}
-.firma-t{font-family:'Nunito',sans-serif; font-weight:600; font-size:14px}
+.firma-t{font-family:var(--font); font-weight:600; font-size:14px}
 .firma-d{font-size:12.5px; color:var(--ink-3); margin-top:1px}
 .firma select{font:inherit; font-size:13.5px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); max-width:210px}
 .switch{display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer}
@@ -369,24 +372,29 @@ table.grid-t td[colspan]{text-align:center; padding:26px 12px}
 
 /* ── Imagen corporativa GPA ──────────────────────────────────────
    Barra marino con filo teal y logo circular, igual que Motor de Fletes. */
-.topbar{background:var(--navy); border-bottom:2px solid var(--teal); color:#fff}
+.topbar{background:var(--brand); border-bottom:0; color:#fff}
 .gpa-logo{display:flex; align-items:center; gap:11px; flex-shrink:0; margin-right:auto}
-.gpa-badge{width:34px; height:34px; flex:none}
+.logo-caja{
+  width:34px; height:34px; flex:none; background:#fff; border-radius:6px;
+  display:grid; place-items:center; padding:3px;
+}
+.logo-caja img{width:100%; height:100%; object-fit:contain}
 .gpa-wordmark{display:flex; flex-direction:column; gap:0; min-width:0}
-.gpa-w1{font-family:'Nunito',sans-serif; font-size:15px; font-weight:800; color:#FFFFFF; line-height:1.15; letter-spacing:-.01em}
-.gpa-w2{font-family:'Nunito Sans',sans-serif; font-size:10px; font-weight:400; color:rgba(255,255,255,.65); line-height:1.2; letter-spacing:.02em}
+.gpa-w1{font-size:13px; font-weight:700; color:#FFFFFF; line-height:1.2}
+.gpa-w2{font-size:10px; font-weight:400; color:rgba(255,255,255,.75); line-height:1.2}
 @media (max-width:620px){ .gpa-wordmark{display:none} }
 
 /* Lo que vive dentro de la barra marino se aclara para poder leerse. */
 .topbar .subnav{margin:0; margin-right:auto}
 .topbar .subnav button{background:transparent; border-color:rgba(255,255,255,.18); color:rgba(255,255,255,.72)}
 .topbar .subnav button:hover:not(:disabled){background:rgba(255,255,255,.08); color:#fff}
-.topbar .subnav button[aria-current="true"]{background:rgba(255,255,255,.13); color:#fff; border-color:rgba(58,173,173,.65)}
+.topbar .subnav button[aria-current="true"]{background:rgba(255,255,255,.18); color:#fff; border-color:rgba(255,255,255,.45)}
 .topbar .subnav button:disabled{opacity:.32}
 .topbar .dim{color:rgba(255,255,255,.62)}
 .topbar .btn{background:transparent; border-color:rgba(255,255,255,.22); color:#fff}
 .topbar .btn:hover{background:rgba(255,255,255,.1)}
-.topbar :focus-visible{outline-color:var(--teal)}
+.topbar :focus-visible{outline-color:#fff}
 
 /* El logo en las pantallas sin barra: acceso interno y portal del cliente. */
-.logo-suelto{display:block; width:52px; height:52px}
+.logo-suelto{display:block; width:110px; height:auto; margin-bottom:4px}
+.logo-suelto img{width:100%; height:auto; display:block}
