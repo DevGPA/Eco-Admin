@@ -37,6 +37,18 @@ var S = {
 };
 
 // ── utilidades ───────────────────────────────────────────────────
+/** Logo de GPA: circulo marino, onda de agua en teal y las siglas.
+ *  Es el mismo de Motor de Fletes, para que los sistemas se vean de la misma casa. */
+function logoGPA(tam) {
+  var t = tam || 52;
+  return '<svg class="logo-suelto" style="width:' + t + 'px;height:' + t + 'px" ' +
+    'viewBox="0 0 36 36" fill="none" role="img" aria-label="GPA">' +
+    '<circle cx="18" cy="18" r="17" fill="#1C2535" stroke="rgba(58,173,173,.4)" stroke-width="1"/>' +
+    '<path d="M4 22 Q9 17 14 22 Q19 27 24 22 Q29 17 34 22" stroke="#3AADAD" stroke-width="1.5" fill="none" opacity=".6"/>' +
+    '<text x="18" y="19" text-anchor="middle" font-family="Nunito,Arial" font-weight="900" font-size="11" fill="white">GPA</text>' +
+    '</svg>';
+}
+
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -157,7 +169,7 @@ function vistaPortal() {
 
 function portalAcceso() {
   return '<div class="stack" style="gap:18px">' +
-    '<div><span class="brand-mark">GPA</span>' +
+    '<div>' + logoGPA(52) +
     '<h1 style="font-size:23px; margin-top:14px">Alta de cliente</h1>' +
     '<p class="muted" style="margin:6px 0 0">General de Productos para el Agua le envió esta invitación. ' +
     "Entre con la clave que le dimos por teléfono o WhatsApp.</p></div>" +
@@ -371,7 +383,7 @@ function portalEnviado() {
 function vistaLogin() {
   if (S.retoCognito) {
     return '<div class="wrap"><div class="tarjeta-login stack" style="gap:14px">' +
-      '<div><span class="brand-mark">GPA</span><h1 style="font-size:21px; margin-top:12px">Elija su contraseña</h1>' +
+      '<div>' + logoGPA(52) + '<h1 style="font-size:21px; margin-top:12px">Elija su contraseña</h1>' +
       '<p class="dim" style="margin:4px 0 0">Es su primer ingreso. Al menos 10 caracteres, ' +
       "con mayúscula, minúscula y número.</p></div>" + bannerError() +
       '<div class="field"><label for="pw1">Contraseña nueva</label>' +
@@ -382,7 +394,7 @@ function vistaLogin() {
       (S.cargando ? "Guardando…" : "Guardar y entrar") + "</button></div></div>";
   }
   return '<div class="wrap"><div class="tarjeta-login stack" style="gap:14px">' +
-    '<div><span class="brand-mark">GPA</span>' +
+    '<div>' + logoGPA(52) +
     '<h1 style="font-size:21px; margin-top:12px">Alta de Clientes</h1>' +
     '<p class="dim" style="margin:4px 0 0">Acceso para personal de GPA.</p></div>' + bannerError() +
     '<div class="field"><label for="correo">Correo</label>' +
@@ -712,7 +724,7 @@ function vistaExpediente() {
       '<p class="dim" style="margin:2px 0 0"><span class="mono">' + esc(c.rfc) + "</span> · " +
       (r ? esc(r.c + " " + r.n) : "") + " · persona " + esc(String(c.persona || "").toLowerCase()) +
       " · " + esc(c.sucursal || "") + "</p></div>" +
-      '<div style="text-align:right"><div style="font-family:Archivo,sans-serif; font-size:26px; font-weight:600">' +
+      '<div style="text-align:right"><div style="font-family:Nunito,sans-serif; font-size:26px; font-weight:600">' +
       av.pct + '%</div><div class="dim">' + av.hechos + " de " + av.total + " puntos</div></div></div>" +
       '<div class="progress"><i style="width:' + av.pct + '%"></i></div>' +
       (c.conflictoRfc ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(c.conflictoRfc) + "</span></div>" : "") +
