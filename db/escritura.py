@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from boto3.dynamodb.conditions import Attr
 
-from catalogos import (TIPOS, FIRMAS_REQUERIDAS, ESTADOS, ESTADOS_CERRADOS,
+from catalogos import (TIPOS, ESTADOS, ESTADOS_CERRADOS,
                        ESTADOS_ABIERTOS_AL_CLIENTE, docs_aplicables, persona_de,
-                       modulos_activos, campos_de, documento, revisa_captura,
-                       valores_fijos, etiquetas_campos)
-from . import tabla, sin_decimales
+                       modulos_activos, campos_de, documento, revisa_campo,
+                       revisa_captura, valores_fijos, etiquetas_campos)
+from . import tabla
 from .modelos import (SK_META, MAX_INTENTOS, pk_caso, sk_log, llaves_caso, iso_mx,
                       legible_mx, prefijo_folio, arma_folio, nuevo_token, nueva_clave,
                       hash_clave, clave_coincide, limpia_texto, limpia_mapa,
@@ -61,12 +61,19 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
     razon = limpia_texto(datos.get("razonSocial"))
     rfc = limpia_texto(datos.get("rfc")).upper().replace(" ", "")
     correo = limpia_texto(datos.get("correo"))
+    celular = limpia_texto(datos.get("celular"))
     if not razon:
         raise ReglaRota("Falta la razón social.")
     if len(rfc) not in (12, 13):
         raise ReglaRota("El RFC debe tener 12 caracteres (persona moral) o 13 (persona física).")
-    if "@" not in correo:
-        raise ReglaRota("Falta un correo válido del contacto.")
+    problema = revisa_campo({"tipo": "email", "req": True}, correo)
+    if problema:
+        raise ReglaRota("Correo del contacto: " + problema)
+    # El celular es obligatorio porque por ahí se le entrega la clave de acceso:
+    # sin él, la liga sola no abre nada y el cliente se queda fuera.
+    problema = revisa_campo({"tipo": "tel", "req": True}, celular)
+    if problema:
+        raise ReglaRota("Celular del contacto: " + problema)
 
     # Los módulos y documentos NO se eligen: cada tipo de solicitud trae los suyos
     # completos. Un alta pide sus 5 documentos y un crédito sus 13, siempre.

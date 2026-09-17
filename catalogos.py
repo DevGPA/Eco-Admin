@@ -84,7 +84,10 @@ CAT = {
     "giro": ["ALBERCAS", "TRAT. DE AGUA", "RECUBRIMIENTOS", "BOMBEO", "CALENTAMIENTO", "QUÍMICOS"],
     "clasificacion": ["1", "2", "3", "4", "5", "6"],
     "sucursal": ["GDL", "CANCÚN", "PTO VALLARTA", "CDMX", "MONTERREY", "LOS CABOS"],
-    "uso": ["Mercancías", "Gastos Generales", "Construcción"],
+    # Uso del CFDI: catálogo c_UsoCFDI del SAT, con la clave por delante para que
+    # quien factura no tenga que adivinarla. GPA solo vende mercancía, así que de
+    # todo el catálogo únicamente aplican estas dos.
+    "uso": ["G01 · Adquisición de mercancías", "G03 · Gastos en general"],
     "forma": ["01 · Efectivo", "02 · Cheque", "03 · Transferencia",
               "04 · Tarjeta de crédito", "05 · Tarjeta de débito"],
     "metodo": ["PUE · Pago en una exhibición", "PPD · Pago en parcialidades o diferido"],

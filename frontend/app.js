@@ -568,6 +568,26 @@ function listaDocumentos(T, persona) {
   }).join("");
 }
 
+/** Que le falta a la pre-solicitud para poder generar la liga.
+ *  Las mismas reglas corren en el servidor; esto solo evita el viaje en balde. */
+function problemasNueva(n) {
+  var out = [];
+  if (!String(n.razon_social || "").trim()) out.push("la razón social");
+  var rfc = String(n.rfc || "").replace(/[^A-Za-z0-9]/g, "");
+  if (rfc.length !== 12 && rfc.length !== 13) {
+    out.push(rfc ? "el RFC completo (12 o 13 caracteres, lleva " + rfc.length + ")" : "el RFC");
+  }
+  var correo = String(n.correo || "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(correo)) {
+    out.push(correo ? "un correo válido del contacto" : "el correo del contacto");
+  }
+  var cel = String(n.celular || "").replace(/\D/g, "");
+  if (cel.length < 10) {
+    out.push(cel ? "el celular completo (10 dígitos, lleva " + cel.length + ")" : "el celular del contacto");
+  }
+  return out;
+}
+
 function textoPersona(n) {
   var r = regimen(n.regimen);
   return "Persona <b>" + esc(personaDe(n.regimen, n.rfc).toLowerCase()) + "</b>" +
@@ -609,11 +629,14 @@ function actualizaPorRfc() {
     conteo.textContent = cuantos + " documento" + (cuantos === 1 ? "" : "s");
   }
 
+  var faltan = problemasNueva(n);
   var boton = $("#btn-generar");
-  if (boton) {
-    boton.disabled = !(String(n.razon_social || "").trim() &&
-                       String(n.rfc || "").trim() &&
-                       String(n.correo || "").trim());
+  if (boton) boton.disabled = faltan.length > 0;
+  var aviso = $("#aviso-nueva");
+  if (aviso) {
+    aviso.innerHTML = faltan.length
+      ? '<p class="dim" style="margin:0">Falta ' + esc(faltan.join(", ")) + ".</p>"
+      : "";
   }
 }
 
@@ -638,7 +661,8 @@ function vistaNueva() {
     var d = doc(id);
     return !(d.pm && persona === "Física");
   }).length;
-  var listo = String(n.razon_social || "").trim() && String(n.rfc || "").trim() && String(n.correo || "").trim();
+  var faltanNueva = problemasNueva(n);
+  var listo = faltanNueva.length === 0;
 
   var panel;
   if (S.ligaNueva) {
@@ -666,7 +690,9 @@ function vistaNueva() {
       "y la <b>clave</b>, que va por otro canal.</p>" +
       '<button class="btn btn-primary" id="btn-generar"' + (listo && !S.cargando ? "" : " disabled") + ">" +
       (S.cargando ? "Generando…" : "Generar liga y clave") + "</button>" +
-      (listo ? "" : '<p class="dim" style="margin:0">Faltan razón social, RFC y correo del contacto.</p>') + "</div>";
+      '<div id="aviso-nueva">' +
+      (listo ? "" : '<p class="dim" style="margin:0">Falta ' + esc(faltanNueva.join(", ")) + ".</p>") +
+      "</div></div>";
   }
 
   return '<div class="stack">' + bannerError() +
@@ -698,7 +724,8 @@ function vistaNueva() {
       selec("clasificacion", "Clasificación", "f-third", CAT.cat.clasificacion) +
       campo("contacto", "Persona de contacto", "f-third") +
       campo("correo", 'Correo del contacto <span class="req">*</span>', "f-half") +
-      campo("celular", "Celular del contacto", "f-half", "mono") + "</div>" +
+      campo("celular", 'Celular del contacto <span class="req">*</span>', "f-half", "mono",
+            "10 dígitos, p. ej. 33 1204 8871") + "</div>" +
       '<div id="conflicto-rfc">' +
       (conflicto ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(conflicto) + "</span></div>" : "") +
       "</div></div>" +

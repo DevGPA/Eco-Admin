@@ -137,6 +137,12 @@ rompe(lambda: e.crear_caso({**nueva(), "rfc": "ABC"}, VENTAS), "12 caracteres", 
 rompe(lambda: e.crear_caso({**nueva(), "correo": "no-es-correo"}, VENTAS), "correo", "rechaza un correo inválido")
 rompe(lambda: e.crear_caso({**nueva(), "razonSocial": ""}, VENTAS), "razón social", "rechaza sin razón social")
 rompe(lambda: e.crear_caso({**nueva(), "tipo": "otra"}, VENTAS), "alta", "rechaza un tipo inventado")
+rompe(lambda: e.crear_caso({**nueva(), "celular": "3312"}, VENTAS), "10 dígitos",
+      "rechaza un celular de contacto incompleto")
+rompe(lambda: e.crear_caso({**nueva(), "celular": ""}, VENTAS), "celular",
+      "y exige celular: por ahí se entrega la clave")
+ok(c.CAT["uso"] == ["G01 · Adquisición de mercancías", "G03 · Gastos en general"],
+   "el uso del CFDI usa las claves del SAT, solo G01 y G03")
 
 print("\n== 2. Régimen del SAT decide los documentos ==")
 fis = nueva("credito", regimen="612", rfc="CAGR850101AB1")
