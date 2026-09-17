@@ -85,9 +85,11 @@ CAT = {
     "clasificacion": ["1", "2", "3", "4", "5", "6"],
     "sucursal": ["GDL", "CANCÚN", "PTO VALLARTA", "CDMX", "MONTERREY", "LOS CABOS"],
     # Uso del CFDI: catálogo c_UsoCFDI del SAT, con la clave por delante para que
-    # quien factura no tenga que adivinarla. GPA solo vende mercancía, así que de
-    # todo el catálogo únicamente aplican estas dos.
-    "uso": ["G01 · Adquisición de mercancías", "G03 · Gastos en general"],
+    # quien factura no tenga que adivinarla. De todo el catálogo solo aplican estas
+    # tres al giro de GPA. S01 es el que usan los clientes que no deducen la compra.
+    "uso": ["G01 · Adquisición de mercancías",
+            "G03 · Gastos en general",
+            "S01 · Sin efectos fiscales"],
     "forma": ["01 · Efectivo", "02 · Cheque", "03 · Transferencia",
               "04 · Tarjeta de crédito", "05 · Tarjeta de débito"],
     "metodo": ["PUE · Pago en una exhibición", "PPD · Pago en parcialidades o diferido"],
