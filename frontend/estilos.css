@@ -406,3 +406,26 @@ table.grid-t td[colspan]{text-align:center; padding:26px 12px}
 .btn.senal{padding:1px 8px; font-weight:700; line-height:1.4; flex:none}
 /* Los campos que fija el sistema se ven, pero no se tocan. */
 .field input.fijo{background:var(--surface-3); color:var(--ink-2); cursor:not-allowed}
+
+/* ── Documentos agrupados por dueño ──────────────────────────────
+   El cliente confundía el INE del representante con el del aval. Cada grupo
+   lleva su nombre escrito y una franja de color; el color solo refuerza. */
+.grupo-doc{
+  border:1px solid var(--line); border-left:4px solid var(--g, var(--brand));
+  border-radius:8px; padding:12px 13px; margin-bottom:12px; background:var(--surface);
+}
+.grupo-cab{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px}
+.grupo-n{font-weight:700; font-size:13.5px; color:var(--g, var(--brand))}
+.grupo-d{font-size:12.5px; color:var(--ink-3); margin-top:1px}
+.grupo-cuenta{
+  flex:none; font-family:var(--mono); font-size:12px; font-weight:600;
+  color:var(--g, var(--brand)); background:var(--surface-3);
+  border-radius:100px; padding:1px 9px;
+}
+/* En tema oscuro el color de grupo se aclara para poder leerse. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .grupo-n,
+  :root:not([data-theme="light"]) .grupo-cuenta{filter:brightness(1.7) saturate(.9)}
+}
+:root[data-theme="dark"] .grupo-n,
+:root[data-theme="dark"] .grupo-cuenta{filter:brightness(1.7) saturate(.9)}

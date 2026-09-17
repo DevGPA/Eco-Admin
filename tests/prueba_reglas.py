@@ -66,6 +66,7 @@ def nueva(tipo="alta", regimen="601", rfc="ASV180412H23", docs=None, modulos=Non
         "nombreComercial": "Albercas del Valle", "rfc": rfc, "regimen": regimen,
         "contacto": "Rodrigo Cárdenas", "correo": "rcardenas@albercasdelvalle.mx",
         "celular": "33 1204 8871", "sucursal": "GDL", "giro": "ALBERCAS", "clasificacion": "2",
+        "montoRequerido": "250,000",
         "modulos": modulos or {m: True for m in T["modulos"]},
         "docs": docs or {d: True for d in T["docs"]},
     }
@@ -147,6 +148,34 @@ ok(c.CAT["uso"] == ["G01 · Adquisición de mercancías", "G03 · Gastos en gene
 ok(all(u[:3] in ("G01", "G03", "S01") and u[3:6] == " · " for u in c.CAT["uso"]),
    "y todas traen la clave por delante, para no adivinarla al facturar")
 
+# ── Vigencia de la liga ──
+ok(bool(caso_alta.get("vence")), "la liga nace con fecha de vencimiento")
+from db.modelos import ya_vencio                                # noqa: E402
+import datetime as _dt                                          # noqa: E402
+dias = (_dt.datetime.fromisoformat(caso_alta["vence"]) -
+        _dt.datetime.fromisoformat(caso_alta["creado"])).days
+ok(dias == 15, f"y dura 15 días naturales (dura {dias})")
+ok(not ya_vencio(caso_alta["vence"]), "recién creada, no está vencida")
+ok(ya_vencio("2020-01-01T00:00:00-06:00"), "una fecha pasada sí se detecta como vencida")
+ok(not ya_vencio(None), "un expediente sin fecha no se da por vencido")
+
+# ── El monto lo fija GPA, no el cliente ──
+rompe(lambda: e.crear_caso({**nueva("credito"), "montoRequerido": ""}, ADMIN),
+      "monto de crédito requerido", "un crédito sin monto no se puede crear")
+e.crear_caso({**nueva("alta"), "montoRequerido": ""}, ADMIN)
+ok(True, "un alta sí se crea sin monto: no aplica")
+ok(c.valores_fijos({"tipo": "credito", "modulos": {"fiscal": 1, "credito": 1, "buro": 1},
+                    "montoRequerido": "250,000"}).get("monto") == "250,000",
+   "el monto capturado por GPA llega al formulario del cliente como dato fijo")
+
+# ── De quién es cada documento ──
+sin_grupo = [d["id"] for d in c.DOCUMENTOS if d.get("de") not in c.ORDEN_GRUPOS]
+ok(not sin_grupo, f"los 15 documentos dicen de quién son (sin grupo: {sin_grupo})")
+ok(c.documento("ine_rep")["de"] == "representante" and c.documento("ine_aval")["de"] == "aval",
+   "el INE del representante y el del aval quedan en grupos distintos")
+ok(len({c.GRUPOS_DOC[g]["c"] for g in c.ORDEN_GRUPOS}) == 3,
+   "cada grupo tiene su propio color")
+
 print("\n== 2. Régimen del SAT decide los documentos ==")
 fis = nueva("credito", regimen="612", rfc="CAGR850101AB1")
 caso_fis, clave_fis = e.crear_caso(fis, VENTAS)
@@ -217,6 +246,24 @@ e.registrar_adjunto(token, clave_alta, "comp_dom", "mismo.pdf",
 rompe(lambda: e.registrar_adjunto(token, clave_alta, "fotos_negocio", "mismo.pdf",
                                   f"{folio}/fotos_negocio-dd44ee55ff66.jpg", tam=5000),
       "ya lo adjuntó", "el mismo archivo no sirve para dos documentos distintos")
+
+# ── Documento libre: lo que el cliente crea útil y no esté en la lista ──
+rompe(lambda: e.registrar_adjunto(token, clave_alta, "otro", "carta.pdf", f"{folio}/otro-aa.pdf",
+                                  tam=3000),
+      "de qué se trata", "el documento adicional exige decir de qué se trata")
+e.registrar_adjunto(token, clave_alta, "otro", "carta_banco.pdf", f"{folio}/otro-bb11cc22.pdf",
+                    tam=3000, descripcion="Carta de mi banco")
+libres = e.otros_de(q.get_caso(folio))
+ok(len(libres) == 1 and libres[0]["descripcion"] == "Carta de mi banco",
+   "se guarda con su descripción")
+ok(libres[0]["id"].startswith("otro:"), "y con identificador propio, sin chocar con los de la lista")
+ok(c.avance(q.get_caso(folio))["total"] ==
+   c.avance({**q.get_caso(folio), "adjuntos": {}})["total"],
+   "los adicionales NO cuentan para el avance: son opcionales")
+rompe(lambda: e.quitar_adjunto(token, clave_alta, "comp_dom"), "solo se pueden quitar",
+      "un documento de la lista no se quita, se reemplaza")
+e.quitar_adjunto(token, clave_alta, libres[0]["id"])
+ok(not e.otros_de(q.get_caso(folio)), "el adicional sí se puede quitar si se subió por error")
 
 print("\n== 7. Envío, revisión y devolución ==")
 llena_todo(token, clave_alta)

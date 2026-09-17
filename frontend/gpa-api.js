@@ -220,8 +220,9 @@ class PortalApi {
   guardar(valores, tablas) { return this._http("/portal/guardar", { valores, tablas }); }
   enviar() { return this._http("/portal/enviar"); }
 
-  /** Sube el archivo directo a S3 con URL prefirmada; nunca pasa por la Lambda. */
-  async subir(docId, archivo, alAvanzar) {
+  /** Sube el archivo directo a S3 con URL prefirmada; nunca pasa por la Lambda.
+   *  Para el documento libre (docId "otro") se manda también de qué se trata. */
+  async subir(docId, archivo, alAvanzar, descripcion) {
     const permiso = await this._http("/portal/url-subida", {
       docId, contentType: archivo.type, tam: archivo.size,
     });
@@ -233,8 +234,14 @@ class PortalApi {
       throw new Error("El archivo no se pudo guardar. Revise su conexión e inténtelo otra vez.");
     }
     if (alAvanzar) alAvanzar(80);
-    return this._http("/portal/adjuntar", { docId, nombre: archivo.name, key: permiso.key });
+    return this._http("/portal/adjuntar", {
+      docId, nombre: archivo.name, key: permiso.key,
+      tam: archivo.size, descripcion: descripcion || "",
+    });
   }
+
+  /** Quita un documento adicional subido por error. Los de la lista se reemplazan. */
+  quitar(docId) { return this._http("/portal/quitar", { docId }); }
 }
 
 /** Catálogos: públicos, los necesita también el cliente que no tiene cuenta. */

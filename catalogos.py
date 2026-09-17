@@ -189,8 +189,9 @@ MODULOS = [
         "nombre": "Crédito",
         "desc": "Monto solicitado, bancos, referencias comerciales y perfil del negocio.",
         "campos": [
-            {"k": "monto", "l": "Monto de crédito solicitado", "w": "half", "req": True,
-             "mono": True, "ph": "250,000", "tipo": "monto"},
+            # Lo captura GPA en la pre-solicitud. El cliente lo ve, no lo cambia.
+            {"k": "monto", "l": "Monto de crédito requerido", "w": "half",
+             "mono": True, "fijoDe": "montoRequerido"},
             {"k": "moneda", "l": "Moneda", "w": "third", "req": True, "opts": CAT["moneda"]},
             {"k": "dias_pago", "l": "Días de pago", "w": "third", "ph": "Martes y jueves"},
             {"k": "revision_fact", "l": "Revisión de facturas", "w": "third", "ph": "Lunes de 9 a 14 h"},
@@ -245,29 +246,52 @@ def campos_de(mod: dict) -> list:
 
 
 # ── Documentos (15 únicos: 5 del alta + 13 del crédito − 3 repetidos) ──
+# "de" dice de QUIÉN es el documento. El cliente confundía el INE del
+# representante con el del aval; agrupados y con color se distinguen de un vistazo.
 DOCUMENTOS = [
-    {"id": "alta_hacienda", "n": "Alta de Hacienda o modificación de alta", "t": "PDF"},
-    {"id": "ine_rep", "n": "INE del dueño o representante legal", "t": "JPG"},
-    {"id": "comp_dom", "n": "Comprobante de domicilio", "t": "PDF"},
-    {"id": "fotos_negocio", "n": "Fotos del negocio e interiores", "t": "JPG"},
-    {"id": "publicidad", "n": "Publicidad, cuando no hay exhibición", "t": "JPG"},
-    {"id": "csf", "n": "Constancia de Situación Fiscal, no mayor a 3 meses", "t": "PDF"},
-    {"id": "rfc_doc", "n": "Cédula de identificación fiscal (RFC)", "t": "PDF"},
-    {"id": "comp_dom_ofi", "n": "Comprobante de domicilio de oficinas", "t": "PDF"},
+    # ── De la empresa ──
+    {"id": "alta_hacienda", "n": "Alta de Hacienda o modificación de alta", "t": "PDF", "de": "empresa"},
+    {"id": "comp_dom", "n": "Comprobante de domicilio", "t": "PDF", "de": "empresa"},
+    {"id": "fotos_negocio", "n": "Fotos del negocio e interiores", "t": "JPG", "de": "empresa"},
+    {"id": "publicidad", "n": "Publicidad, cuando no hay exhibición", "t": "JPG", "de": "empresa"},
+    {"id": "csf", "n": "Constancia de Situación Fiscal, no mayor a 3 meses", "t": "PDF", "de": "empresa"},
+    {"id": "rfc_doc", "n": "Cédula de identificación fiscal (RFC)", "t": "PDF", "de": "empresa"},
+    {"id": "comp_dom_ofi", "n": "Comprobante de domicilio de oficinas", "t": "PDF", "de": "empresa"},
+    {"id": "acta_const", "n": "Acta constitutiva", "t": "PDF", "pm": True, "de": "empresa"},
+    {"id": "edos_cuenta", "n": "Últimos 2 estados de cuenta bancarios", "t": "PDF", "de": "empresa"},
+    # ── Del dueño o representante legal ──
+    {"id": "ine_rep", "n": "INE del dueño o representante legal", "t": "JPG", "de": "representante"},
+    {"id": "poder", "n": "Poder notarial del representante", "t": "PDF", "pm": True, "de": "representante"},
     {"id": "comp_dom_dueno",
-     "n": "Comprobante de domicilio particular del principal accionista o dueño", "t": "PDF"},
-    {"id": "acta_const", "n": "Acta constitutiva", "t": "PDF", "pm": True},
-    {"id": "poder", "n": "Poder notarial del representante", "t": "PDF", "pm": True},
-    {"id": "edos_cuenta", "n": "Últimos 2 estados de cuenta bancarios", "t": "PDF"},
-    {"id": "ine_aval", "n": "INE del aval", "t": "JPG"},
-    {"id": "comp_dom_aval", "n": "Comprobante de domicilio particular del aval", "t": "PDF"},
-    {"id": "ine_obligados", "n": "INE del obligado solidario 1 y 2", "t": "JPG"},
+     "n": "Comprobante de domicilio particular del principal accionista o dueño",
+     "t": "PDF", "de": "representante"},
+    # ── Del aval y obligados solidarios ──
+    {"id": "ine_aval", "n": "INE del aval", "t": "JPG", "de": "aval"},
+    {"id": "comp_dom_aval", "n": "Comprobante de domicilio particular del aval", "t": "PDF", "de": "aval"},
+    {"id": "ine_obligados", "n": "INE del obligado solidario 1 y 2", "t": "JPG", "de": "aval"},
 ]
 _DOC_POR_ID = {d["id"]: d for d in DOCUMENTOS}
 
 
 def documento(did: str) -> dict | None:
     return _DOC_POR_ID.get(did)
+
+
+# ── De quién es cada documento ───────────────────────────────────
+# El nombre del grupo va escrito; el color solo lo refuerza.
+GRUPOS_DOC = {
+    "empresa":       {"n": "De la empresa", "c": "#185FA5",
+                      "d": "Papeles del negocio y de su domicilio."},
+    "representante": {"n": "Del dueño o representante legal", "c": "#6D4AA0",
+                      "d": "De la persona que firma por la empresa."},
+    "aval":          {"n": "Del aval y obligados solidarios", "c": "#0D6E6E",
+                      "d": "De quienes responden si el cliente no paga."},
+}
+ORDEN_GRUPOS = ["empresa", "representante", "aval"]
+
+# Documento libre: para lo que el cliente crea util y no este en la lista.
+ID_OTRO = "otro"
+OTRO = {"id": ID_OTRO, "n": "Otro documento", "t": "PDF", "de": "empresa", "opcional": True}
 
 
 # ── Tipos de solicitud: alta y crédito van SIEMPRE por separado ──
@@ -372,6 +396,9 @@ def catalogos_publicos() -> dict:
         "grupoARol": GRUPO_A_ROL,
         "modulos": MODULOS,
         "documentos": DOCUMENTOS,
+        "gruposDoc": GRUPOS_DOC,
+        "ordenGrupos": ORDEN_GRUPOS,
+        "otro": OTRO,
         "tipos": TIPOS,
         "estados": ESTADOS,
         "firmasRequeridas": FIRMAS_REQUERIDAS,
@@ -431,7 +458,7 @@ def revisa_captura(caso: dict) -> dict:
     valores = caso.get("valores") or {}
     for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
         for f in campos_de(m):
-            if f.get("fijo"):
+            if campo_fijo(f):
                 continue
             problema = revisa_campo(f, valores.get(f["k"]))
             if problema:
@@ -448,11 +475,24 @@ def etiquetas_campos(caso: dict) -> dict:
     return out
 
 
+def campo_fijo(f: dict) -> bool:
+    """¿Lo pone el sistema en vez del cliente?"""
+    return bool(f.get("fijo") or f.get("fijoDe"))
+
+
 def valores_fijos(caso: dict) -> dict:
-    """Campos que el sistema fija solo y el cliente no puede cambiar."""
+    """Campos que el sistema fija solo y el cliente no puede cambiar.
+
+    "fijo" es un valor constante (País = México). "fijoDe" toma el valor de un
+    dato del propio expediente que captura GPA (el monto requerido del crédito).
+    """
     fijos = {}
     for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
         for f in campos_de(m):
             if f.get("fijo"):
                 fijos[f["k"]] = f["fijo"]
+            elif f.get("fijoDe"):
+                valor = caso.get(f["fijoDe"])
+                if valor not in (None, ""):
+                    fijos[f["k"]] = valor
     return fijos

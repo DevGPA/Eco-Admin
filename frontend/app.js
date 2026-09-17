@@ -160,7 +160,9 @@ function vistaPortal() {
   return '<div class="wrap"><div class="tarjeta-portal">' +
     (c ? '<div class="steps">' + pasos + "</div>" : "") + cuerpo + "</div>" +
     '<p class="dim pie-portal">Sin cuenta, sin contraseña y sin instalar nada. ' +
-    "Puede salir y volver con esta misma liga y clave.</p></div>";
+    "Puede salir y volver con esta misma liga y clave." +
+    (c && c.venceLegible ? " Esta invitación vence el <b>" + esc(c.venceLegible) + "</b>." : "") +
+    "</p></div>";
 }
 
 function portalAcceso() {
@@ -194,6 +196,10 @@ function bloqueFijos(c) {
       '<div class="fila"><span>RFC</span><span class="mono">' + esc(c.rfc) + "</span></div>" +
       '<div class="fila"><span>Régimen fiscal</span><span>' + (r ? esc(r.c + " — " + r.n) : esc(c.regimen)) + "</span></div>" +
       '<div class="fila"><span>Tipo de persona</span><span>' + esc(c.persona) + "</span></div>" +
+      (c.montoRequerido
+        ? '<div class="fila"><span>Monto de crédito requerido</span>' +
+          '<span class="mono">' + esc(c.montoRequerido) + "</span></div>"
+        : "") +
     "</div>" +
     '<p class="dim" style="margin:0">Si algo de aquí está mal, avísele a GPA: solo ellos lo pueden corregir.</p></div>';
 }
@@ -334,6 +340,83 @@ function sincronizaDesdeDOM() {
   });
 }
 
+function grupoDoc(id) {
+  return (CAT.gruposDoc || {})[id] || { n: "Documentos", c: "#185FA5", d: "" };
+}
+
+/** Parte los documentos por a quién pertenecen, en el orden del catálogo. */
+function docsPorGrupo(lista) {
+  var orden = CAT.ordenGrupos || ["empresa", "representante", "aval"];
+  var out = [];
+  orden.forEach(function (g) {
+    var dd = lista.filter(function (d) { return (d.de || "empresa") === g; });
+    if (dd.length) out.push({ grupo: g, docs: dd });
+  });
+  return out;
+}
+
+/** Un renglón de documento en la vista del cliente. */
+function docRenglonCliente(d, c) {
+  var adj = (c.adjuntos || {})[d.id];
+  var marca = (c.marcas || {})[d.id];
+  return '<div class="doc ' + (marca ? "flag" : adj ? "attached" : "") + '">' +
+    '<div class="doc-ic">' + esc(d.t) + "</div>" +
+    '<div class="doc-body"><div class="doc-name">' + esc(d.n) + "</div>" +
+    '<div class="doc-meta">' +
+    (adj ? '<span class="mono">' + esc(adj.nombre) + "</span>" +
+           (adj.url ? ' <a href="' + esc(adj.url) + '" target="_blank" rel="noopener">ver</a>' : "")
+         : "<span>Archivo " + esc(d.t) + " o foto desde el celular</span>") +
+    "</div>" +
+    (marca ? '<div class="doc-motivo">GPA señaló: ' + esc(marca.motivo) + "</div>" : "") +
+    '<div class="barra-subida" data-barra="' + d.id + '" hidden><i></i></div>' +
+    "</div>" +
+    '<label class="btn btn-sm ' + (adj ? "" : "btn-primary") + ' subir">' +
+    (adj ? "Reemplazar" : "Adjuntar") +
+    '<input type="file" data-subir="' + d.id + '" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,image/*,application/pdf" hidden></label>' +
+    "</div>";
+}
+
+/** Documentos agrupados por dueño, cada grupo con su nombre y su color.
+ *  El nombre va escrito: el color solo refuerza, nunca es la única señal. */
+function seccionDocumentos(c, visibles) {
+  return docsPorGrupo(visibles).map(function (bloque) {
+    var g = grupoDoc(bloque.grupo);
+    return '<div class="grupo-doc" style="--g:' + g.c + '">' +
+      '<div class="grupo-cab"><div><div class="grupo-n">' + esc(g.n) + "</div>" +
+      (g.d ? '<div class="grupo-d">' + esc(g.d) + "</div>" : "") + "</div>" +
+      '<span class="grupo-cuenta">' + bloque.docs.length + "</span></div>" +
+      '<div class="doclist">' +
+      bloque.docs.map(function (d) { return docRenglonCliente(d, c); }).join("") +
+      "</div></div>";
+  }).join("");
+}
+
+/** Documentos adicionales: lo que el cliente crea útil y no esté en la lista. */
+function seccionOtros(c) {
+  var otros = c.otros || [];
+  var lista = otros.map(function (o) {
+    return '<div class="doc attached">' +
+      '<div class="doc-ic">+</div>' +
+      '<div class="doc-body"><div class="doc-name">' + esc(o.descripcion || "Documento adicional") + "</div>" +
+      '<div class="doc-meta"><span class="mono">' + esc(o.nombre) + "</span>" +
+      (o.url ? ' <a href="' + esc(o.url) + '" target="_blank" rel="noopener">ver</a>' : "") + "</div></div>" +
+      '<button class="btn btn-sm btn-stop" data-quitar="' + esc(o.id) + '">Quitar</button></div>';
+  }).join("");
+
+  return '<div class="grupo-doc" style="--g:#7A8A9A">' +
+    '<div class="grupo-cab"><div><div class="grupo-n">Otros documentos</div>' +
+    '<div class="grupo-d">Opcional. Si tiene algo más que crea útil, súbalo aquí.</div></div>' +
+    '<span class="grupo-cuenta">' + otros.length + "</span></div>" +
+    (lista ? '<div class="doclist">' + lista + "</div>" : "") +
+    '<div class="grid" style="margin-top:8px">' +
+    '<div class="field f-full"><label for="otro-desc">¿De qué se trata?</label>' +
+    '<input id="otro-desc" placeholder="Ej. Carta de recomendación de mi banco"></div>' +
+    '<div class="f-full row"><label class="btn btn-sm subir">Elegir archivo y subir' +
+    '<input type="file" data-subir="otro" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,image/*,application/pdf" hidden></label>' +
+    '<span class="dim">Hasta 10 archivos, 15 MB cada uno.</span></div>' +
+    "</div></div>";
+}
+
 function portalCaptura() {
   var c = S.casoCliente;
   var devuelta = c.estado === "devuelta";
@@ -353,25 +436,7 @@ function portalCaptura() {
       '<div class="grid">' + campos + tablas + '</div></div><hr class="sep">';
   }).join("");
 
-  var docs = visibles.map(function (d) {
-    var adj = (c.adjuntos || {})[d.id];
-    var marca = (c.marcas || {})[d.id];
-    return '<div class="doc ' + (marca ? "flag" : adj ? "attached" : "") + '">' +
-      '<div class="doc-ic">' + esc(d.t) + "</div>" +
-      '<div class="doc-body"><div class="doc-name">' + esc(d.n) + "</div>" +
-      '<div class="doc-meta">' +
-      (adj ? '<span class="mono">' + esc(adj.nombre) + "</span>" +
-             (adj.url ? ' <a href="' + esc(adj.url) + '" target="_blank" rel="noopener">ver</a>' : "")
-           : "<span>Archivo " + esc(d.t) + " o foto desde el celular</span>") +
-      "</div>" +
-      (marca ? '<div class="doc-motivo">GPA señaló: ' + esc(marca.motivo) + "</div>" : "") +
-      '<div class="barra-subida" data-barra="' + d.id + '" hidden><i></i></div>' +
-      "</div>" +
-      '<label class="btn btn-sm ' + (adj ? "" : "btn-primary") + ' subir">' +
-      (adj ? "Reemplazar" : "Adjuntar") +
-      '<input type="file" data-subir="' + d.id + '" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,image/*,application/pdf" hidden></label>' +
-      "</div>";
-  }).join("");
+  var docs = seccionDocumentos(c, visibles);
 
   var cabecera = devuelta
     ? '<div class="banner banner-stop"><span><b>Faltan unos ajustes.</b> Revisamos su expediente y ' +
@@ -390,7 +455,8 @@ function portalCaptura() {
     '<p class="dim" style="margin:2px 0 0">' +
     (devuelta ? "Solo estos necesitan reemplazo." : "Puede tomarles foto con el celular. Hasta 15 MB cada uno.") +
     "</p></div>" +
-    '<div class="doclist">' + (docs || '<p class="dim">No hay documentos por adjuntar.</p>') + "</div></div>" +
+    (docs || '<p class="dim">No hay documentos por adjuntar.</p>') +
+    (devuelta ? "" : seccionOtros(c)) + "</div>" +
     '<hr class="sep">' +
     '<div class="row"><button class="btn btn-primary" id="btn-a-revisar">Revisar y enviar</button>' +
     '<button class="btn" id="btn-guardar-portal">Guardar y salir</button></div></div>';
@@ -585,6 +651,10 @@ function problemasNueva(n) {
   if (cel.length < 10) {
     out.push(cel ? "el celular completo (10 dígitos, lleva " + cel.length + ")" : "el celular del contacto");
   }
+  // El monto lo fija GPA, no el cliente: sin el no hay credito que evaluar.
+  if (n.tipo === "credito" && !String(n.montoRequerido || "").replace(/\D/g, "")) {
+    out.push("el monto de crédito requerido");
+  }
   return out;
 }
 
@@ -725,7 +795,15 @@ function vistaNueva() {
       campo("contacto", "Persona de contacto", "f-third") +
       campo("correo", 'Correo del contacto <span class="req">*</span>', "f-half") +
       campo("celular", 'Celular del contacto <span class="req">*</span>', "f-half", "mono",
-            "10 dígitos, p. ej. 33 1204 8871") + "</div>" +
+            "10 dígitos, p. ej. 33 1204 8871") +
+      (n.tipo === "credito"
+        ? campo("montoRequerido", 'Monto de crédito requerido <span class="req">*</span>',
+                "f-half", "mono", "250,000")
+        : "") + "</div>" +
+      (n.tipo === "credito"
+        ? '<p class="dim" style="margin:0">El monto lo captura GPA. El cliente lo verá en su ' +
+          "formulario, pero no lo puede cambiar.</p>"
+        : "") +
       '<div id="conflicto-rfc">' +
       (conflicto ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(conflicto) + "</span></div>" : "") +
       "</div></div>" +
@@ -803,7 +881,7 @@ function vistaExpediente() {
   var señalados = Object.keys(marcas).filter(function (k) { return marcas[k] && marcas[k].motivo; });
   var recibidos = aplic.filter(function (d) { return (c.adjuntos || {})[d.id]; }).length;
 
-  var docs = aplic.map(function (d) {
+  function docRenglonInterno(d) {
     var adj = (c.adjuntos || {})[d.id];
     var m = marcas[d.id];
     return '<div class="doc ' + (m && m.motivo ? "flag" : adj ? "attached" : "") + '">' +
@@ -820,7 +898,31 @@ function vistaExpediente() {
           '<button class="btn btn-sm btn-ok" data-ok="' + d.id + '" aria-pressed="' + (m && m.ok ? "true" : "false") + '">Correcto</button>' +
           '<button class="btn btn-sm btn-stop" data-señalar="' + d.id + '" aria-pressed="' + (m && m.motivo ? "true" : "false") + '">Señalar</button></div>'
         : "") + "</div>";
+  }
+
+  // Agrupados por dueño, igual que los ve el cliente: así se revisa sin confundir
+  // el INE del representante con el del aval.
+  var docs = docsPorGrupo(aplic).map(function (bloque) {
+    var g = grupoDoc(bloque.grupo);
+    return '<div class="grupo-doc" style="--g:' + g.c + '">' +
+      '<div class="grupo-cab"><div class="grupo-n">' + esc(g.n) + "</div>" +
+      '<span class="grupo-cuenta">' + bloque.docs.length + "</span></div>" +
+      '<div class="doclist">' + bloque.docs.map(docRenglonInterno).join("") + "</div></div>";
   }).join("");
+
+  var otrosInt = (c.otros || []).map(function (o) {
+    return '<div class="doc attached"><div class="doc-ic">+</div>' +
+      '<div class="doc-body"><div class="doc-name">' + esc(o.descripcion || "Documento adicional") + "</div>" +
+      '<div class="doc-meta"><span class="mono">' + esc(o.nombre) + "</span>" +
+      (o.url ? ' <a href="' + esc(o.url) + '" target="_blank" rel="noopener">ver documento</a>' : "") +
+      "</div></div></div>";
+  }).join("");
+  if (otrosInt) {
+    docs += '<div class="grupo-doc" style="--g:#7A8A9A">' +
+      '<div class="grupo-cab"><div class="grupo-n">Otros documentos que subió el cliente</div>' +
+      '<span class="grupo-cuenta">' + (c.otros || []).length + "</span></div>" +
+      '<div class="doclist">' + otrosInt + "</div></div>";
+  }
 
   var problemas = c.problemas || {};
   var puedeSenalar = revisor && c.estado !== "autorizada" && c.estado !== "rechazada";
@@ -869,6 +971,12 @@ function vistaExpediente() {
       av.pct + '%</div><div class="dim">' + av.hechos + " de " + av.total + " puntos</div></div></div>" +
       '<div class="progress"><i style="width:' + av.pct + '%"></i></div>' +
       (c.conflictoRfc ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(c.conflictoRfc) + "</span></div>" : "") +
+      (c.vencida
+        ? '<div class="banner banner-stop"><span><b>La liga venció el ' + esc(c.venceLegible) +
+          ".</b> El cliente ya no puede entrar. Genere una clave nueva: eso reinicia los 15 días.</span></div>"
+        : c.venceLegible
+          ? '<p class="dim" style="margin:0">La liga del cliente vence el <b>' + esc(c.venceLegible) + "</b>.</p>"
+          : "") +
     "</div>" +
     '<div class="cols"><div class="stack">' +
       '<div class="card pad stack"><div class="spread"><div class="eyebrow">Documentos del expediente</div>' +
@@ -982,7 +1090,8 @@ function nuevaVacia(tipo) {
   // Sin módulos ni documentos: los fija el servidor según el tipo de solicitud.
   var T = CAT.tipos[tipo || "alta"];
   return { tipo: T.id, razon_social: "", nombre_comercial: "", rfc: "", regimen: "601",
-           contacto: "", correo: "", celular: "", sucursal: CAT.cat.sucursal[0],
+           contacto: "", correo: "", celular: "", montoRequerido: "",
+           sucursal: CAT.cat.sucursal[0],
            giro: CAT.cat.giro[0], clasificacion: CAT.cat.clasificacion[0] };
 }
 
@@ -1047,6 +1156,20 @@ document.addEventListener("click", function (ev) {
     })();
     return;
   }
+  if (d.quitar) {
+    sincronizaDesdeDOM();
+    var guardado = JSON.parse(JSON.stringify({ v: S.casoCliente.valores || {},
+                                               t: S.casoCliente.tablasVal || {} }));
+    conError(function () {
+      return portal.quitar(d.quitar).then(function (c) {
+        c.valores = Object.assign({}, c.valores, guardado.v);
+        c.tablasVal = Object.assign({}, c.tablasVal, guardado.t);
+        S.casoCliente = c;
+        toast("Documento quitado.");
+      });
+    })();
+    return;
+  }
   if (t.id === "btn-guardar-portal") { sincronizaDesdeDOM(); guardaPortal("guardado"); return; }
   if (t.id === "btn-a-revisar") { sincronizaDesdeDOM(); S.mostrarFaltantes = true; guardaPortal("revisar"); return; }
   if (t.id === "btn-seguir-llenando") { S.pasoCliente = "captura"; render(); return; }
@@ -1090,7 +1213,7 @@ document.addEventListener("click", function (ev) {
     var previo = S.nueva || {};
     S.nueva = nuevaVacia(d.tipo);
     ["razon_social", "nombre_comercial", "rfc", "regimen", "contacto", "correo",
-     "celular", "sucursal", "giro", "clasificacion"].forEach(function (k) {
+     "celular", "montoRequerido", "sucursal", "giro", "clasificacion"].forEach(function (k) {
       if (previo[k]) S.nueva[k] = previo[k];
     });
     S.ligaNueva = null;
@@ -1112,6 +1235,7 @@ document.addEventListener("click", function (ev) {
         tipo: n.tipo, razonSocial: n.razon_social, nombreComercial: n.nombre_comercial,
         rfc: n.rfc, regimen: n.regimen, contacto: n.contacto, correo: n.correo,
         celular: n.celular, sucursal: n.sucursal, giro: n.giro, clasificacion: n.clasificacion,
+        montoRequerido: n.montoRequerido,
         // No se mandan módulos ni documentos: los fija el servidor según el tipo.
       }).then(function (r) {
         var base = (window.GPA_CONFIG && window.GPA_CONFIG.portalUrl) || (location.origin + location.pathname.replace(/[^/]*$/, ""));
@@ -1268,7 +1392,21 @@ document.addEventListener("change", function (ev) {
   if (d.firmasel) { S.firmaSel[d.firmasel] = el.value; return; }
   if (el.id === "privacidad") { var b = $("#btn-enviar-portal"); if (b) b.disabled = !el.checked; return; }
 
-  if (d.subir) { subeArchivo(d.subir, el.files && el.files[0]); return; }
+  if (d.subir) {
+    var desc = "";
+    if (d.subir === "otro") {
+      var caja = $("#otro-desc");
+      desc = caja ? caja.value.trim() : "";
+      if (!desc) {
+        S.error = "Antes de subirlo, escriba de qué se trata el documento.";
+        el.value = "";
+        render();
+        return;
+      }
+    }
+    subeArchivo(d.subir, el.files && el.files[0], desc);
+    return;
+  }
 
   // panel de usuarios: cada cambio se guarda de inmediato
   var correo = d.urol || d.un1 || d.un2 || d.uact;
@@ -1286,7 +1424,7 @@ document.addEventListener("change", function (ev) {
   }
 });
 
-var subeArchivo = function (docId, archivo) {
+var subeArchivo = function (docId, archivo, descripcion) {
   if (!archivo) return;
   // Se guarda antes de subir: la respuesta redibuja y se perderia lo capturado.
   sincronizaDesdeDOM();
@@ -1297,7 +1435,7 @@ var subeArchivo = function (docId, archivo) {
   S.error = "";
   portal.subir(docId, archivo, function (pct) {
     if (barra) barra.firstElementChild.style.width = pct + "%";
-  }).then(function (c) {
+  }, descripcion).then(function (c) {
     // El servidor aun no conoce lo que se acaba de teclear: se repone encima.
     c.valores = Object.assign({}, c.valores, capturado.v);
     c.tablasVal = Object.assign({}, c.tablasVal, capturado.t);

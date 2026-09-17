@@ -45,6 +45,35 @@ def legible_mx(iso: str | None = None) -> str:
     return d.strftime("%d/%m/%Y %H:%M")
 
 
+def vence_en(dias: int | None = None) -> str:
+    """Momento en que caduca una liga. Por omisión, 15 días naturales."""
+    dias = int(dias or os.environ.get("VIGENCIA_LIGA_DIAS") or 15)
+    return (ahora_mx() + timedelta(days=dias)).isoformat(timespec="seconds")
+
+
+def ya_vencio(iso: str | None) -> bool:
+    """Una liga sin fecha NO se considera vencida: son las creadas antes de la regla."""
+    if not iso:
+        return False
+    try:
+        return datetime.fromisoformat(iso).astimezone(TZ_MX) < ahora_mx()
+    except (ValueError, TypeError):
+        return False
+
+
+def fecha_larga(iso: str | None) -> str:
+    """15 de octubre de 2026 — para decirle al cliente hasta cuándo tiene."""
+    if not iso:
+        return ""
+    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+             "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    try:
+        d = datetime.fromisoformat(iso).astimezone(TZ_MX)
+    except (ValueError, TypeError):
+        return ""
+    return f"{d.day} de {meses[d.month - 1]} de {d.year}"
+
+
 def dias_desde(iso: str | None) -> int:
     if not iso:
         return 0

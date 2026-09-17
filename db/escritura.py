@@ -6,17 +6,20 @@
 
 from __future__ import annotations
 
+import secrets
+
 from boto3.dynamodb.conditions import Attr
 
 from catalogos import (TIPOS, ESTADOS, ESTADOS_CERRADOS,
                        ESTADOS_ABIERTOS_AL_CLIENTE, docs_aplicables, persona_de,
                        modulos_activos, campos_de, documento, revisa_campo,
-                       revisa_captura, valores_fijos, etiquetas_campos)
+                       revisa_captura, valores_fijos, etiquetas_campos,
+                       campo_fijo, ID_OTRO, OTRO)
 from . import tabla
 from .modelos import (SK_META, MAX_INTENTOS, pk_caso, sk_log, llaves_caso, iso_mx,
                       legible_mx, prefijo_folio, arma_folio, nuevo_token, nueva_clave,
                       hash_clave, clave_coincide, limpia_texto, limpia_mapa,
-                      id_documento_valido)
+                      id_documento_valido, vence_en, ya_vencio, fecha_larga)
 from .queries import get_caso
 
 
@@ -75,6 +78,13 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
     if problema:
         raise ReglaRota("Celular del contacto: " + problema)
 
+    # 2) El monto lo fija GPA, no el cliente. Sin monto no hay credito que evaluar.
+    monto_req = limpia_texto(datos.get("montoRequerido"))
+    if tipo_id == "credito":
+        if not "".join(ch for ch in monto_req if ch.isdigit()):
+            raise ReglaRota("Falta el monto de crédito requerido. Lo captura GPA, "
+                            "no el cliente.")
+
     # Los módulos y documentos NO se eligen: cada tipo de solicitud trae los suyos
     # completos. Un alta pide sus 5 documentos y un crédito sus 13, siempre.
     # Lo único que se descuenta es lo que solo aplica a persona moral, y eso lo
@@ -105,6 +115,8 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
         "modulos": modulos, "docs": docs,
         "valores": {}, "tablasVal": {}, "adjuntos": {}, "marcas": {},
         "autorizaciones": [], "rechazo": "",
+        "montoRequerido": monto_req,
+        "vence": vence_en(),
         "estado": "enviada", "creado": creado, "creadoPor": usuario.get("correo", ""),
         "creadoPorNombre": usuario.get("nombre", ""),
         "actualizado": creado,
@@ -129,11 +141,13 @@ def regenerar_clave(folio: str, usuario: dict) -> str:
     tabla().update_item(
         Key={"PK": pk_caso(folio), "SK": SK_META},
         UpdateExpression=("SET claveHash=:h, claveSal=:s, intentos=:cero, "
-                          "bloqueado=:no, actualizado=:t"),
+                          "bloqueado=:no, vence=:v, actualizado=:t"),
         ExpressionAttributeValues={":h": huella, ":s": sal, ":cero": 0,
-                                   ":no": False, ":t": iso_mx()},
+                                   ":no": False, ":v": vence_en(), ":t": iso_mx()},
     )
-    log(folio, "clave-nueva", usuario.get("correo", ""), "Se generó una clave de acceso nueva")
+    # Dar clave nueva es volver a invitar: la vigencia arranca de cero.
+    log(folio, "clave-nueva", usuario.get("correo", ""),
+        "Clave nueva; la liga vuelve a vencer el " + fecha_larga(vence_en()))
     return clave
 
 
@@ -149,6 +163,9 @@ def verificar_clave(token: str, clave: str) -> dict:
                         "Comuníquese con GPA para que le den una clave nueva.")
     if caso["estado"] in ESTADOS_CERRADOS:
         raise ReglaRota("Este expediente ya se cerró. Comuníquese con GPA.")
+    if ya_vencio(caso.get("vence")):
+        raise ReglaRota(f"Esta liga venció el {fecha_larga(caso.get('vence'))}. "
+                        "Comuníquese con GPA para que le manden una nueva.")
 
     if clave_coincide(clave, caso.get("claveHash", ""), caso.get("claveSal", "")):
         actualiza = {"intentos": 0}
@@ -202,8 +219,8 @@ def campos_permitidos(caso: dict) -> set:
     permitidos = set()
     for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
         for f in campos_de(m):
-            if f.get("fijo"):
-                continue          # el sistema los pone solo: País siempre México
+            if campo_fijo(f):
+                continue          # los pone el sistema: País y el monto del crédito
             permitidos.add(f["k"])
         for t in m.get("tablas", []):
             for fila in range(t.get("n", 1)):
@@ -254,18 +271,41 @@ def _firma_archivo(nombre: str, tam) -> str:
     return f"{str(nombre or '').strip().lower()}|{int(tam or 0)}"
 
 
+def es_otro(doc_id: str) -> bool:
+    """Los documentos libres que sube el cliente van con el prefijo «otro:»."""
+    return str(doc_id or "").startswith(ID_OTRO + ":")
+
+
+def otros_de(caso: dict) -> list:
+    """Los documentos libres del expediente, del mas viejo al mas nuevo."""
+    adjuntos = caso.get("adjuntos") or {}
+    libres = [{"id": k, **v} for k, v in adjuntos.items()
+              if es_otro(k) and isinstance(v, dict)]
+    return sorted(libres, key=lambda d: d.get("cuando", ""))
+
+
 def registrar_adjunto(token: str, clave: str, doc_id: str, nombre: str, key: str,
-                      tam: int = 0) -> dict:
+                      tam: int = 0, descripcion: str = "") -> dict:
     """Deja constancia de un documento ya subido a S3 con URL prefirmada."""
     caso = verificar_clave(token, clave)
     _exige_abierto_al_cliente(caso)
     if not id_documento_valido(doc_id):
         raise ReglaRota("Identificador de documento inválido.")
-    persona = persona_de(caso.get("regimen"), caso.get("rfc"))
-    pedidos = {d["id"] for d in docs_aplicables(caso.get("tipo"), caso.get("docs") or {}, persona)}
-    if doc_id not in pedidos:
-        raise ReglaRota("Ese documento no se le pidió en esta solicitud.")
-    if caso["estado"] == "devuelta":
+
+    # Documento libre: no estaba en la lista, pero el cliente lo cree util.
+    if doc_id == ID_OTRO:
+        descripcion = limpia_texto(descripcion)
+        if not descripcion:
+            raise ReglaRota("Escriba de qué se trata el documento, para saber qué es al revisarlo.")
+        if len(otros_de(caso)) >= 10:
+            raise ReglaRota("Ya subió 10 documentos adicionales. Si necesita más, avísele a GPA.")
+        doc_id = f"{ID_OTRO}:{secrets.token_hex(4)}"
+    else:
+        persona = persona_de(caso.get("regimen"), caso.get("rfc"))
+        pedidos = {d["id"] for d in docs_aplicables(caso.get("tipo"), caso.get("docs") or {}, persona)}
+        if doc_id not in pedidos:
+            raise ReglaRota("Ese documento no se le pidió en esta solicitud.")
+    if caso["estado"] == "devuelta" and not es_otro(doc_id):
         marca = (caso.get("marcas") or {}).get(doc_id) or {}
         if not marca.get("motivo"):
             raise ReglaRota("Ese documento ya fue aceptado; no hace falta reemplazarlo.")
@@ -291,9 +331,29 @@ def registrar_adjunto(token: str, clave: str, doc_id: str, nombre: str, key: str
 
     adjuntos[doc_id] = {"nombre": limpia_texto(nombre), "key": limpia_texto(key),
                         "tam": int(tam or 0), "firma": firma, "cuando": iso_mx()}
+    if descripcion:
+        adjuntos[doc_id]["descripcion"] = descripcion
     marcas.pop(doc_id, None)          # un documento nuevo borra el señalamiento anterior
     _fija_campos(caso["folio"], {"adjuntos": adjuntos, "marcas": marcas}, caso)
-    log(caso["folio"], "adjunto", "cliente", f"{doc_id}: {nombre}")
+    log(caso["folio"], "adjunto", "cliente",
+        f"{doc_id}: {nombre}" + (f" — {descripcion}" if descripcion else ""))
+    return get_caso(caso["folio"])
+
+
+def quitar_adjunto(token: str, clave: str, doc_id: str) -> dict:
+    """Quita un documento libre. Los de la lista no se quitan: se reemplazan."""
+    caso = verificar_clave(token, clave)
+    _exige_abierto_al_cliente(caso)
+    if not es_otro(doc_id):
+        raise ReglaRota("Solo se pueden quitar los documentos adicionales. "
+                        "Los de la lista se reemplazan subiendo otro archivo.")
+    adjuntos = dict(caso.get("adjuntos") or {})
+    quitado = adjuntos.pop(doc_id, None)
+    if not quitado:
+        raise ReglaRota("Ese documento ya no está en su expediente.")
+    _fija_campos(caso["folio"], {"adjuntos": adjuntos}, caso)
+    log(caso["folio"], "adjunto-quitado", "cliente",
+        f"{doc_id}: {quitado.get('nombre', '')}")
     return get_caso(caso["folio"])
 
 

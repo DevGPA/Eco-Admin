@@ -7,7 +7,8 @@
 #   POST  /portal/entrar           {token, clave} → su expediente
 #   POST  /portal/guardar          {token, clave, valores, tablas}
 #   POST  /portal/url-subida       {token, clave, docId, contentType, tam}
-#   POST  /portal/adjuntar         {token, clave, docId, nombre, key}
+#   POST  /portal/adjuntar         {token, clave, docId, nombre, key, tam, descripcion}
+#   POST  /portal/quitar           {token, clave, docId}   solo documentos libres
 #   POST  /portal/enviar           {token, clave}
 #
 # CON COGNITO (usuarios de GPA)
@@ -34,12 +35,13 @@ from catalogos import (TIPOS, ESTADOS, catalogos_publicos, puede, avance,
                        docs_aplicables, persona_de, conflicto_regimen_rfc,
                        revisa_captura)
 from db.escritura import (ReglaRota, crear_caso, regenerar_clave, verificar_clave,
-                          guardar_captura, registrar_adjunto, enviar_expediente,
+                          guardar_captura, registrar_adjunto, quitar_adjunto,
+                          otros_de, enviar_expediente,
                           marcar_documento, señalar_campo, devolver,
                           pasar_a_autorizacion, pendientes_para_autorizar,
                           firmar, rechazar, campos_permitidos)
 from db.queries import get_caso, listar_casos, bitacora, resumen_bandeja
-from db.modelos import dias_desde
+from db.modelos import dias_desde, fecha_larga, ya_vencio
 from s3.documentos import DocumentoInvalido, url_subida, resuelve_urls
 import auth_cognito
 
@@ -119,6 +121,11 @@ def _vista_cliente(caso: dict) -> dict:
         "tablasVal": caso.get("tablasVal") or {},
         "adjuntos": con_urls.get("adjuntos") or {},
         "marcas": marcas_publicas,
+        "otros": [{**o, "url": (con_urls.get("adjuntos") or {}).get(o["id"], {}).get("url", "")}
+                  for o in otros_de(caso)],
+        "montoRequerido": caso.get("montoRequerido", ""),
+        "vence": caso.get("vence", ""),
+        "venceLegible": fecha_larga(caso.get("vence")),
         # El servidor dice qué puede escribir: la pantalla obedece, no decide.
         "camposEditables": sorted(campos_permitidos(caso)),
         # Que esta mal, campo por campo. La pantalla lo pinta; el servidor lo decide.
@@ -138,6 +145,9 @@ def _vista_interna(caso: dict) -> dict:
                            docs_aplicables(caso.get("tipo"), caso.get("docs") or {}, persona)],
         "pendientesAutorizar": pendientes_para_autorizar(caso),
         "problemas": revisa_captura(caso),
+        "otros": otros_de(caso),
+        "venceLegible": fecha_larga(caso.get("vence")),
+        "vencida": ya_vencio(caso.get("vence")),
         "conflictoRfc": conflicto_regimen_rfc(caso.get("regimen"), caso.get("rfc")),
     }
 
@@ -201,7 +211,7 @@ def _portal(ruta: str, datos: dict):
         persona = persona_de(caso.get("regimen"), caso.get("rfc"))
         pedidos = {d["id"] for d in
                    docs_aplicables(caso.get("tipo"), caso.get("docs") or {}, persona)}
-        if doc_id not in pedidos:
+        if doc_id != "otro" and doc_id not in pedidos:
             return _err("Ese documento no se le pidió en esta solicitud.", 400)
         return _resp(url_subida(caso["folio"], doc_id,
                                 str(datos.get("contentType") or ""),
@@ -211,7 +221,10 @@ def _portal(ruta: str, datos: dict):
         return _resp(_vista_cliente(registrar_adjunto(
             token, clave, str(datos.get("docId") or ""),
             str(datos.get("nombre") or ""), str(datos.get("key") or ""),
-            int(datos.get("tam") or 0))))
+            int(datos.get("tam") or 0), str(datos.get("descripcion") or ""))))
+
+    if ruta == "POST /portal/quitar":
+        return _resp(_vista_cliente(quitar_adjunto(token, clave, str(datos.get("docId") or ""))))
 
     if ruta == "POST /portal/enviar":
         return _resp(_vista_cliente(enviar_expediente(token, clave)))

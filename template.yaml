@@ -117,6 +117,9 @@ Resources:
         PortalAdjuntar:
           Type: HttpApi
           Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/adjuntar, Auth: { Authorizer: NONE } }
+        PortalQuitar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/quitar, Auth: { Authorizer: NONE } }
         PortalEnviar:
           Type: HttpApi
           Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /portal/enviar, Auth: { Authorizer: NONE } }

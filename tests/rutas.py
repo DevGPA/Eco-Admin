@@ -77,7 +77,8 @@ def main():
         print("   ", r)
 
     esperadas = {"GET /health", "GET /catalogos", "POST /portal/entrar", "POST /portal/guardar",
-                 "POST /portal/url-subida", "POST /portal/adjuntar", "POST /portal/enviar"}
+                 "POST /portal/url-subida", "POST /portal/adjuntar", "POST /portal/quitar",
+                 "POST /portal/enviar"}
     if publicas != esperadas:
         problemas.append(f"las rutas públicas no son las esperadas: sobran {sorted(publicas - esperadas)}, "
                          f"faltan {sorted(esperadas - publicas)}")
