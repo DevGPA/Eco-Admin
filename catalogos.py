@@ -136,8 +136,9 @@ MODULOS = [
             {"k": "ciudad", "l": "Ciudad", "w": "third", "req": True},
             {"k": "municipio", "l": "Municipio", "w": "third"},
             {"k": "estado_dom", "l": "Estado", "w": "third", "req": True},
-            {"k": "pais", "l": "País", "w": "third"},
-            {"k": "telefono", "l": "Teléfono", "w": "third", "req": True, "mono": True, "tipo": "tel"},
+            {"k": "pais", "l": "País", "w": "third", "fijo": "México"},
+            {"k": "telefono", "l": "Teléfono", "w": "third", "req": True, "mono": True, "tipo": "tel",
+             "ph": "33 1234 5678"},
             {"k": "telefono2", "l": "Teléfono 2", "w": "third", "mono": True, "tipo": "tel"},
             {"k": "web", "l": "Página web", "w": "third"},
             {"k": "uso", "l": "Uso del CFDI", "w": "third", "req": True, "opts": CAT["uso"]},
@@ -162,11 +163,12 @@ MODULOS = [
             {"k": "e_celular", "l": "Celular de contacto", "w": "half", "req": True,
              "mono": True, "tipo": "tel"},
             {"k": "e_email", "l": "Correo del contacto", "w": "half", "tipo": "email"},
-            {"k": "lv_ini", "l": "Entrega L–V desde", "w": "third", "req": True, "ph": "8:00"},
-            {"k": "lv_fin", "l": "Entrega L–V hasta", "w": "third", "req": True, "ph": "17:00"},
-            {"k": "comida", "l": "Horario de comida", "w": "third", "ph": "14:00 a 15:00"},
-            {"k": "sab_ini", "l": "Sábado desde", "w": "third", "ph": "9:00"},
-            {"k": "sab_fin", "l": "Sábado hasta", "w": "third", "ph": "13:00"},
+            {"k": "lv_ini", "l": "Entrega L–V desde", "w": "third", "req": True, "tipo": "hora"},
+            {"k": "lv_fin", "l": "Entrega L–V hasta", "w": "third", "req": True, "tipo": "hora"},
+            {"k": "comida_ini", "l": "Comida desde", "w": "third", "tipo": "hora"},
+            {"k": "comida_fin", "l": "Comida hasta", "w": "third", "tipo": "hora"},
+            {"k": "sab_ini", "l": "Sábado desde", "w": "third", "tipo": "hora"},
+            {"k": "sab_fin", "l": "Sábado hasta", "w": "third", "tipo": "hora"},
         ],
     },
     {
@@ -369,3 +371,83 @@ def catalogos_publicos() -> dict:
         "estados": ESTADOS,
         "firmasRequeridas": FIRMAS_REQUERIDAS,
     }
+
+
+# ── Validacion de lo que captura el cliente ──────────────────────
+# Vive aqui, junto a la definicion de los campos, para que no se separen.
+import re as _re
+
+_RE_CORREO = _re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+
+
+def solo_digitos(valor) -> str:
+    return "".join(ch for ch in str(valor or "") if ch.isdigit())
+
+
+def revisa_campo(f: dict, valor) -> str:
+    """Devuelve el problema del valor, o cadena vacia si esta bien.
+
+    El mensaje se le muestra tal cual a quien captura, asi que explica que
+    corregir, no que regla se rompio.
+    """
+    tipo = f.get("tipo", "")
+    texto = "" if valor is None else str(valor).strip()
+
+    if tipo == "check":
+        return "" if valor is True or not f.get("req") else "Falta marcar esta casilla."
+    if not texto:
+        return "Falta llenar este dato." if f.get("req") else ""
+
+    if tipo == "tel":
+        d = solo_digitos(texto)
+        if len(d) < 10:
+            return f"El teléfono va con 10 dígitos, incluida la clave de la ciudad. Escribió {len(d)}."
+        if len(d) > 13:
+            return "Ese teléfono trae demasiados dígitos."
+    elif tipo == "email":
+        if not _RE_CORREO.match(texto):
+            return "Ese correo no parece válido. Revise que lleve arroba y dominio."
+    elif tipo == "cp":
+        d = solo_digitos(texto)
+        if len(d) != 5:
+            return f"El código postal va con 5 dígitos. Escribió {len(d)}."
+    elif tipo == "hora":
+        if not _re.match(r"^([01]?\d|2[0-3]):[0-5]\d$", texto):
+            return "La hora va como 08:00 o 17:30."
+    elif tipo == "monto":
+        if not solo_digitos(texto):
+            return "El monto va en números."
+    return ""
+
+
+def revisa_captura(caso: dict) -> dict:
+    """Todos los problemas del expediente: {clave del campo: que corregir}."""
+    problemas = {}
+    valores = caso.get("valores") or {}
+    for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
+        for f in campos_de(m):
+            if f.get("fijo"):
+                continue
+            problema = revisa_campo(f, valores.get(f["k"]))
+            if problema:
+                problemas[f["k"]] = problema
+    return problemas
+
+
+def etiquetas_campos(caso: dict) -> dict:
+    """{clave del campo: su etiqueta}. Para poder nombrar lo que falta."""
+    out = {}
+    for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
+        for f in campos_de(m):
+            out[f["k"]] = f["l"]
+    return out
+
+
+def valores_fijos(caso: dict) -> dict:
+    """Campos que el sistema fija solo y el cliente no puede cambiar."""
+    fijos = {}
+    for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
+        for f in campos_de(m):
+            if f.get("fijo"):
+                fijos[f["k"]] = f["fijo"]
+    return fijos

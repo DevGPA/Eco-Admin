@@ -10,7 +10,8 @@ from boto3.dynamodb.conditions import Attr
 
 from catalogos import (TIPOS, FIRMAS_REQUERIDAS, ESTADOS, ESTADOS_CERRADOS,
                        ESTADOS_ABIERTOS_AL_CLIENTE, docs_aplicables, persona_de,
-                       modulos_activos, campos_de, documento)
+                       modulos_activos, campos_de, documento, revisa_captura,
+                       valores_fijos, etiquetas_campos)
 from . import tabla, sin_decimales
 from .modelos import (SK_META, MAX_INTENTOS, pk_caso, sk_log, llaves_caso, iso_mx,
                       legible_mx, prefijo_folio, arma_folio, nuevo_token, nueva_clave,
@@ -101,6 +102,7 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
         "creadoPorNombre": usuario.get("nombre", ""),
         "actualizado": creado,
     }
+    caso["valores"] = valores_fijos(caso)
     tabla().put_item(Item=caso, ConditionExpression=Attr("PK").not_exists())
     log(folio, "creada", usuario.get("correo", ""),
         f"{tipo['nombre']} · {razon} · liga y clave generadas")
@@ -193,6 +195,8 @@ def campos_permitidos(caso: dict) -> set:
     permitidos = set()
     for m in modulos_activos(caso.get("tipo"), caso.get("modulos") or {}):
         for f in campos_de(m):
+            if f.get("fijo"):
+                continue          # el sistema los pone solo: País siempre México
             permitidos.add(f["k"])
         for t in m.get("tablas", []):
             for fila in range(t.get("n", 1)):
@@ -227,6 +231,7 @@ def guardar_captura(token: str, clave: str, valores: dict, tablas: dict) -> dict
         else:
             descartados.append(k)
 
+    nuevos_valores.update(valores_fijos(caso))
     _fija_campos(caso["folio"], {"valores": nuevos_valores, "tablasVal": nuevas_tablas}, caso)
     if descartados:
         # No se calla: queda en la bitácora para poder explicarlo después.
@@ -237,7 +242,13 @@ def guardar_captura(token: str, clave: str, valores: dict, tablas: dict) -> dict
     return resultado
 
 
-def registrar_adjunto(token: str, clave: str, doc_id: str, nombre: str, key: str) -> dict:
+def _firma_archivo(nombre: str, tam) -> str:
+    """Huella barata de un archivo: su nombre y su tamaño exacto en bytes."""
+    return f"{str(nombre or '').strip().lower()}|{int(tam or 0)}"
+
+
+def registrar_adjunto(token: str, clave: str, doc_id: str, nombre: str, key: str,
+                      tam: int = 0) -> dict:
     """Deja constancia de un documento ya subido a S3 con URL prefirmada."""
     caso = verificar_clave(token, clave)
     _exige_abierto_al_cliente(caso)
@@ -253,9 +264,26 @@ def registrar_adjunto(token: str, clave: str, doc_id: str, nombre: str, key: str
             raise ReglaRota("Ese documento ya fue aceptado; no hace falta reemplazarlo.")
 
     adjuntos = dict(caso.get("adjuntos") or {})
-    adjuntos[doc_id] = {"nombre": limpia_texto(nombre), "key": limpia_texto(key),
-                        "cuando": iso_mx()}
     marcas = dict(caso.get("marcas") or {})
+    firma = _firma_archivo(nombre, tam)
+
+    # El mismo archivo no puede servir para dos documentos distintos.
+    for otro_id, info in adjuntos.items():
+        if otro_id == doc_id or not isinstance(info, dict):
+            continue
+        if info.get("firma") and info["firma"] == firma:
+            otro = documento(otro_id)
+            raise ReglaRota(f"Ese mismo archivo ya lo adjuntó en «{otro['n'] if otro else otro_id}». "
+                            "Cada documento necesita su propio archivo.")
+
+    # Y si este documento venía señalado, no vale volver a subir el que se rechazó.
+    marca = marcas.get(doc_id) or {}
+    if marca.get("firmaRechazada") and marca["firmaRechazada"] == firma:
+        raise ReglaRota("Ese es el mismo archivo que le señalamos: " +
+                        str(marca.get("motivo", "")) + " Suba uno distinto.")
+
+    adjuntos[doc_id] = {"nombre": limpia_texto(nombre), "key": limpia_texto(key),
+                        "tam": int(tam or 0), "firma": firma, "cuando": iso_mx()}
     marcas.pop(doc_id, None)          # un documento nuevo borra el señalamiento anterior
     _fija_campos(caso["folio"], {"adjuntos": adjuntos, "marcas": marcas}, caso)
     log(caso["folio"], "adjunto", "cliente", f"{doc_id}: {nombre}")
@@ -265,6 +293,20 @@ def registrar_adjunto(token: str, clave: str, doc_id: str, nombre: str, key: str
 def enviar_expediente(token: str, clave: str) -> dict:
     caso = verificar_clave(token, clave)
     _exige_abierto_al_cliente(caso)
+
+    problemas = revisa_captura(caso)
+    persona = persona_de(caso.get("regimen"), caso.get("rfc"))
+    faltan_docs = [d["n"] for d in docs_aplicables(caso.get("tipo"), caso.get("docs") or {}, persona)
+                   if not (caso.get("adjuntos") or {}).get(d["id"])]
+    if problemas or faltan_docs:
+        # Se nombra lo que falta: un "faltan 15 puntos" a secas no le sirve a nadie.
+        etiquetas = etiquetas_campos(caso)
+        nombres = [etiquetas.get(k, k) for k in problemas] + faltan_docs
+        cuantos = len(nombres)
+        muestra = ", ".join(nombres[:5])
+        resto = f" y {cuantos - 5} más" if cuantos > 5 else ""
+        raise ReglaRota(f"Faltan {cuantos} punto(s) por resolver: {muestra}{resto}. "
+                        "Están marcados en rojo en el formulario.")
     _fija_campos(caso["folio"], {"estado": "recibida", "marcas": {},
                                  "enviado": iso_mx()}, caso)
     log(caso["folio"], "enviado", "cliente", "El cliente envió su expediente")
@@ -288,7 +330,11 @@ def marcar_documento(folio: str, doc_id: str, ok: bool, motivo: str, usuario: di
         motivo = limpia_texto(motivo, area=True)
         if not motivo:
             raise ReglaRota("Escriba el motivo: el cliente lo va a leer tal cual.")
-        marcas[doc_id] = {"motivo": motivo, "quien": usuario.get("correo", ""), "cuando": iso_mx()}
+        adjunto = (caso.get("adjuntos") or {}).get(doc_id) or {}
+        marcas[doc_id] = {"motivo": motivo, "quien": usuario.get("correo", ""),
+                          "cuando": iso_mx(),
+                          # Se recuerda cual archivo se rechazo para no aceptarlo de vuelta.
+                          "firmaRechazada": adjunto.get("firma", "")}
         detalle = f"{doc_id} señalado: {motivo}"
     _fija_campos(folio, {"marcas": marcas}, caso)
     log(folio, "revision", usuario.get("correo", ""), detalle)

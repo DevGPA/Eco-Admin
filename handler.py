@@ -31,7 +31,8 @@ import os
 import traceback
 
 from catalogos import (TIPOS, ESTADOS, catalogos_publicos, puede, avance,
-                       docs_aplicables, persona_de, conflicto_regimen_rfc)
+                       docs_aplicables, persona_de, conflicto_regimen_rfc,
+                       revisa_captura)
 from db.escritura import (ReglaRota, crear_caso, regenerar_clave, verificar_clave,
                           guardar_captura, registrar_adjunto, enviar_expediente,
                           marcar_documento, señalar_campo, devolver,
@@ -120,6 +121,8 @@ def _vista_cliente(caso: dict) -> dict:
         "marcas": marcas_publicas,
         # El servidor dice qué puede escribir: la pantalla obedece, no decide.
         "camposEditables": sorted(campos_permitidos(caso)),
+        # Que esta mal, campo por campo. La pantalla lo pinta; el servidor lo decide.
+        "problemas": revisa_captura(caso),
         "avance": avance(caso),
     }
 
@@ -134,6 +137,7 @@ def _vista_interna(caso: dict) -> dict:
         "docsAplicables": [d["id"] for d in
                            docs_aplicables(caso.get("tipo"), caso.get("docs") or {}, persona)],
         "pendientesAutorizar": pendientes_para_autorizar(caso),
+        "problemas": revisa_captura(caso),
         "conflictoRfc": conflicto_regimen_rfc(caso.get("regimen"), caso.get("rfc")),
     }
 
@@ -206,7 +210,8 @@ def _portal(ruta: str, datos: dict):
     if ruta == "POST /portal/adjuntar":
         return _resp(_vista_cliente(registrar_adjunto(
             token, clave, str(datos.get("docId") or ""),
-            str(datos.get("nombre") or ""), str(datos.get("key") or ""))))
+            str(datos.get("nombre") or ""), str(datos.get("key") or ""),
+            int(datos.get("tam") or 0))))
 
     if ruta == "POST /portal/enviar":
         return _resp(_vista_cliente(enviar_expediente(token, clave)))

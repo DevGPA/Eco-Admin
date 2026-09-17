@@ -71,6 +71,33 @@ def nueva(tipo="alta", regimen="601", rfc="ASV180412H23", docs=None, modulos=Non
     }
 
 
+EJEMPLOS_POR_TIPO = {"tel": "33 1234 5678", "email": "cliente@ejemplo.mx", "cp": "44110",
+                     "hora": "08:00", "monto": "250000"}
+
+
+def llena_todo(token, clave):
+    """Llena todo lo obligatorio con valores válidos, como lo haría el cliente."""
+    caso = q.caso_por_token(token)
+    valores, tablas = {}, {}
+    for m in c.modulos_activos(caso["tipo"], caso["modulos"]):
+        for f in c.campos_de(m):
+            if f.get("fijo") or not f.get("req"):
+                continue
+            valores[f["k"]] = True if f.get("tipo") == "check" else (
+                f["opts"][0] if f.get("opts") else
+                EJEMPLOS_POR_TIPO.get(f.get("tipo"), "Dato de prueba"))
+        for t in m.get("tablas", []):
+            if t.get("req"):
+                tablas[t["k"] + "_0_0"] = "Proveedor de prueba"
+    e.guardar_captura(token, clave, valores, tablas)
+    persona = c.persona_de(caso["regimen"], caso["rfc"])
+    for i, d in enumerate(c.docs_aplicables(caso["tipo"], caso["docs"], persona)):
+        if not (q.get_caso(caso["folio"])["adjuntos"] or {}).get(d["id"]):
+            e.registrar_adjunto(token, clave, d["id"], f"{d['id']}.pdf",
+                                f"{caso['folio']}/{d['id']}-aabbccddeeff.pdf",
+                                tam=10000 + i * 137)
+
+
 print("\n== 1. Crear pre-solicitud ==")
 caso_alta, clave_alta = e.crear_caso(nueva("alta"), VENTAS)
 ok(caso_alta["folio"].startswith("GS-"), f"folio consecutivo generado: {caso_alta['folio']}")
@@ -162,10 +189,28 @@ rompe(lambda: e.registrar_adjunto(token, clave_alta, "edos_cuenta", "x.pdf", "k"
 rompe(lambda: e.registrar_adjunto(token, clave_alta, "../../secreto", "x", "k"),
       "inválido", "rechaza un identificador con caracteres de ruta")
 
-print("\n== 6. Envío, revisión y devolución ==")
-for d in c.TIPOS["alta"]["docs"]:
-    if q.get_caso(folio)["docs"].get(d):
-        e.registrar_adjunto(token, clave_alta, d, f"{d}.pdf", f"{folio}/{d}-aabbccddeeff.pdf")
+print("\n== 6. País fijo, formatos y archivos repetidos ==")
+ok(q.get_caso(folio)["valores"].get("pais") == "México", "el País se pone solo en México al crear")
+e.guardar_captura(token, clave_alta, {"pais": "Guatemala"}, {})
+ok(q.get_caso(folio)["valores"].get("pais") == "México", "y el cliente no lo puede cambiar")
+
+e.guardar_captura(token, clave_alta, {"telefono": "33123"}, {})
+probs = c.revisa_captura(q.get_caso(folio))
+ok("10 dígitos" in probs.get("telefono", ""), "un teléfono de 5 dígitos se marca como incompleto")
+e.guardar_captura(token, clave_alta, {"lv_ini": "8 de la mañana"}, {})
+ok("08:00" in c.revisa_captura(q.get_caso(folio)).get("lv_ini", ""),
+   "una hora mal escrita también se marca")
+rompe(lambda: e.enviar_expediente(token, clave_alta), "Faltan",
+      "con campos incompletos NO deja enviar")
+
+e.registrar_adjunto(token, clave_alta, "comp_dom", "mismo.pdf",
+                    f"{folio}/comp_dom-aa11bb22cc33.pdf", tam=5000)
+rompe(lambda: e.registrar_adjunto(token, clave_alta, "fotos_negocio", "mismo.pdf",
+                                  f"{folio}/fotos_negocio-dd44ee55ff66.jpg", tam=5000),
+      "ya lo adjuntó", "el mismo archivo no sirve para dos documentos distintos")
+
+print("\n== 7. Envío, revisión y devolución ==")
+llena_todo(token, clave_alta)
 e.enviar_expediente(token, clave_alta)
 ok(q.get_caso(folio)["estado"] == "recibida", "al enviar, el expediente queda «Recibida»")
 rompe(lambda: e.guardar_captura(token, clave_alta, {"calle": "otra"}, {}),
@@ -187,14 +232,21 @@ ok(e.campos_permitidos(q.get_caso(folio)) == {"telefono"}, "señalado un campo, 
 e.guardar_captura(token, clave_alta, {"telefono": "33 1111 2222", "calle": "intento de cambio"}, {})
 g = q.get_caso(folio)
 ok(g["valores"]["telefono"] == "33 1111 2222", "acepta el campo señalado")
-ok(g["valores"]["calle"] == "Av. Vallarta 3020", "y NO deja tocar lo que ya estaba aceptado")
+ok(g["valores"]["calle"] != "intento de cambio", "y NO deja tocar lo que ya estaba aceptado")
 
 rompe(lambda: e.registrar_adjunto(token, clave_alta, "comp_dom", "x.pdf", "k"),
       "ya fue aceptado", "devuelto, no deja reemplazar un documento que estaba bien")
-e.registrar_adjunto(token, clave_alta, "ine_rep", "IMG_nueva.jpg", f"{folio}/ine_rep-112233445566.jpg")
-ok("ine_rep" not in q.get_caso(folio)["marcas"], "al resubir, el señalamiento se borra solo")
+rechazado = q.get_caso(folio)["adjuntos"]["ine_rep"]
+rompe(lambda: e.registrar_adjunto(token, clave_alta, "ine_rep", rechazado["nombre"],
+                                  f"{folio}/ine_rep-999888777666.jpg", tam=rechazado["tam"]),
+      "mismo archivo que le señalamos",
+      "no acepta de vuelta exactamente el archivo que se rechazó")
+e.registrar_adjunto(token, clave_alta, "ine_rep", "IMG_nueva.jpg",
+                    f"{folio}/ine_rep-112233445566.jpg", tam=777777)
+ok("ine_rep" not in q.get_caso(folio)["marcas"], "al resubir uno distinto, el señalamiento se borra solo")
 
-print("\n== 7. Autorización de un ALTA: una firma ==")
+print("\n== 8. Autorización de un ALTA: una firma ==")
+llena_todo(token, clave_alta)
 e.enviar_expediente(token, clave_alta)
 for d in q.get_caso(folio)["docsAplicables"] if "docsAplicables" in q.get_caso(folio) else []:
     pass
@@ -213,12 +265,11 @@ e.firmar(folio, 1, FIRMA1, ADMIN)
 ok(q.get_caso(folio)["estado"] == "autorizada", "con una firma, el alta queda autorizada")
 rompe(lambda: e.firmar(folio, 1, FIRMA1, ADMIN), "no está en autorización", "cerrada, ya no admite firmas")
 
-print("\n== 8. Autorización de un CRÉDITO: 1 + 2 firmas ==")
+print("\n== 9. Autorización de un CRÉDITO: 1 + 2 firmas ==")
 fc, kc = caso_cred["folio"], clave_cred
 tc = caso_cred["token"]
 e.verificar_clave(tc, kc)
-for d in c.docs_aplicables("credito", caso_cred["docs"], "Moral"):
-    e.registrar_adjunto(tc, kc, d["id"], f"{d['id']}.pdf", f"{fc}/{d['id']}-aabbccddeeff.pdf")
+llena_todo(tc, kc)
 e.enviar_expediente(tc, kc)
 for d in c.docs_aplicables("credito", caso_cred["docs"], "Moral"):
     e.marcar_documento(fc, d["id"], True, "", ADMIN)

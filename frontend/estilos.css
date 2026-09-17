@@ -398,3 +398,11 @@ table.grid-t td[colspan]{text-align:center; padding:26px 12px}
 /* El logo en las pantallas sin barra: acceso interno y portal del cliente. */
 .logo-suelto{display:block; width:110px; height:auto; margin-bottom:4px}
 .logo-suelto img{width:100%; height:auto; display:block}
+
+/* Revisión dato por dato: cada renglón se puede señalar como incompleto. */
+.campo-rev{padding:4px 0; border-bottom:1px solid var(--line-2)}
+.campo-rev:last-child{border-bottom:0}
+.campo-rev.flag{background:var(--stop-soft); border-radius:6px; padding:5px 8px; margin:2px 0}
+.btn.senal{padding:1px 8px; font-weight:700; line-height:1.4; flex:none}
+/* Los campos que fija el sistema se ven, pero no se tocan. */
+.field input.fijo{background:var(--surface-3); color:var(--ink-2); cursor:not-allowed}

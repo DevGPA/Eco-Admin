@@ -34,6 +34,7 @@ var S = {
   pasoCliente: "acceso",
   errorClave: "",
   retoCognito: null,
+  mostrarFaltantes: false,   // se prende al intentar enviar
 };
 
 // ── utilidades ───────────────────────────────────────────────────
@@ -151,6 +152,7 @@ function vistaPortal() {
 
   var cuerpo;
   if (!c) cuerpo = portalAcceso();
+  else if (paso === "guardado") cuerpo = portalGuardado();
   else if (paso === "enviado") cuerpo = portalEnviado();
   else if (paso === "revisar") cuerpo = portalRevisar();
   else cuerpo = portalCaptura();
@@ -199,13 +201,23 @@ function bloqueFijos(c) {
 function campoHTML(f, c, editables) {
   var puede = !editables || editables.indexOf(f.k) !== -1;
   if (!puede) return "";
-  var marca = (c.marcas || {})["campo:" + f.k];
   var v = (c.valores || {})[f.k];
   var ancho = f.w === "full" ? "f-full" : f.w === "half" ? "f-half" : "f-third";
-  var cls = "field " + ancho + (marca ? " flag" : "");
-  var nota = marca ? '<span class="field-note">' + esc(marca.motivo) + "</span>" : "";
   var req = f.req ? ' <span class="req">*</span>' : "";
   var id = "f_" + f.k;
+
+  // Campos que fija el sistema: el cliente los ve, no los cambia. (País = México)
+  if (f.fijo) {
+    return '<div class="field ' + ancho + '"><label for="' + id + '">' + esc(f.l) + "</label>" +
+      '<input id="' + id + '" value="' + esc(f.fijo) + '" disabled class="fijo"></div>';
+  }
+
+  // Lo que GPA señaló al devolver, y lo que está mal escrito o falta.
+  var marca = (c.marcas || {})["campo:" + f.k];
+  var problema = (c.problemas || {})[f.k];
+  var malo = marca ? marca.motivo : (S.mostrarFaltantes ? problema : "");
+  var cls = "field " + ancho + (malo ? " flag" : "");
+  var nota = malo ? '<span class="field-note">' + esc(malo) + "</span>" : "";
 
   if (f.tipo === "check") {
     return '<label class="check f-full" style="padding:4px 0">' +
@@ -223,8 +235,9 @@ function campoHTML(f, c, editables) {
       f.opts.map(function (o) { return "<option " + (v === o ? "selected" : "") + ">" + esc(o) + "</option>"; }).join("") +
       "</select>" + nota + "</div>";
   }
-  var tipoInput = f.tipo === "email" ? "email" : f.tipo === "tel" ? "tel" : "text";
-  var modo = f.tipo === "tel" || f.tipo === "cp" ? ' inputmode="numeric"' : "";
+  // Las horas usan el selector del navegador: asi todos capturan igual (08:00, 17:30).
+  var tipoInput = f.tipo === "hora" ? "time" : f.tipo === "email" ? "email" : f.tipo === "tel" ? "tel" : "text";
+  var modo = (f.tipo === "tel" || f.tipo === "cp") ? ' inputmode="numeric"' : "";
   return '<div class="' + cls + '"><label for="' + id + '">' + esc(f.l) + req + "</label>" +
     '<input id="' + id + '" type="' + tipoInput + '"' + modo + ' data-campo="' + f.k + '" class="' +
     (f.mono ? "mono" : "") + '" value="' + esc(v || "") + '" placeholder="' + esc(f.ph || "") + '">' +
@@ -246,6 +259,79 @@ function tablaHTML(t, c, editables) {
   return '<div class="stack f-full" style="gap:6px">' +
     '<div class="eyebrow">' + esc(t.l) + (t.req ? ' <span class="req">*</span>' : "") + "</div>" +
     '<div class="tablewrap"><table class="minitable">' + filas.join("") + "</table></div></div>";
+}
+
+/** Lo que falta o esta mal, calculado aqui mismo para poder avisar al instante.
+ *  El servidor vuelve a revisarlo todo al enviar: esto es solo para la pantalla. */
+function revisaLocal(c) {
+  var out = {};
+  modulosActivos(c).forEach(function (m) {
+    camposDe(m).forEach(function (f) {
+      if (f.fijo) return;
+      var v = (c.valores || {})[f.k];
+      var t = v === undefined || v === null ? "" : String(v).trim();
+      if (f.tipo === "check") { if (f.req && v !== true) out[f.k] = "Falta marcar esta casilla."; return; }
+      if (!t) { if (f.req) out[f.k] = "Falta llenar este dato."; return; }
+      var d = t.replace(/\D/g, "");
+      if (f.tipo === "tel" && d.length < 10) out[f.k] = "El teléfono va con 10 dígitos. Escribió " + d.length + ".";
+      else if (f.tipo === "cp" && d.length !== 5) out[f.k] = "El código postal va con 5 dígitos. Escribió " + d.length + ".";
+      else if (f.tipo === "email" && !/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(t)) out[f.k] = "Ese correo no parece válido.";
+      else if (f.tipo === "hora" && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)) out[f.k] = "La hora va como 08:00.";
+    });
+  });
+  return out;
+}
+
+function faltantesLocal(c) {
+  var lista = [];
+  var probs = revisaLocal(c);
+  var etiquetas = {};
+  modulosActivos(c).forEach(function (m) {
+    camposDe(m).forEach(function (f) { etiquetas[f.k] = limpia(f.l); });
+  });
+  Object.keys(probs).forEach(function (k) { lista.push(etiquetas[k] || k); });
+  docsAplicables(c).forEach(function (d) {
+    if (!(c.adjuntos || {})[d.id]) lista.push(d.n);
+  });
+  return lista;
+}
+
+/** Avance calculado aqui: la barra se mueve mientras se escribe, sin ir al servidor. */
+function avanceLocal(c) {
+  var total = 0, hechos = 0;
+  modulosActivos(c).forEach(function (m) {
+    camposDe(m).forEach(function (f) {
+      if (!f.req || f.fijo) return;
+      total++;
+      var v = (c.valores || {})[f.k];
+      if (f.tipo === "check" ? v === true : String(v == null ? "" : v).trim() !== "") hechos++;
+    });
+    (m.tablas || []).forEach(function (t) {
+      if (!t.req) return;
+      total++;
+      if (String((c.tablasVal || {})[t.k + "_0_0"] || "").trim() !== "") hechos++;
+    });
+  });
+  docsAplicables(c).forEach(function (d) {
+    total++;
+    if ((c.adjuntos || {})[d.id]) hechos++;
+  });
+  return { total: total, hechos: hechos, pct: total ? Math.round(hechos / total * 100) : 0 };
+}
+
+/** Pasa al estado lo que hay escrito en pantalla, antes de redibujar o guardar.
+ *  Sin esto, cada redibujado (guardar, adjuntar) borraba lo tecleado. */
+function sincronizaDesdeDOM() {
+  var c = S.casoCliente;
+  if (!c) return;
+  c.valores = c.valores || {};
+  c.tablasVal = c.tablasVal || {};
+  document.querySelectorAll("[data-campo]").forEach(function (el) {
+    c.valores[el.dataset.campo] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  document.querySelectorAll("[data-tabla]").forEach(function (el) {
+    c.tablasVal[el.dataset.tabla] = el.value;
+  });
 }
 
 function portalCaptura() {
@@ -293,7 +379,7 @@ function portalCaptura() {
     : '<div><h1 style="font-size:21px">' + esc(c.tipoNombre) + "</h1>" +
       '<p class="dim" style="margin:3px 0 0">Complete lo que aplique. Puede salir y volver cuando quiera.</p></div>';
 
-  var av = c.avance || { pct: 0 };
+  var av = avanceLocal(c);
   return '<div class="stack" style="gap:18px">' + cabecera + bannerError() + bannerAviso() +
     (devuelta ? "" : bloqueFijos(c)) +
     '<div class="stack" style="gap:7px"><div class="spread"><span class="dim">Avance</span>' +
@@ -313,16 +399,7 @@ function portalCaptura() {
 function portalRevisar() {
   var c = S.casoCliente;
   var aplic = docsAplicables(c);
-  var faltan = [];
-  modulosActivos(c).forEach(function (m) {
-    camposDe(m).forEach(function (f) {
-      if (!f.req) return;
-      var v = (c.valores || {})[f.k];
-      var lleno = f.tipo === "check" ? v === true : !!String(v || "").trim();
-      if (!lleno) faltan.push(limpia(f.l));
-    });
-  });
-  aplic.forEach(function (d) { if (!(c.adjuntos || {})[d.id]) faltan.push(d.n); });
+  var faltan = faltantesLocal(c);
 
   var resumen = modulosActivos(c).map(function (m) {
     var campos = camposDe(m).filter(function (f) { return f.tipo !== "check" && (c.valores || {})[f.k]; });
@@ -334,10 +411,12 @@ function portalRevisar() {
       }).join("") + "</div></div>";
   }).join("");
 
+  // Sin campos completos no se envia: la regla tambien esta en el servidor.
   var aviso = faltan.length
-    ? '<div class="banner banner-stop"><span><b>Faltan ' + faltan.length + " puntos:</b> " +
-      esc(faltan.slice(0, 4).join(", ")) + (faltan.length > 4 ? " y " + (faltan.length - 4) + " más" : "") +
-      ". Puede enviar así y completarlos después, o volver a llenarlos ahora.</span></div>"
+    ? '<div class="banner banner-stop"><span><b>Todavía no se puede enviar.</b> Faltan ' +
+      faltan.length + " punto(s): " + esc(faltan.slice(0, 6).join(", ")) +
+      (faltan.length > 6 ? " y " + (faltan.length - 6) + " más" : "") +
+      '. Vuelva a su información: están marcados en rojo.</span></div>'
     : '<div class="banner banner-ok"><span><b>Su expediente está completo.</b> ' +
       aplic.length + " documentos adjuntos.</span></div>";
 
@@ -352,11 +431,34 @@ function portalRevisar() {
       return '<div class="row" style="gap:8px; font-size:13.5px"><span style="color:' +
         (ok ? "var(--ok)" : "var(--warn)") + '">' + (ok ? "✓" : "○") + "</span><span>" + esc(d.n) + "</span></div>";
     }).join("") + "</div><hr class=\"sep\">" +
-    '<label class="check"><input type="checkbox" id="privacidad">' +
-    "<span>He leído el aviso de privacidad y autorizo a General de Productos para el Agua, S.A. de C.V. " +
-    "a tratar estos datos y documentos para evaluar y registrar mi solicitud.</span></label>" +
-    '<div class="row"><button class="btn btn-primary" id="btn-enviar-portal" disabled>Enviar mi expediente</button>' +
+    (faltan.length ? "" :
+      '<label class="check"><input type="checkbox" id="privacidad">' +
+      "<span>He leído el aviso de privacidad y autorizo a General de Productos para el Agua, S.A. de C.V. " +
+      "a tratar estos datos y documentos para evaluar y registrar mi solicitud.</span></label>") +
+    '<div class="row">' +
+    (faltan.length
+      ? '<button class="btn btn-primary" disabled>Enviar mi expediente</button>'
+      : '<button class="btn btn-primary" id="btn-enviar-portal" disabled>Enviar mi expediente</button>') +
     '<button class="btn" id="btn-volver-captura">Volver a mi información</button></div></div>';
+}
+
+function portalGuardado() {
+  var c = S.casoCliente;
+  var av = avanceLocal(c);
+  var faltan = faltantesLocal(c);
+  return '<div class="stack" style="gap:18px">' +
+    '<div class="banner banner-ok" style="font-size:15px"><span><b>Guardado.</b> ' +
+    "Puede cerrar esta página y volver cuando quiera con su misma liga y clave.</span></div>" +
+    '<div class="stack" style="gap:7px"><div class="spread"><span class="dim">Lleva</span>' +
+    '<span class="dim mono">' + av.pct + '%</span></div>' +
+    '<div class="progress"><i style="width:' + av.pct + '%"></i></div></div>' +
+    (faltan.length
+      ? '<div class="banner banner-warn"><span><b>Le faltan ' + faltan.length + " punto(s):</b> " +
+        esc(faltan.slice(0, 5).join(", ")) + (faltan.length > 5 ? " y " + (faltan.length - 5) + " más" : "") +
+        ". Su expediente no se envía hasta que estén completos.</span></div>"
+      : '<div class="banner banner-ok"><span>Ya no le falta nada: puede enviarlo cuando guste.</span></div>') +
+    '<div class="row"><button class="btn btn-primary" id="btn-seguir-llenando">Seguir llenando</button></div>' +
+    '<p class="dim" style="margin:0">Folio <span class="mono">' + esc(c.folio) + "</span></p></div>";
 }
 
 function portalEnviado() {
@@ -693,16 +795,34 @@ function vistaExpediente() {
         : "") + "</div>";
   }).join("");
 
+  var problemas = c.problemas || {};
+  var puedeSenalar = revisor && c.estado !== "autorizada" && c.estado !== "rechazada";
   var datos = modulosActivos(c).map(function (m) {
-    var campos = camposDe(m).filter(function (f) { return f.tipo !== "check"; });
+    var campos = camposDe(m);
     return '<div class="stack" style="gap:6px"><div class="eyebrow">' + esc(m.nombre) + "</div><div>" +
       campos.map(function (f) {
         var v = (c.valores || {})[f.k];
-        return '<div class="kv"><span>' + esc(limpia(f.l)) + "</span><span" +
-          (f.mono ? ' class="mono" style="font-size:13px"' : "") + ">" +
-          (v ? esc(v) : '<span class="dim">—</span>') + "</span></div>";
+        var texto = f.tipo === "check" ? (v === true ? "Sí" : "No") : v;
+        var marcado = marcas["campo:" + f.k];
+        var falta = problemas[f.k];
+        return '<div class="campo-rev ' + (marcado ? "flag" : "") + '">' +
+          '<div class="kv" style="border:0; padding:2px 0">' +
+          "<span>" + esc(limpia(f.l)) + "</span>" +
+          '<span class="row" style="gap:8px; justify-content:flex-end">' +
+          "<span" + (f.mono ? ' class="mono" style="font-size:13px"' : "") + ">" +
+          (texto ? esc(texto) : '<span class="dim">—</span>') + "</span>" +
+          (puedeSenalar
+            ? '<button class="btn btn-sm btn-stop senal" data-senalar-campo="' + f.k +
+              '" title="Señalar este dato" aria-pressed="' + (marcado ? "true" : "false") + '">!</button>'
+            : "") +
+          "</span></div>" +
+          (falta ? '<div class="doc-motivo" style="color:var(--warn)">' + esc(falta) + "</div>" : "") +
+          (marcado ? '<div class="doc-motivo">Señalado: ' + esc(marcado.motivo) + "</div>" : "") +
+          "</div>";
       }).join("") + "</div></div>";
   }).join("");
+
+  var incompletos = Object.keys(problemas).length;
 
   var r = regimen(c.regimen);
   var av = c.avance || { pct: 0, hechos: 0, total: 0 };
@@ -745,7 +865,13 @@ function vistaExpediente() {
         ? '<div class="banner banner-ok"><span><b>Clave nueva:</b> <span class="mono">' + esc(S.ligaNueva.clave) +
           "</span> — dígtela al cliente ahora, no se vuelve a mostrar.</span></div>" : "") +
       "</div>" + bloqueFirmas(c) + "</div>" +
-      '<div class="card pad stack"><div class="eyebrow">Lo que capturó el cliente</div>' + datos + "</div>" +
+      '<div class="card pad stack"><div class="spread"><div class="eyebrow">Lo que capturó el cliente</div>' +
+      (incompletos
+        ? '<span class="dim" style="color:var(--warn)">' + incompletos + " incompleto" + (incompletos > 1 ? "s" : "") + "</span>"
+        : '<span class="dim">completo</span>') + "</div>" +
+      (puedeSenalar ? '<p class="dim" style="margin:0">El botón <b>!</b> de cada dato lo señala como ' +
+        "incorrecto o incompleto; al devolver, el cliente solo verá lo señalado.</p>" : "") +
+      datos + "</div>" +
     "</div></div>";
 }
 
@@ -865,24 +991,14 @@ function copiar(texto, aviso) {
   }
 }
 
-function tomaCampos() {
-  var valores = {}, tablas = {};
-  document.querySelectorAll("[data-campo]").forEach(function (el) {
-    valores[el.dataset.campo] = el.type === "checkbox" ? el.checked : el.value;
-  });
-  document.querySelectorAll("[data-tabla]").forEach(function (el) {
-    tablas[el.dataset.tabla] = el.value;
-  });
-  return { valores: valores, tablas: tablas };
-}
-
 var guardaPortal = conError(function (siguiente) {
-  var d = tomaCampos();
-  return portal.guardar(d.valores, d.tablas).then(function (c) {
-    S.casoCliente = c;
-    S.aviso = c.aviso || "";
+  // Se lee la pantalla ANTES de nada: conError redibuja, y sin esto se mandaba vacio.
+  var c = S.casoCliente || {};
+  return portal.guardar(c.valores || {}, c.tablasVal || {}).then(function (r) {
+    // La respuesta del servidor manda, pero se conserva lo tecleado que aun no viaja.
+    S.casoCliente = r;
+    S.aviso = r.aviso || "";
     if (siguiente) S.pasoCliente = siguiente;
-    else toast("Guardado. Puede volver con su misma liga y clave.");
   });
 });
 
@@ -904,8 +1020,9 @@ document.addEventListener("click", function (ev) {
     })();
     return;
   }
-  if (t.id === "btn-guardar-portal") { guardaPortal(); return; }
-  if (t.id === "btn-a-revisar") { guardaPortal("revisar"); return; }
+  if (t.id === "btn-guardar-portal") { sincronizaDesdeDOM(); guardaPortal("guardado"); return; }
+  if (t.id === "btn-a-revisar") { sincronizaDesdeDOM(); S.mostrarFaltantes = true; guardaPortal("revisar"); return; }
+  if (t.id === "btn-seguir-llenando") { S.pasoCliente = "captura"; render(); return; }
   if (t.id === "btn-volver-captura") { S.pasoCliente = "captura"; render(); return; }
   if (t.id === "btn-enviar-portal") {
     conError(function () {
@@ -997,6 +1114,18 @@ document.addEventListener("click", function (ev) {
     conError(function () { return api.marcarDoc(S.folio, d["señalar"], false, motivo.trim()).then(recargaCaso); })();
     return;
   }
+  if (d.senalarCampo) {
+    var previo = (S.caso.marcas || {})["campo:" + d.senalarCampo] || {};
+    var sugerido = (S.caso.problemas || {})[d.senalarCampo] || "";
+    var motivoCampo = window.prompt(
+      "¿Qué tiene mal este dato? El cliente verá este texto tal cual.",
+      previo.motivo || sugerido);
+    if (!motivoCampo || !motivoCampo.trim()) return;
+    conError(function () {
+      return api["señalarCampo"](S.folio, d.senalarCampo, motivoCampo.trim()).then(recargaCaso);
+    })();
+    return;
+  }
   if (t.id === "btn-devolver") { conError(function () { return api.devolver(S.folio).then(recargaCaso); })(); return; }
   if (t.id === "btn-a-autorizacion") { conError(function () { return api.aAutorizacion(S.folio).then(recargaCaso); })(); return; }
   if (t.id === "btn-clave-nueva") {
@@ -1042,6 +1171,23 @@ document.addEventListener("click", function (ev) {
 // ── Cambios en formularios ───────────────────────────────────────
 document.addEventListener("input", function (ev) {
   var el = ev.target, d = el.dataset || {};
+
+  // Lo que se escribe entra al estado de inmediato. Antes solo vivia en el HTML,
+  // asi que cualquier redibujado (guardar, adjuntar) lo borraba.
+  if (d.campo || d.tabla) {
+    var c = S.casoCliente;
+    if (!c) return;
+    if (d.campo) {
+      c.valores = c.valores || {};
+      c.valores[d.campo] = el.type === "checkbox" ? el.checked : el.value;
+    } else {
+      c.tablasVal = c.tablasVal || {};
+      c.tablasVal[d.tabla] = el.value;
+    }
+    refrescaAvanceCliente();
+    return;
+  }
+
   if (d.nueva) {
     S.nueva[d.nueva] = el.value;
     // Aquí NO se llama a render(). Redibujar el formulario destruye el campo que
@@ -1050,8 +1196,47 @@ document.addEventListener("input", function (ev) {
   }
 });
 
+/** Mueve la barra y reevalua el boton de enviar sin redibujar el formulario. */
+function refrescaAvanceCliente() {
+  var c = S.casoCliente;
+  if (!c) return;
+  var av = avanceLocal(c);
+  var barra = document.querySelector(".progress i");
+  if (barra) barra.style.width = av.pct + "%";
+  var pct = $("#pct");
+  if (pct) pct.textContent = av.pct + "%";
+}
+
 document.addEventListener("change", function (ev) {
   var el = ev.target, d = el.dataset || {};
+
+  // "El domicilio de entrega es el mismo que el fiscal": se copia solo.
+  if (d.campo === "mismo_dom") {
+    var c = S.casoCliente;
+    if (c) {
+      c.valores = c.valores || {};
+      c.valores.mismo_dom = el.checked;
+      if (el.checked) {
+        var copia = { e_calle: "calle", e_colonia: "colonia", e_municipio: "municipio",
+                      e_cp: "cp", e_ciudad: "ciudad", e_estado: "estado_dom" };
+        Object.keys(copia).forEach(function (destino) {
+          c.valores[destino] = c.valores[copia[destino]] || "";
+        });
+        toast("Copiamos su domicilio fiscal. Puede ajustarlo si hace falta.");
+      }
+      render();
+    }
+    return;
+  }
+  if (d.campo) {
+    var cc = S.casoCliente;
+    if (cc) {
+      cc.valores = cc.valores || {};
+      cc.valores[d.campo] = el.type === "checkbox" ? el.checked : el.value;
+      refrescaAvanceCliente();
+    }
+    return;
+  }
   if (d.nueva === "regimen") { S.nueva.regimen = el.value; actualizaPorRfc(); return; }
   if (d.firmasel) { S.firmaSel[d.firmasel] = el.value; return; }
   if (el.id === "privacidad") { var b = $("#btn-enviar-portal"); if (b) b.disabled = !el.checked; return; }
@@ -1076,12 +1261,19 @@ document.addEventListener("change", function (ev) {
 
 var subeArchivo = function (docId, archivo) {
   if (!archivo) return;
+  // Se guarda antes de subir: la respuesta redibuja y se perderia lo capturado.
+  sincronizaDesdeDOM();
+  var capturado = JSON.parse(JSON.stringify({ v: S.casoCliente.valores || {},
+                                              t: S.casoCliente.tablasVal || {} }));
   var barra = document.querySelector('[data-barra="' + docId + '"]');
   if (barra) { barra.hidden = false; barra.firstElementChild.style.width = "10%"; }
   S.error = "";
   portal.subir(docId, archivo, function (pct) {
     if (barra) barra.firstElementChild.style.width = pct + "%";
   }).then(function (c) {
+    // El servidor aun no conoce lo que se acaba de teclear: se repone encima.
+    c.valores = Object.assign({}, c.valores, capturado.v);
+    c.tablasVal = Object.assign({}, c.tablasVal, capturado.t);
     S.casoCliente = c;
     render();
     toast("Documento recibido.");
