@@ -19,7 +19,8 @@ from . import tabla
 from .modelos import (SK_META, MAX_INTENTOS, pk_caso, sk_log, llaves_caso, iso_mx,
                       legible_mx, prefijo_folio, arma_folio, nuevo_token, nueva_clave,
                       hash_clave, clave_coincide, limpia_texto, limpia_mapa,
-                      id_documento_valido, vence_en, ya_vencio, fecha_larga)
+                      id_documento_valido, vence_en, ya_vencio, fecha_larga,
+                      sk_comentario)
 from .queries import get_caso
 
 
@@ -470,12 +471,89 @@ def pasar_a_autorizacion(folio: str, usuario: dict) -> dict:
     return get_caso(folio)
 
 
-# ── Autorización ─────────────────────────────────────────────────
-def firmar(folio: str, nivel: int, firmante: dict, usuario: dict) -> dict:
-    """Registra una firma. Las reglas se validan aquí, no en la pantalla."""
+# ── Análisis interno: comentarios y anexos ───────────────────────
+# Esto NO lo ve el cliente. Los anexos viven en "anexos", nunca en "adjuntos":
+# la vista del cliente entrega el mapa de adjuntos completo, con sus enlaces de
+# descarga, asi que meterlos ahi seria enseñarle el buro y el analisis financiero.
+
+def agregar_comentario(folio: str, texto: str, usuario: dict, tipo: str = "nota") -> dict:
+    """Deja un comentario en el expediente. No se borra: es registro de autorización."""
     caso = get_caso(folio)
     if not caso:
         raise ReglaRota("No existe ese expediente.")
+    texto = limpia_texto(texto, area=True)
+    if not texto:
+        raise ReglaRota("Escriba el comentario.")
+    item = {
+        "PK": pk_caso(folio), "SK": sk_comentario(),
+        "texto": texto, "tipo": tipo,
+        "quien": usuario.get("correo", ""), "nombre": usuario.get("nombre", ""),
+        "rol": usuario.get("rol", ""),
+        "cuando": iso_mx(), "cuandoLegible": legible_mx(),
+    }
+    tabla().put_item(Item=item)
+    log(folio, "comentario", usuario.get("correo", ""), texto[:120])
+    return item
+
+
+def agregar_anexo(folio: str, nombre: str, key: str, tam: int,
+                  descripcion: str, usuario: dict) -> dict:
+    """Guarda un anexo interno: buró, análisis financiero, cédula de referencias."""
+    caso = get_caso(folio)
+    if not caso:
+        raise ReglaRota("No existe ese expediente.")
+    descripcion = limpia_texto(descripcion)
+    if not descripcion:
+        raise ReglaRota("Escriba qué es el anexo, para saberlo al revisarlo después.")
+    anexos = dict(caso.get("anexos") or {})
+    if len(anexos) >= 20:
+        raise ReglaRota("Ya hay 20 anexos en este expediente.")
+    aid = "anexo:" + secrets.token_hex(4)
+    anexos[aid] = {
+        "id": aid, "nombre": limpia_texto(nombre), "key": limpia_texto(key),
+        "tam": int(tam or 0), "descripcion": descripcion,
+        "quien": usuario.get("correo", ""), "nombre_quien": usuario.get("nombre", ""),
+        "cuando": iso_mx(), "cuandoLegible": legible_mx(),
+    }
+    _fija_campos(folio, {"anexos": anexos}, caso)
+    log(folio, "anexo", usuario.get("correo", ""), f"{descripcion} ({nombre})")
+    return anexos[aid]
+
+
+def quitar_anexo(folio: str, anexo_id: str, usuario: dict) -> dict:
+    caso = get_caso(folio)
+    if not caso:
+        raise ReglaRota("No existe ese expediente.")
+    anexos = dict(caso.get("anexos") or {})
+    quitado = anexos.pop(anexo_id, None)
+    if not quitado:
+        raise ReglaRota("Ese anexo ya no está en el expediente.")
+    _fija_campos(folio, {"anexos": anexos}, caso)
+    log(folio, "anexo-quitado", usuario.get("correo", ""),
+        f"{quitado.get('descripcion', '')} ({quitado.get('nombre', '')})")
+    return get_caso(folio)
+
+
+def anexos_de(caso: dict) -> list:
+    """Los anexos internos, del más viejo al más nuevo."""
+    return sorted((caso.get("anexos") or {}).values(), key=lambda a: a.get("cuando", ""))
+
+
+# ── Autorización ─────────────────────────────────────────────────
+def firmar(folio: str, nivel: int, firmante: dict, usuario: dict,
+           comentario: str = "") -> dict:
+    """Registra una firma con el porqué de quien la da.
+
+    El comentario es obligatorio en los tres niveles y queda pegado a la firma:
+    después no se puede editar, porque es parte del acta de autorización.
+    """
+    caso = get_caso(folio)
+    if not caso:
+        raise ReglaRota("No existe ese expediente.")
+    comentario = limpia_texto(comentario, area=True)
+    if not comentario:
+        raise ReglaRota("Escriba el motivo de su firma. Queda en el acta de autorización "
+                        "y no se puede cambiar después.")
     if caso["estado"] != "por_autorizar":
         raise ReglaRota("El expediente no está en autorización.")
     tipo = TIPOS.get(caso.get("tipo")) or TIPOS["alta"]
@@ -508,6 +586,7 @@ def firmar(folio: str, nivel: int, firmante: dict, usuario: dict) -> dict:
 
     firmas.append({"nivel": nivel, "usuarioId": fid,
                    "nombre": firmante.get("nombre", ""), "rol": firmante.get("rol", ""),
+                   "comentario": comentario,
                    "fecha": legible_mx(), "cuando": iso_mx(),
                    "registradaPor": usuario.get("correo", "")})
 
@@ -519,8 +598,12 @@ def firmar(folio: str, nivel: int, firmante: dict, usuario: dict) -> dict:
         campos["autorizado"] = iso_mx()
     _fija_campos(folio, campos, caso)
     log(folio, "firma", usuario.get("correo", ""),
-        f"Nivel {nivel} firmado por {firmante.get('nombre') or fid}"
+        f"Nivel {nivel} firmado por {firmante.get('nombre') or fid}: {comentario[:120]}"
         + (" · expediente AUTORIZADO" if completa else ""))
+    # La firma también queda en el hilo, para leer el expediente de corrido.
+    agregar_comentario(folio, comentario,
+                       {"correo": fid, "nombre": firmante.get("nombre", ""),
+                        "rol": firmante.get("rol", "")}, tipo=f"firma-n{nivel}")
     return get_caso(folio)
 
 
@@ -536,4 +619,5 @@ def rechazar(folio: str, motivo: str, usuario: dict) -> dict:
     _fija_campos(folio, {"estado": "rechazada", "rechazo": motivo,
                          "rechazadoPor": usuario.get("correo", "")}, caso)
     log(folio, "rechazo", usuario.get("correo", ""), motivo)
+    agregar_comentario(folio, motivo, usuario, tipo="rechazo")
     return get_caso(folio)

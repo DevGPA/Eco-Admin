@@ -140,6 +140,18 @@ Resources:
         CasoClave:
           Type: HttpApi
           Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/clave' }
+        CasoAnalisis:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: '/casos/{folio}/analisis' }
+        CasoComentario:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/comentario' }
+        CasoAnexoUrl:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/anexo-url' }
+        CasoAnexo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/anexo' }
         CasoRevision:
           Type: HttpApi
           Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: '/casos/{folio}/revision' }

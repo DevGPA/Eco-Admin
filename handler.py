@@ -22,6 +22,10 @@
 #   POST  /casos/{folio}/autorizacion     pasar a firmas
 #   POST  /casos/{folio}/firmar           {nivel, correoFirmante}
 #   POST  /casos/{folio}/rechazar         {motivo}
+#   GET   /casos/{folio}/analisis         comentarios y anexos internos
+#   POST  /casos/{folio}/comentario       {texto}
+#   POST  /casos/{folio}/anexo-url        {nombre, contentType, tam} → URL de subida
+#   POST  /casos/{folio}/anexo            {nombre, key, tam, descripcion} o {quitar}
 #   GET   /usuarios · POST /usuarios      panel de usuarios (solo Administrador)
 # ─────────────────────────────────────────────────────────────────
 
@@ -39,10 +43,13 @@ from db.escritura import (ReglaRota, crear_caso, regenerar_clave, verificar_clav
                           otros_de, enviar_expediente,
                           marcar_documento, señalar_campo, devolver,
                           pasar_a_autorizacion, pendientes_para_autorizar,
-                          firmar, rechazar, campos_permitidos)
-from db.queries import get_caso, listar_casos, bitacora, resumen_bandeja
+                          firmar, rechazar, campos_permitidos,
+                          agregar_comentario, agregar_anexo, quitar_anexo, anexos_de)
+from db.queries import (get_caso, listar_casos, bitacora, comentarios,
+                        resumen_bandeja)
 from db.modelos import dias_desde, fecha_larga, ya_vencio
-from s3.documentos import DocumentoInvalido, url_subida, resuelve_urls
+from s3.documentos import (DocumentoInvalido, ID_INTERNO, url_subida, url_lectura,
+                           resuelve_urls)
 import auth_cognito
 
 logger = logging.getLogger()
@@ -146,6 +153,9 @@ def _vista_interna(caso: dict) -> dict:
         "pendientesAutorizar": pendientes_para_autorizar(caso),
         "problemas": revisa_captura(caso),
         "otros": otros_de(caso),
+        # Los anexos internos van APARTE de "adjuntos" a propósito: la vista del
+        # cliente entrega el mapa de adjuntos completo y los estaría enseñando.
+        "anexos": [{**a, "url": url_lectura(a.get("key", ""))} for a in anexos_de(caso)],
         "venceLegible": fecha_larga(caso.get("vence")),
         "vencida": ya_vencio(caso.get("vence")),
         "conflictoRfc": conflicto_regimen_rfc(caso.get("regimen"), caso.get("rfc")),
@@ -258,6 +268,10 @@ def _interno(ruta: str, event, usuario: dict):
             return _resp(_vista_interna(caso))
         if ruta == "GET /casos/{folio}/bitacora":
             return _resp({"bitacora": bitacora(folio)})
+        if ruta == "GET /casos/{folio}/analisis":
+            return _resp({"comentarios": comentarios(folio),
+                          "anexos": [{**a, "url": url_lectura(a.get("key", ""))}
+                                     for a in anexos_de(caso)]})
 
         cuerpo = _body(event)
 
@@ -266,6 +280,28 @@ def _interno(ruta: str, event, usuario: dict):
                 return _err(f"Su rol ({rol}) no puede generar claves.", 403)
             return _resp({"clave": regenerar_clave(folio, usuario),
                           "aviso": "Anote o copie la clave ahora: no se vuelve a mostrar."})
+
+        if ruta == "POST /casos/{folio}/comentario":
+            if not puede(rol, "comentar"):
+                return _err(f"Su rol ({rol}) no puede comentar expedientes.", 403)
+            return _resp(agregar_comentario(folio, cuerpo.get("texto", ""), usuario))
+
+        if ruta == "POST /casos/{folio}/anexo-url":
+            if not puede(rol, "comentar"):
+                return _err(f"Su rol ({rol}) no puede subir anexos.", 403)
+            return _resp(url_subida(folio, ID_INTERNO,
+                                    str(cuerpo.get("contentType") or ""),
+                                    int(cuerpo.get("tam") or 0)))
+
+        if ruta == "POST /casos/{folio}/anexo":
+            if not puede(rol, "comentar"):
+                return _err(f"Su rol ({rol}) no puede subir anexos.", 403)
+            if cuerpo.get("quitar"):
+                return _resp(_vista_interna(quitar_anexo(folio, str(cuerpo["quitar"]), usuario)))
+            agregar_anexo(folio, str(cuerpo.get("nombre") or ""), str(cuerpo.get("key") or ""),
+                          int(cuerpo.get("tam") or 0), str(cuerpo.get("descripcion") or ""),
+                          usuario)
+            return _resp(_vista_interna(get_caso(folio)))
 
         if ruta == "POST /casos/{folio}/revision":
             if not puede(rol, "revisar"):
@@ -297,7 +333,8 @@ def _interno(ruta: str, event, usuario: dict):
                 return _err("Ese usuario ya no existe en el sistema.", 404)
             if not firmante["activo"]:
                 return _err(f"{firmante['nombre']} está dado de baja y no puede firmar.", 409)
-            return _resp(_vista_interna(firmar(folio, nivel, firmante, usuario)))
+            return _resp(_vista_interna(
+                firmar(folio, nivel, firmante, usuario, cuerpo.get("comentario", ""))))
 
         if ruta == "POST /casos/{folio}/rechazar":
             if not puede(rol, "autorizar"):

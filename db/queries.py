@@ -69,6 +69,19 @@ def bitacora(folio: str, limite: int = 200) -> list:
     return sin_decimales(r.get("Items") or [])
 
 
+def comentarios(folio: str, limite: int = 200) -> list:
+    """El hilo de análisis del expediente, del más viejo al más nuevo.
+
+    Se lee en orden de lectura: primero el análisis, después las firmas.
+    """
+    r = tabla().query(
+        KeyConditionExpression=Key("PK").eq(pk_caso(folio)) & Key("SK").begins_with("COM#"),
+        ScanIndexForward=True,
+        Limit=limite,
+    )
+    return sin_decimales(r.get("Items") or [])
+
+
 def resumen_bandeja(casos: list) -> list:
     """Lo que la bandeja necesita por renglón, sin arrastrar el expediente completo."""
     from catalogos import TIPOS, docs_aplicables, persona_de, FIRMAS_REQUERIDAS

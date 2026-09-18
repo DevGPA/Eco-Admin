@@ -52,6 +52,11 @@ def arma_key(folio: str, doc_id: str, content_type: str) -> str:
     return f"{folio}/{doc_id}-{secrets.token_hex(6)}.{ext}"
 
 
+# Los anexos internos usan este identificador. Van al mismo bucket privado, pero
+# NUNCA se listan en la vista del cliente: esa se arma por lista blanca.
+ID_INTERNO = "interno"
+
+
 def url_subida(folio: str, doc_id: str, content_type: str, tam: int) -> dict:
     """URL prefirmada para que el navegador haga PUT del archivo."""
     if tam and int(tam) > TAM_MAXIMO:

@@ -117,6 +117,9 @@ PERMISOS = {
     "crear":     {ROL_ADMIN, ROL_VENTAS, ROL_COMITE},
     "revisar":   {ROL_ADMIN, ROL_VENTAS, ROL_COMITE},
     "autorizar": {ROL_ADMIN, ROL_COMITE},
+    # Ventas conoce al cliente y suele tener contexto util, asi que comenta y
+    # anexa, pero sigue sin poder firmar.
+    "comentar":  {ROL_ADMIN, ROL_COMITE, ROL_VENTAS},
     "usuarios":  {ROL_ADMIN},
 }
 

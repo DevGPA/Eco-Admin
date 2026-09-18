@@ -315,11 +315,11 @@ marcas.pop("campo:telefono")
 e._fija_campos(folio, {"marcas": marcas}, q.get_caso(folio))
 e.pasar_a_autorizacion(folio, ADMIN)
 ok(q.get_caso(folio)["estado"] == "por_autorizar", "con todo revisado, pasa a firmas")
-rompe(lambda: e.firmar(folio, 2, FIRMA2A, ADMIN), "una sola firma", "un alta no admite nivel 2")
-rompe(lambda: e.firmar(folio, 1, SIN_NIVEL, ADMIN), "no está habilitado", "quien no tiene nivel 1 no firma")
-e.firmar(folio, 1, FIRMA1, ADMIN)
+rompe(lambda: e.firmar(folio, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "una sola firma", "un alta no admite nivel 2")
+rompe(lambda: e.firmar(folio, 1, SIN_NIVEL, ADMIN, "Motivo de prueba de la firma"), "no está habilitado", "quien no tiene nivel 1 no firma")
+e.firmar(folio, 1, FIRMA1, ADMIN, "Motivo de prueba de la firma")
 ok(q.get_caso(folio)["estado"] == "autorizada", "con una firma, el alta queda autorizada")
-rompe(lambda: e.firmar(folio, 1, FIRMA1, ADMIN), "no está en autorización", "cerrada, ya no admite firmas")
+rompe(lambda: e.firmar(folio, 1, FIRMA1, ADMIN, "Motivo de prueba de la firma"), "no está en autorización", "cerrada, ya no admite firmas")
 
 print("\n== 9. Autorización de un CRÉDITO: 1 + 2 firmas ==")
 fc, kc = caso_cred["folio"], clave_cred
@@ -330,17 +330,17 @@ e.enviar_expediente(tc, kc)
 for d in c.docs_aplicables("credito", caso_cred["docs"], "Moral"):
     e.marcar_documento(fc, d["id"], True, "", ADMIN)
 e.pasar_a_autorizacion(fc, ADMIN)
-rompe(lambda: e.firmar(fc, 2, FIRMA2A, ADMIN), "falta la firma de nivel 1",
+rompe(lambda: e.firmar(fc, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "falta la firma de nivel 1",
       "el nivel 2 no puede firmarse antes que el nivel 1")
-e.firmar(fc, 1, FIRMA1, ADMIN)
+e.firmar(fc, 1, FIRMA1, ADMIN, "Motivo de prueba de la firma")
 ok(q.get_caso(fc)["estado"] == "por_autorizar", "con nivel 1 el crédito sigue sin autorizarse")
-rompe(lambda: e.firmar(fc, 1, FIRMA2A, ADMIN), "ya está firmado", "el nivel 1 no se firma dos veces")
-rompe(lambda: e.firmar(fc, 2, FIRMA1, ADMIN), "ya firmó", "quien firmó nivel 1 no puede firmar nivel 2")
-rompe(lambda: e.firmar(fc, 2, SIN_NIVEL, ADMIN), "no está habilitado", "sin nivel 2 no firma")
-e.firmar(fc, 2, FIRMA2A, ADMIN)
+rompe(lambda: e.firmar(fc, 1, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "ya está firmado", "el nivel 1 no se firma dos veces")
+rompe(lambda: e.firmar(fc, 2, FIRMA1, ADMIN, "Motivo de prueba de la firma"), "ya firmó", "quien firmó nivel 1 no puede firmar nivel 2")
+rompe(lambda: e.firmar(fc, 2, SIN_NIVEL, ADMIN, "Motivo de prueba de la firma"), "no está habilitado", "sin nivel 2 no firma")
+e.firmar(fc, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma")
 ok(q.get_caso(fc)["estado"] == "por_autorizar", "con una firma de nivel 2 todavía no basta")
-rompe(lambda: e.firmar(fc, 2, FIRMA2A, ADMIN), "ya firmó", "la misma persona no cubre las dos firmas del nivel 2")
-e.firmar(fc, 2, FIRMA2B, ADMIN)
+rompe(lambda: e.firmar(fc, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "ya firmó", "la misma persona no cubre las dos firmas del nivel 2")
+e.firmar(fc, 2, FIRMA2B, ADMIN, "Motivo de prueba de la firma")
 ok(q.get_caso(fc)["estado"] == "autorizada", "con 1 + 2 firmas el crédito queda autorizado")
 ok(len(q.get_caso(fc)["autorizaciones"]) == 3, "quedan registradas las tres firmas")
 ok(all(a.get("fecha") and a.get("nombre") for a in q.get_caso(fc)["autorizaciones"]),
@@ -368,6 +368,67 @@ a = c.avance(q.get_caso(fc))
 ok(0 < a["pct"] <= 100, f"el avance del crédito completo es creíble: {a['hechos']}/{a['total']} = {a['pct']}%")
 vacio = c.avance(q.get_caso(caso_r["folio"]))
 ok(vacio["pct"] == 0, "un expediente recién creado arranca en 0%")
+
+print("\n== 11. Análisis interno: comentarios y anexos ==")
+COMITE = {"correo": "hsalgado@gpa.com.mx", "nombre": "Héctor Salgado", "rol": c.ROL_COMITE}
+fa = caso_alta["folio"]
+
+rompe(lambda: e.agregar_comentario(fa, "   ", COMITE), "escriba el comentario",
+      "un comentario vacío se rechaza")
+e.agregar_comentario(fa, "Hablé con dos referencias: 3 años sin atrasos.", COMITE)
+hilo = q.comentarios(fa)
+ok(any("dos referencias" in m["texto"] for m in hilo), "el comentario queda en el hilo")
+ok(all(m.get("nombre") and m.get("rol") and m.get("cuandoLegible") for m in hilo),
+   "cada comentario dice quién, con qué rol y cuándo")
+
+# Ventas comenta aunque no pueda firmar.
+ok(c.puede(c.ROL_VENTAS, "comentar") and not c.puede(c.ROL_VENTAS, "autorizar"),
+   "Ventas comenta y anexa, pero no firma")
+ok(not c.puede(c.ROL_CONSULTA, "comentar"), "Consulta sigue siendo solo lectura")
+
+rompe(lambda: e.agregar_anexo(fa, "buro.pdf", f"{fa}/interno-aabbccddeeff.pdf", 9000, "", COMITE),
+      "escriba qué es", "un anexo sin descripción se rechaza")
+e.agregar_anexo(fa, "buro.pdf", f"{fa}/interno-aabbccddeeff.pdf", 9000,
+                "Reporte de buró de crédito", COMITE)
+caso_fa = q.get_caso(fa)
+ok(len(e.anexos_de(caso_fa)) == 1, "el anexo interno se guarda")
+
+# LA regla que importa: el anexo interno NO puede acabar entre los adjuntos,
+# porque la vista del cliente entrega ese mapa completo, con enlaces de descarga.
+ok(not any(k.startswith("anexo:") for k in (caso_fa.get("adjuntos") or {})),
+   "los anexos internos NO están en «adjuntos»: el cliente no los puede ver")
+ok("anexos" in caso_fa and isinstance(caso_fa["anexos"], dict),
+   "viven en su propio campo «anexos»")
+
+aid = e.anexos_de(caso_fa)[0]["id"]
+e.quitar_anexo(fa, aid, COMITE)
+ok(not e.anexos_de(q.get_caso(fa)), "un anexo se puede quitar si se subió por error")
+
+print("\n== 12. La firma exige su motivo ==")
+caso_f, clave_f = e.crear_caso(nueva("credito"), ADMIN)
+tf, ff = caso_f["token"], caso_f["folio"]
+e.verificar_clave(tf, clave_f)
+llena_todo(tf, clave_f)
+e.enviar_expediente(tf, clave_f)
+for d in c.docs_aplicables("credito", caso_f["docs"], "Moral"):
+    e.marcar_documento(ff, d["id"], True, "", ADMIN)
+e.pasar_a_autorizacion(ff, ADMIN)
+
+rompe(lambda: e.firmar(ff, 1, FIRMA1, ADMIN, ""), "motivo de su firma",
+      "no se puede firmar sin escribir el motivo")
+rompe(lambda: e.firmar(ff, 1, FIRMA1, ADMIN, "   "), "motivo de su firma",
+      "ni con espacios en blanco")
+e.firmar(ff, 1, FIRMA1, ADMIN, "Línea de 250,000 contra pagaré; revisar a los 6 meses.")
+firma = q.get_caso(ff)["autorizaciones"][0]
+ok(firma.get("comentario", "").startswith("Línea de 250,000"),
+   "el motivo queda pegado a la firma")
+hilo_f = q.comentarios(ff)
+ok(any(m.get("tipo") == "firma-n1" for m in hilo_f),
+   "y la firma también entra al hilo, para leer el expediente de corrido")
+
+e.rechazar(ff, "Las referencias no confirmaron la relación.", ADMIN)
+ok(any(m.get("tipo") == "rechazo" for m in q.comentarios(ff)),
+   "el rechazo también queda en el hilo, con su motivo")
 
 print("\n" + "=" * 62)
 if FALLAS:

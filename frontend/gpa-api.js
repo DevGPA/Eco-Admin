@@ -167,7 +167,30 @@ class GpaApi {
   señalarCampo(folio, campo, motivo) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/revision`, { campo, motivo }); }
   devolver(folio) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/devolver`); }
   aAutorizacion(folio) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/autorizacion`); }
-  firmar(folio, nivel, correoFirmante) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/firmar`, { nivel, correoFirmante }); }
+  firmar(folio, nivel, correoFirmante, comentario) {
+    return this._http("POST", `/casos/${encodeURIComponent(folio)}/firmar`,
+                      { nivel, correoFirmante, comentario });
+  }
+
+  // ── Análisis interno: comentarios y anexos. El cliente nunca ve nada de esto. ──
+  analisis(folio) { return this._http("GET", `/casos/${encodeURIComponent(folio)}/analisis`); }
+  comentar(folio, texto) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/comentario`, { texto }); }
+  quitarAnexo(folio, quitar) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/anexo`, { quitar }); }
+
+  /** Sube un anexo interno directo a S3 y lo registra con su descripción. */
+  async subirAnexo(folio, archivo, descripcion) {
+    const permiso = await this._http("POST", `/casos/${encodeURIComponent(folio)}/anexo-url`,
+                                     { contentType: archivo.type, tam: archivo.size });
+    const puesto = await _pide(permiso.url, {
+      method: "PUT", headers: permiso.headers, body: archivo,
+    });
+    if (!puesto.ok) {
+      throw new Error("El anexo no se pudo guardar. Revise su conexión e inténtelo otra vez.");
+    }
+    return this._http("POST", `/casos/${encodeURIComponent(folio)}/anexo`, {
+      nombre: archivo.name, key: permiso.key, tam: archivo.size, descripcion,
+    });
+  }
   rechazar(folio, motivo) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/rechazar`, { motivo }); }
 
   // ── Usuarios ──

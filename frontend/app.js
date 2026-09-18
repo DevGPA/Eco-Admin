@@ -26,6 +26,8 @@ var S = {
   ligaNueva: null,          // { liga, clave, folio } — la clave se ve una sola vez
   borrador: "",
   firmaSel: {},
+  firmando: null,        // {nivel, slot} mientras se escribe el motivo
+  analisis: { comentarios: [], anexos: [] },
   cargando: false,
   error: "",
   aviso: "",
@@ -818,6 +820,64 @@ function vistaNueva() {
     '<div class="card pad stack"><div class="eyebrow">4 · Envío al cliente</div>' + panel + "</div></div></div>";
 }
 
+/** Análisis y autorización: comentarios y anexos internos. NO lo ve el cliente. */
+function bloqueAnalisis(c) {
+  var rol = api.sesion ? api.sesion.rol : "";
+  var puedeComentar = ["Administrador", "Comité de Crédito", "Ventas"].indexOf(rol) !== -1;
+  var comentarios = S.analisis.comentarios || [];
+  var anexos = S.analisis.anexos || [];
+
+  var hilo = comentarios.map(function (m) {
+    var esFirma = String(m.tipo || "").indexOf("firma") === 0;
+    var esRechazo = m.tipo === "rechazo";
+    var etiqueta = esFirma ? "Firma " + m.tipo.replace("firma-n", "nivel ")
+                 : esRechazo ? "Rechazo" : "";
+    return '<div class="coment ' + (esFirma ? "es-firma" : esRechazo ? "es-rechazo" : "") + '">' +
+      '<div class="coment-cab"><b>' + esc(m.nombre || m.quien) + "</b>" +
+      '<span class="dim">' + esc(m.rol || "") + " · " + esc(m.cuandoLegible || "") + "</span>" +
+      (etiqueta ? '<span class="tag">' + esc(etiqueta) + "</span>" : "") + "</div>" +
+      '<div class="coment-txt">' + esc(m.texto) + "</div></div>";
+  }).join("");
+
+  var listaAnexos = anexos.map(function (a) {
+    return '<div class="doc attached"><div class="doc-ic">int</div>' +
+      '<div class="doc-body"><div class="doc-name">' + esc(a.descripcion) + "</div>" +
+      '<div class="doc-meta"><span class="mono">' + esc(a.nombre) + "</span>" +
+      (a.url ? ' <a href="' + esc(a.url) + '" target="_blank" rel="noopener">ver</a>' : "") +
+      '<span>' + esc(a.nombre_quien || a.quien) + " · " + esc(a.cuandoLegible || "") + "</span>" +
+      "</div></div>" +
+      (puedeComentar ? '<button class="btn btn-sm btn-stop" data-quitar-anexo="' + esc(a.id) + '">Quitar</button>' : "") +
+      "</div>";
+  }).join("");
+
+  return '<div class="card pad stack">' +
+    '<div class="spread"><div class="eyebrow">Análisis y autorización</div>' +
+    '<span class="tag tag-credito">Solo GPA</span></div>' +
+    '<p class="dim" style="margin:0">Nada de esto lo ve el cliente: ni los comentarios ' +
+    "ni los anexos.</p>" +
+    (hilo ? '<div class="stack" style="gap:8px">' + hilo + "</div>"
+          : '<p class="dim" style="margin:0">Todavía no hay comentarios.</p>') +
+    (puedeComentar
+      ? '<hr class="sep"><div class="field"><label for="nuevo-coment">Agregar un comentario</label>' +
+        '<textarea id="nuevo-coment" rows="2" placeholder="Ej. Hablé con dos referencias, ' +
+        'ambas confirman 3 años de relación sin atrasos."></textarea></div>' +
+        '<div class="row"><button class="btn btn-sm btn-primary" id="btn-comentar">Guardar comentario</button>' +
+        '<span class="dim">No se puede borrar: es registro de autorización.</span></div>'
+      : "") +
+    '<hr class="sep">' +
+    '<div class="spread"><div class="eyebrow">Anexos internos</div>' +
+    '<span class="dim">' + anexos.length + "</span></div>" +
+    (listaAnexos ? '<div class="doclist">' + listaAnexos + "</div>" : "") +
+    (puedeComentar
+      ? '<div class="field"><label for="anexo-desc">¿Qué es el anexo?</label>' +
+        '<input id="anexo-desc" placeholder="Ej. Reporte de buró, análisis financiero, cédula de referencias"></div>' +
+        '<div class="row"><label class="btn btn-sm subir">Elegir archivo y subir' +
+        '<input type="file" id="anexo-file" accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf" hidden></label>' +
+        '<span class="dim">Hasta 20 anexos, 15 MB cada uno.</span></div>'
+      : "") +
+    "</div>";
+}
+
 function bloqueFirmas(c) {
   var T = tipoDe(c);
   var listo = c.estado === "por_autorizar";
@@ -839,6 +899,7 @@ function bloqueFirmas(c) {
       .filter(function (u) { return yaFirmaron.indexOf(u.correo) === -1; });
     var clave = "n" + nivel + "_" + indice;
     var sel = S.firmaSel[clave] || (opciones[0] ? opciones[0].correo : "");
+    var abierto = !!(S.firmando && S.firmando.nivel === nivel && S.firmando.slot === indice);
     var motivo = !listo ? "Falta que el expediente pase a autorización"
       : faltaN1 ? "Espera la firma de nivel 1"
       : !opciones.length ? "No hay usuarios habilitados disponibles"
@@ -852,6 +913,18 @@ function bloqueFirmas(c) {
           return '<option value="' + esc(u.correo) + '" ' + (sel === u.correo ? "selected" : "") + ">" + esc(u.nombre) + "</option>";
         }).join("") + "</select>" +
         '<button class="btn btn-sm btn-primary" data-firmar="' + nivel + '" data-slot="' + indice + '">Firmar</button>') +
+      // El motivo de la firma va en el acta y no se puede cambiar: por eso un
+      // cuadro de texto de verdad y no una ventanita del navegador.
+      (abierto
+        ? '<div class="f-full" style="flex-basis:100%; margin-top:8px">' +
+          '<div class="field"><label for="motivo-firma">Motivo de su firma <span class="req">*</span></label>' +
+          '<textarea id="motivo-firma" rows="2" placeholder="Ej. Línea de 250,000 autorizada ' +
+          'contra pagaré firmado; revisar a los 6 meses."></textarea></div>' +
+          '<div class="row" style="margin-top:8px">' +
+          '<button class="btn btn-sm btn-primary" data-confirmar-firma="' + nivel + '" data-slot="' + indice + '">Confirmar firma</button>' +
+          '<button class="btn btn-sm" id="btn-cancelar-firma">Cancelar</button>' +
+          '<span class="dim">Queda en el acta; no se puede editar después.</span></div></div>'
+        : "") +
       "</div>";
   }
 
@@ -1000,6 +1073,7 @@ function vistaExpediente() {
         ? '<div class="banner banner-ok"><span><b>Clave nueva:</b> <span class="mono">' + esc(S.ligaNueva.clave) +
           "</span> — dígtela al cliente ahora, no se vuelve a mostrar.</span></div>" : "") +
       "</div>" + bloqueFirmas(c) + "</div>" +
+      bloqueAnalisis(c) +
       '<div class="card pad stack"><div class="spread"><div class="eyebrow">Lo que capturó el cliente</div>' +
       (incompletos
         ? '<span class="dim" style="color:var(--warn)">' + incompletos + " incompleto" + (incompletos > 1 ? "s" : "") + "</span>"
@@ -1107,15 +1181,20 @@ var irA = conError(function (vista, folio) {
   }
   if (vista === "expediente") {
     S.folio = folio;
-    return Promise.all([api.caso(folio), api.firmantes()]).then(function (res) {
-      S.caso = res[0];
-      S.firmantes = res[1];
-    });
+    return Promise.all([api.caso(folio), api.firmantes(), api.analisis(folio)])
+      .then(function (res) {
+        S.caso = res[0];
+        S.firmantes = res[1];
+        S.analisis = res[2];
+      });
   }
 });
 
 function recargaCaso() {
-  return api.caso(S.folio).then(function (c) { S.caso = c; });
+  return Promise.all([api.caso(S.folio), api.analisis(S.folio)]).then(function (r) {
+    S.caso = r[0];
+    S.analisis = r[1];
+  });
 }
 
 function copiar(texto, aviso) {
@@ -1288,13 +1367,43 @@ document.addEventListener("click", function (ev) {
     return;
   }
   if (d.firmar) {
-    var nivel = Number(d.firmar), slot = Number(d.slot);
-    var sel = S.firmaSel["n" + nivel + "_" + slot];
-    if (!sel) {
-      var caja = document.querySelector('[data-firmasel="n' + nivel + "_" + slot + '"]');
-      sel = caja ? caja.value : "";
+    // Primero se pide el motivo; la firma se confirma en el siguiente paso.
+    var caja = document.querySelector('[data-firmasel="n' + d.firmar + "_" + d.slot + '"]');
+    if (caja) S.firmaSel["n" + d.firmar + "_" + d.slot] = caja.value;
+    S.firmando = { nivel: Number(d.firmar), slot: Number(d.slot) };
+    render();
+    var ta = $("#motivo-firma");
+    if (ta) ta.focus();
+    return;
+  }
+  if (t.id === "btn-cancelar-firma") { S.firmando = null; render(); return; }
+  if (d.confirmarFirma) {
+    var niv = Number(d.confirmarFirma), sl = Number(d.slot);
+    var motivoFirma = ($("#motivo-firma") || {}).value || "";
+    if (!motivoFirma.trim()) {
+      S.error = "Escriba el motivo de su firma. Queda en el acta y no se puede cambiar después.";
+      render();
+      return;
     }
-    conError(function () { return api.firmar(S.folio, nivel, sel).then(recargaCaso); })();
+    var quien = S.firmaSel["n" + niv + "_" + sl];
+    conError(function () {
+      return api.firmar(S.folio, niv, quien, motivoFirma.trim()).then(function () {
+        S.firmando = null;
+        return recargaCaso();
+      });
+    })();
+    return;
+  }
+  if (t.id === "btn-comentar") {
+    var texto = ($("#nuevo-coment") || {}).value || "";
+    if (!texto.trim()) { S.error = "Escriba el comentario."; render(); return; }
+    conError(function () {
+      return api.comentar(S.folio, texto.trim()).then(recargaCaso);
+    })();
+    return;
+  }
+  if (d.quitarAnexo) {
+    conError(function () { return api.quitarAnexo(S.folio, d.quitarAnexo).then(recargaCaso); })();
     return;
   }
   if (t.id === "btn-rechazar") {
@@ -1392,6 +1501,19 @@ document.addEventListener("change", function (ev) {
   if (d.firmasel) { S.firmaSel[d.firmasel] = el.value; return; }
   if (el.id === "privacidad") { var b = $("#btn-enviar-portal"); if (b) b.disabled = !el.checked; return; }
 
+  if (el.id === "anexo-file") {
+    var cajaDesc = $("#anexo-desc");
+    var descAnexo = cajaDesc ? cajaDesc.value.trim() : "";
+    var arch = el.files && el.files[0];
+    el.value = "";
+    if (!descAnexo) { S.error = "Antes de subirlo, escriba qué es el anexo."; render(); return; }
+    if (!arch) return;
+    conError(function () {
+      return api.subirAnexo(S.folio, arch, descAnexo).then(recargaCaso)
+        .then(function () { toast("Anexo guardado."); });
+    })();
+    return;
+  }
   if (d.subir) {
     var desc = "";
     if (d.subir === "otro") {

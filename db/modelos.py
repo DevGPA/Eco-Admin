@@ -103,6 +103,11 @@ def sk_log() -> str:
     return f"LOG#{marca}#{secrets.token_hex(3)}"
 
 
+def sk_comentario() -> str:
+    """Clave de un comentario del análisis. Ordenable y única, como la bitácora."""
+    return f"COM#{ahora_mx().isoformat(timespec='microseconds')}#{secrets.token_hex(3)}"
+
+
 def llaves_caso(folio: str, creado: str, token: str, estado: str) -> dict:
     return {
         "PK": pk_caso(folio),

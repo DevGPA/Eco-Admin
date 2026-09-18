@@ -429,3 +429,11 @@ table.grid-t td[colspan]{text-align:center; padding:26px 12px}
 }
 :root[data-theme="dark"] .grupo-n,
 :root[data-theme="dark"] .grupo-cuenta{filter:brightness(1.7) saturate(.9)}
+
+/* ── Hilo de análisis interno ────────────────────────────────────
+   Solo lo ve GPA. Las firmas y el rechazo se distinguen del resto. */
+.coment{border:1px solid var(--line-2); border-left:3px solid var(--line); border-radius:7px; padding:9px 11px; background:var(--surface-2)}
+.coment.es-firma{border-left-color:var(--ok); background:var(--ok-soft)}
+.coment.es-rechazo{border-left-color:var(--stop); background:var(--stop-soft)}
+.coment-cab{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; margin-bottom:4px}
+.coment-txt{font-size:14px; white-space:pre-wrap; overflow-wrap:anywhere}
