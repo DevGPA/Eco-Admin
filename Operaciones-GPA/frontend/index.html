@@ -585,6 +585,41 @@ const esGasLP=v=>normTxt(v&&v.combustible).replace(/\s+/g,"").includes("gaslp");
 // Tope de avance de km desde el último de la unidad (ESPEJO de db/modelos.py KM_MAX_DELTA):
 // UNO SOLO para toda la flota, sin excepciones por combustible ni por módulo.
 const MAX_DELTA_KM=1000;
+
+// ─── Borrador local de captura ───────────────────────────────────────────────
+// Conserva lo ya llenado de un formulario largo para poder salir y volver sin
+// perderlo. NO es almacén de registros: el registro SIEMPRE se envía a la API;
+// esto es una comodidad por dispositivo y se borra al enviar. Si el navegador
+// bloquea el almacenamiento, la app sigue funcionando igual.
+const leerBorrador=k=>{if(!k)return{};try{return JSON.parse(localStorage.getItem(k))||{};}catch{return{};}};
+// Quita las fotos (data:...) de un objeto anidado, para el plan B de cuota.
+const sinDataURL=v=>Array.isArray(v)?v.map(sinDataURL)
+  :(v&&typeof v==="object")?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,sinDataURL(x)]))
+  :(typeof v==="string"&&v.startsWith("data:"))?null:v;
+// Guarda y avisa qué se pudo guardar: "" completo · "sinfotos" se soltaron las
+// fotos por falta de espacio (mejor eso que perder 56 respuestas) · "no" nada.
+const guardarBorrador=(k,obj)=>{
+  if(!k)return"";
+  try{localStorage.setItem(k,JSON.stringify(obj));return"";}catch(e){}
+  try{localStorage.setItem(k,JSON.stringify(sinDataURL(obj)));return"sinfotos";}catch(e){}
+  try{localStorage.removeItem(k);}catch(e){}
+  return"no";
+};
+const borrarBorrador=k=>{if(!k)return;try{localStorage.removeItem(k);}catch{}};
+// Aviso de arriba del formulario: dice que se retomó algo sin enviar y, si el
+// borrador no alcanzó a guardar las fotos, lo advierte ANTES de que el usuario
+// salga y las pierda (nada de degradarse en silencio).
+const AvisoBorrador=({retomado,estado,texto,onDescartar})=>{
+  const limite=estado==="sinfotos"?"Las fotos y la firma no caben en el borrador de este dispositivo: si sales, hay que volver a tomarlas."
+    :estado==="no"?"Este dispositivo no permite guardar borradores: si sales, se pierde lo capturado.":"";
+  if(!retomado&&!limite)return null;
+  return(
+    <div className="wb" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+      <span>{retomado?"📝 "+texto+" ":"⚠️ "}{limite}</span>
+      {retomado&&<button className="bd" style={{padding:"4px 10px",fontSize:11,whiteSpace:"nowrap"}} onClick={onDescartar}>Descartar</button>}
+    </div>
+  );
+};
 const esActivoV=v=>!!v&&v.activo!==false&&v.activo!==0&&normTxt(v.activo)!=="false"&&normTxt(v.activo)!=="no";
 const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMACEN")||esGasLP(v))?"montacargas":"reparto");
 // Folio de identificación de un registro: TIPO-ID único (se muestra en el detalle
@@ -946,15 +981,27 @@ function CampoForm({item,getA,setA,availVeh}){
 }
 
 // Formulario dinámico multipaso (1 sección = 1 paso) construido desde la plantilla
-function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast}){
+function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast,sinBorrador}){
   // El responsable es SIEMPRE el titular de la cuenta que capturó (unificado con Cuentas).
   const yo={id:session.email,nombre:session.nombre||session.email,mail:session.email};
   const secs=plantilla.secciones||[];
   const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   const sucOpts=(sucursalesUser&&!["admin","analista"].includes(rol))?sucursalesUser:cat.sucursales;
-  const[suc,setSuc]=useState(sucOpts[0]||session.sucursal||"");
-  const[ans,setAns]=useState({});const[obs,setObs]=useState("");const[proxServ,setProxServ]=useState("");const[sig,setSig]=useState(null);
-  const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);
+  // Borrador: lo capturado sobrevive a salir del formulario y volver. Uno por
+  // plantilla y por cuenta. La vista previa de Admin no genera borrador.
+  const DKEY=sinBorrador?null:("gpa_frm_draft_"+plantilla.clave+"_"+session.email);
+  const draftRef=useRef(undefined);
+  if(draftRef.current===undefined)draftRef.current=leerBorrador(DKEY);
+  const D=draftRef.current;
+  const sucIni=()=>D.suc||sucOpts[0]||session.sucursal||"";
+  const[suc,setSuc]=useState(sucIni);
+  const[ans,setAns]=useState(D.ans||{});const[obs,setObs]=useState(D.obs||"");const[proxServ,setProxServ]=useState(D.proxServ||"");const[sig,setSig]=useState(D.sig||null);
+  const[step,setStep]=useState(D.step||0);const[busy,setBusy]=useState(false);
+  const[teniaBorrador]=useState(!!((D.ans&&Object.keys(D.ans).length)||D.obs||D.proxServ||D.sig));
+  const[borEstado,setBorEstado]=useState("");
+  const cerradoRef=useRef(false);   // ver nota del mismo guardado en el checklist de reparto
+  useEffect(()=>{const t=setTimeout(()=>{if(cerradoRef.current)return;setBorEstado(guardarBorrador(DKEY,{suc,ans,obs,proxServ,sig,step}));},400);return()=>clearTimeout(t);},[suc,ans,obs,proxServ,sig,step]);
+  const descartarBorrador=()=>{cerradoRef.current=true;borrarBorrador(DKEY);setTimeout(()=>{cerradoRef.current=false;},500);setSuc(sucIni());setAns({});setObs("");setProxServ("");setSig(null);setStep(0);showToast("Borrador descartado");};
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const reqFirma=plantilla.requiereFirma!==false;
   const total=secs.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?secs[step-1]:null;
@@ -993,6 +1040,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
       if(res){datos.resultado=res.lbl;datos.resultadoNivel=res.nivel;datos.puntaje=res.sum;datos.puntajeMax=res.max;}
       const subido=await api.subirEvidencias("formulario",datos);
       await api.crearFormulario(plantilla.clave,subido);
+      cerradoRef.current=true;borrarBorrador(DKEY);
       showToast("✓ Formulario enviado");onDone&&onDone();
     }catch(e){showToast("⚠️ "+e.message);}
     setBusy(false);
@@ -1001,6 +1049,7 @@ function FormDinamico({plantilla,cat,rol,sucursalesUser,session,onDone,showToast
     <div>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:700,color:C.blue}}>{plantilla.nombre}</span><span style={{fontSize:11,color:"#888"}}>Paso {step+1}/{total}</span></div>
       <div className="sb">{Array.from({length:total}).map((_,i)=><div key={i} className="sd" style={{background:step>=i?C.blue:"#e0e0e0"}}/>)}</div>
+      <AvisoBorrador retomado={teniaBorrador} texto="Retomaste un formulario sin enviar." estado={borEstado} onDescartar={descartarBorrador}/>
       {step===0&&<div>
         <div className="card"><div className="ct">Datos Generales</div>
           <label>Sucursal</label><select value={suc} onChange={e=>setSuc(e.target.value)}><option value="">— Selecciona —</option>{sucOpts.map(s=><option key={s}>{s}</option>)}</select>
@@ -1937,8 +1986,24 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   const availVeh=cat.vehicles.filter(v=>esActivoV(v)&&catVeh(v)==="reparto"&&(!sucursalesUser||rol==="admin"||rol==="analista"||sucursalesUser.includes(v.sucursal)));
   // Preselección: la última unidad que ESTE usuario capturó en este módulo.
   const ultUsada=(items||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
-  const[veh,setVeh]=useState(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):""));
-  const[km,setKm]=useState("");const[fotoKm,setFotoKm]=useState(null);const[ans,setAns]=useState({});const[sig,setSig]=useState(null);const[obs,setObs]=useState("");const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);const[forzarKm,setForzarKm]=useState(false);
+  // Borrador: lo capturado sobrevive a salir del módulo y volver. Uno por TIPO
+  // de checklist (semanal/mensual) y por cuenta, para que no se mezclen.
+  const DKEY="gpa_cl_draft_"+tipo+"_"+session.email;
+  const draftRef=useRef(undefined);
+  if(draftRef.current===undefined)draftRef.current=leerBorrador(DKEY);
+  const D=draftRef.current;
+  const vehIni=()=>D.veh||(ultUsada&&availVeh.some(v=>String(v.id)===String(ultUsada))?String(ultUsada):(availVeh[0]?String(availVeh[0].id):""));
+  const[veh,setVeh]=useState(vehIni);
+  const[km,setKm]=useState(D.km||"");const[fotoKm,setFotoKm]=useState(D.fotoKm||null);const[ans,setAns]=useState(D.ans||{});const[sig,setSig]=useState(D.sig||null);const[obs,setObs]=useState(D.obs||"");const[step,setStep]=useState(D.step||0);const[busy,setBusy]=useState(false);const[forzarKm,setForzarKm]=useState(false);
+  const[teniaBorrador]=useState(!!(D.km||D.fotoKm||(D.ans&&Object.keys(D.ans).length)||D.obs||D.sig));
+  const[borEstado,setBorEstado]=useState("");
+  // Se guarda con un respiro de 400 ms: en un celular, serializar las fotos en
+  // cada tecleo se siente lento.
+  // El guardado va con retraso; si mientras tanto se envió o se descartó, NO debe
+  // volver a escribir el borrador (si no, el siguiente checklist abriría con estos datos).
+  const cerradoRef=useRef(false);
+  useEffect(()=>{const t=setTimeout(()=>{if(cerradoRef.current)return;setBorEstado(guardarBorrador(DKEY,{veh,km,fotoKm,ans,obs,sig,step}));},400);return()=>clearTimeout(t);},[veh,km,fotoKm,ans,obs,sig,step]);
+  const descartarBorrador=()=>{cerradoRef.current=true;borrarBorrador(DKEY);setTimeout(()=>{cerradoRef.current=false;},500);setVeh(vehIni());setKm("");setFotoKm(null);setAns({});setSig(null);setObs("");setStep(0);showToast("Borrador descartado");};
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user={id:session.email,nombre:session.nombre||session.email};
   // Kilometraje: contra el último km REAL de la unidad (odómetro compartido SOL+CL, del backend).
@@ -1964,6 +2029,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
       const datos={tipo,vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,userId:user.id,responsable:user.nombre,km:parseFloat(km),fotoKm,answers:ans,obs,firma:sig,status:"Aprobado",...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("checklist",datos);
       await api.crear("checklist",subido);
+      cerradoRef.current=true;borrarBorrador(DKEY);
       showToast("✓ Checklist enviado");await refrescar();onDone();
     }catch(e){showToast("⚠️ "+e.message);}
     setBusy(false);
@@ -1972,6 +2038,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
     <div>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:700,color:tipo==="semanal"?C.blue:C.green}}>{tipo==="semanal"?"Checklist Semanal":"Checklist Mensual"}</span><span style={{fontSize:11,color:"#888"}}>Paso {step+1}/{total}</span></div>
       <div className="sb">{Array.from({length:total}).map((_,i)=><div key={i} className="sd" style={{background:step>=i?(tipo==="semanal"?C.blue:C.green):"#e0e0e0"}}/>)}</div>
+      <AvisoBorrador retomado={teniaBorrador} texto="Retomaste un checklist sin enviar." estado={borEstado} onDescartar={descartarBorrador}/>
       {step===0&&<div>
         <div className="card"><div className="ct">Datos Generales</div>
           <label>Vehículo</label><select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas}</option>)}</select>
@@ -2119,14 +2186,28 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
   const availMC=mc.filter(v=>!sucursalesUser||sucursalesUser.includes(v.sucursal));
   // Preselección: el último equipo que ESTE usuario capturó en este módulo.
   const ultUsado=(registros||[]).filter(r=>(r.accountId||r.mail)===session.email).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0]?.vehicleId;
-  const[eq,setEq]=useState(ultUsado&&availMC.some(v=>String(v.id)===String(ultUsado))?String(ultUsado):(availMC[0]?String(availMC[0].id):""));
-  const[estatus,setEstatus]=useState("Activo");const[dia,setDia]=useState(new Date().toISOString().split("T")[0]);
-  const[horas,setHoras]=useState("");const[forzarHoras,setForzarHoras]=useState(false);
+  // Borrador: lo capturado sobrevive a salir del módulo y volver. Uno por TIPO
+  // de equipo (gas/eléctrico) y por cuenta.
+  const DKEY="gpa_mc_draft_"+tipo+"_"+session.email;
+  const draftRef=useRef(undefined);
+  if(draftRef.current===undefined)draftRef.current=leerBorrador(DKEY);
+  const D=draftRef.current;
+  const eqIni=()=>D.eq||(ultUsado&&availMC.some(v=>String(v.id)===String(ultUsado))?String(ultUsado):(availMC[0]?String(availMC[0].id):""));
+  const[eq,setEq]=useState(eqIni);
+  // La FECHA de revisión NO se restaura: define la semana ISO del registro y un
+  // borrador viejo lo archivaría en una semana que ya pasó, sin que se note.
+  const[estatus,setEstatus]=useState(D.estatus||"Activo");const[dia,setDia]=useState(new Date().toISOString().split("T")[0]);
+  const[horas,setHoras]=useState(D.horas||"");const[forzarHoras,setForzarHoras]=useState(false);
   // Número de semana ISO calculado automáticamente a partir de la fecha de revisión
   const isoSemana=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");d.setDate(d.getDate()+3-((d.getDay()+6)%7));const w1=new Date(d.getFullYear(),0,4);return 1+Math.round(((d-w1)/86400000-3+((w1.getDay()+6)%7))/7);};
   const semana=isoSemana(dia);
-  const[resps,setResps]=useState({});const[fotos,setFotos]=useState({});const[coments,setComents]=useState({});
-  const[obs,setObs]=useState("");const[sig,setSig]=useState(null);const[step,setStep]=useState(0);const[busy,setBusy]=useState(false);const[marcar,setMarcar]=useState(false);
+  const[resps,setResps]=useState(D.resps||{});const[fotos,setFotos]=useState(D.fotos||{});const[coments,setComents]=useState(D.coments||{});
+  const[obs,setObs]=useState(D.obs||"");const[sig,setSig]=useState(D.sig||null);const[step,setStep]=useState(D.step||0);const[busy,setBusy]=useState(false);const[marcar,setMarcar]=useState(false);
+  const[teniaBorrador]=useState(!!(D.horas||(D.resps&&Object.keys(D.resps).length)||D.obs||D.sig));
+  const[borEstado,setBorEstado]=useState("");
+  const cerradoRef=useRef(false);   // ver nota del mismo guardado en el checklist de reparto
+  useEffect(()=>{const t=setTimeout(()=>{if(cerradoRef.current)return;setBorEstado(guardarBorrador(DKEY,{eq,estatus,horas,resps,fotos,coments,obs,sig,step}));},400);return()=>clearTimeout(t);},[eq,estatus,horas,resps,fotos,coments,obs,sig,step]);
+  const descartarBorrador=()=>{cerradoRef.current=true;borrarBorrador(DKEY);setTimeout(()=>{cerradoRef.current=false;},500);setEq(eqIni());setEstatus("Activo");setHoras("");setResps({});setFotos({});setComents({});setObs("");setSig(null);setStep(0);showToast("Borrador descartado");};
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(eq));
   // Horas de trabajo: contra las últimas horas REALES de la unidad (del backend, no
@@ -2153,6 +2234,7 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
       const datos={tipo,username:yo?.nombre||session.nombre,vehicleId:vehicle?.id,placas:vehicle?.placas,subMarca:vehicle?.subMarca,sucursal:vehicle?.sucursal,economico:vehicle?.economico,estatus,dia,semana,horas:parseFloat(horas),resps,fotos,coments,obs,firma:sig,status:"Aprobado",autorizadoPor:"Envío automático",...(puedeForzar&&forzarHoras&&horasErr?{forzar:true}:{})};
       const subido=await api.subirEvidencias("montacargas",datos);
       await api.crear("montacargas",subido);
+      cerradoRef.current=true;borrarBorrador(DKEY);
       showToast("✓ Checklist enviado");await refrescar();onDone();
     }catch(e){showToast("⚠️ "+e.message);}
     setBusy(false);
@@ -2162,6 +2244,7 @@ function MCForm({tipo,cat,mc,registros,session,rol,sucursalesUser,refrescar,show
     <div>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:13,fontWeight:700,color}}>{tipo==="gas"?"⛽ Gas/Gasolina":"⚡ Eléctrico"} — Diario</span><span style={{fontSize:11,color:"#888"}}>Paso {step+1}/{total}</span></div>
       <div className="sb">{Array.from({length:total}).map((_,i)=><div key={i} className="sd" style={{background:step>=i?color:"#e0e0e0"}}/>)}</div>
+      <AvisoBorrador retomado={teniaBorrador} texto="Retomaste un checklist sin enviar." estado={borEstado} onDescartar={descartarBorrador}/>
       {step===0&&<div>
         <div className="card"><div className="ct">Información General</div>
           <label>Montacargas</label><select value={eq} onChange={e=>setEq(e.target.value)}><option value="">— Selecciona —</option>{availMC.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
@@ -2661,7 +2744,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
           <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Vista previa: {preview.nombre}</div>
           {preview._noSop&&preview._noSop.length>0&&<div className="wb" style={{marginBottom:8}}>Tipos no soportados (se omitirán): {preview._noSop.join(", ")}</div>}
           <div style={{fontSize:11,color:"#666",marginBottom:10}}>Así se verá el formulario. Revisa los campos y guarda.</div>
-          <FormDinamico plantilla={preview} cat={cat} rol="admin" sucursalesUser={null} session={{email:"preview",nombre:"Vista previa",sucursal:cat.sucursales[0]||""}} showToast={showToast} onDone={()=>{}}/>
+          <FormDinamico plantilla={preview} cat={cat} rol="admin" sucursalesUser={null} session={{email:"preview",nombre:"Vista previa",sucursal:cat.sucursales[0]||""}} showToast={showToast} onDone={()=>{}} sinBorrador/>
           {errPrev&&<div className="eb" style={{marginTop:10,fontSize:12}}>⚠️ <b>No se pudo guardar:</b> {errPrev}</div>}
           <div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={()=>setShowPrev(false)}>Cerrar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={guardarPlantilla}>✓ Guardar formulario</button></div>
         </div></div>}
