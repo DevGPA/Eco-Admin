@@ -12,7 +12,6 @@
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-import unicodedata
 from decimal import Decimal
 from typing import Any
 
@@ -84,46 +83,27 @@ def from_dynamo(value: Any) -> Any:
 
 
 # ── Regla de kilometraje (pura, sin dependencias) ────────────────
-# Tope de avance permitido desde el último km de la unidad, por combustible.
-# En la práctica son poblaciones DISJUNTAS:
-#   · Gas LP    → montacargas; solo aparecen en Combustible (100 km entre cargas).
-#   · Eléctrico → unidad de reparto; solo aparece en Checklist semanal/mensual,
-#                 donde 100 km era demasiado estrecho para una semana de reparto.
-KM_MAX_DELTA_GASLP     = 100     # Gas LP (montacargas)
-KM_MAX_DELTA_ELECTRICO = 300     # Eléctrico (checklist de reparto)
-KM_MAX_DELTA_DEFAULT   = 1000    # resto
-KM_MAX_DELTA_ESPECIAL  = KM_MAX_DELTA_GASLP   # compat. con el nombre anterior
-
-
-def norm_combustible(valor) -> str:
-    """'Eléctrico' / 'GAS LP' / ' gas lp ' → 'electrico' / 'gaslp'.
-    Igual que normTxt() del front: sin acentos, minúsculas, sin espacios."""
-    txt = unicodedata.normalize("NFD", str(valor or ""))
-    txt = "".join(c for c in txt if not unicodedata.combining(c)).lower()
-    return "".join(txt.split())
-
-
-def max_delta_km(combustible: str | None) -> int:
-    """Tope de avance de km según el combustible de la unidad."""
-    c = norm_combustible(combustible)
-    if "gaslp" in c:
-        return KM_MAX_DELTA_GASLP
-    if "electric" in c:
-        return KM_MAX_DELTA_ELECTRICO
-    return KM_MAX_DELTA_DEFAULT
+# Tope de avance permitido desde el último km de la unidad: UNO SOLO para toda
+# la flota, sin importar el combustible ni el módulo. Antes había topes
+# especiales (Gas LP 100 km, Eléctrico 300 km) que trababan capturas legítimas;
+# por decisión del área todas las unidades se controlan igual que gasolina y
+# diésel.
+KM_MAX_DELTA = 1000              # km máximos de avance entre dos lecturas
+KM_MAX_DELTA_DEFAULT = KM_MAX_DELTA   # compat. con el nombre anterior
 
 
 def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | None:
     """Valida el km de una nueva captura contra el último de la unidad.
     Devuelve un mensaje de error, o None si es válido.
-    `km_ultimo` None = primer registro de la unidad → se permite cualquier km."""
+    `km_ultimo` None = primer registro de la unidad → se permite cualquier km.
+    `combustible` ya NO altera el tope; se acepta por compatibilidad."""
     if km_nuevo is None or km_ultimo is None:
         return None
     try:
         nuevo, ult = float(km_nuevo), float(km_ultimo)
     except (TypeError, ValueError):
         return "Kilometraje inválido"
-    max_delta = max_delta_km(combustible)
+    max_delta = KM_MAX_DELTA
     if nuevo < ult:
         return f"El kilometraje ({nuevo:g}) no puede ser menor al último de la unidad ({ult:g})."
     if nuevo - ult > max_delta:

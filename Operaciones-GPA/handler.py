@@ -317,8 +317,9 @@ def _validar_medidor(tipo, datos, cl):
         ult = ultimo_medidor_por_vehiculo([m.SOL, m.CL], "km").get(vid)
         if not ult:
             return None                   # primera lectura de la unidad
-        comb = datos.get("combustible") or (get_vehiculo(vid) or {}).get("combustible")
-        return m.evaluar_km(datos.get("km"), ult["valor"], comb)
+        # El tope es único para toda la flota: ya no hace falta leer el vehículo
+        # solo para saber su combustible.
+        return m.evaluar_km(datos.get("km"), ult["valor"])
     if tipo == m.MC:
         if datos.get("estatus") not in (None, "Activo"):
             return None                   # equipo inactivo: no se exige horómetro

@@ -582,9 +582,9 @@ const mxHora=(ds,H)=>{const[y,m,d]=String(ds).split("-").map(Number);return new 
 const normTxt=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
 const esElectrico=v=>normTxt(v&&v.combustible).includes("electric");
 const esGasLP=v=>normTxt(v&&v.combustible).replace(/\s+/g,"").includes("gaslp");
-// Tope de avance de km desde el último de la unidad (ESPEJO de db/modelos.py max_delta_km):
-//   Gas LP (montacargas, solo Combustible) 100 · Eléctrico (reparto, solo Checklist) 300 · resto 1000.
-const maxDeltaKmDe=v=>!v?1000:esGasLP(v)?100:esElectrico(v)?300:1000;
+// Tope de avance de km desde el último de la unidad (ESPEJO de db/modelos.py KM_MAX_DELTA):
+// UNO SOLO para toda la flota, sin excepciones por combustible ni por módulo.
+const MAX_DELTA_KM=1000;
 const esActivoV=v=>!!v&&v.activo!==false&&v.activo!==0&&normTxt(v.activo)!=="false"&&normTxt(v.activo)!=="no";
 const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMACEN")||esGasLP(v))?"montacargas":"reparto");
 // Folio de identificación de un registro: TIPO-ID único (se muestra en el detalle
@@ -1334,8 +1334,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const need=Math.max(0,1-tank);const litros=vehicle?Math.round(vehicle.tanque*need):0;const monto=vehicle?Math.round(litros*vehicle.precio):0;
   // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
-  // Tope de avance de km por combustible (maxDeltaKmDe): Gas LP 100 · Eléctrico 300 · resto 1000
-  const maxDeltaKm=maxDeltaKmDe(vehicle);
+  const maxDeltaKm=MAX_DELTA_KM;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
@@ -1441,7 +1440,7 @@ function RepForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
   // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
-  const maxDeltaKm=maxDeltaKmDe(vehicle);
+  const maxDeltaKm=MAX_DELTA_KM;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   // El bloqueo solo se libera si un admin marca "forzar" (corrección). El backend revalida igual.
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
@@ -1944,7 +1943,7 @@ function CLForm({tipo,cat,items,session,rol,sucursalesUser,refrescar,showToast,o
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));const user={id:session.email,nombre:session.nombre||session.email};
   // Kilometraje: contra el último km REAL de la unidad (odómetro compartido SOL+CL, del backend).
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
-  const maxDeltaKm=maxDeltaKmDe(vehicle);
+  const maxDeltaKm=MAX_DELTA_KM;
   const kmN=parseFloat(km);const kmErr=km&&lastKm!=null?(kmN<lastKm?`No puede ser menor al último: ${lastKm.toLocaleString()} km`:kmN-lastKm>maxDeltaKm?`No puede exceder ${maxDeltaKm.toLocaleString()} km del último (${lastKm.toLocaleString()} km)`:null):null;
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
   const total=sections.length+2;const isLast=step===total-1;const curSec=step>0&&step<total-1?sections[step-1]:null;
