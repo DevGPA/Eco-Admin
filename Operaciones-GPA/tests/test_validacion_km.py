@@ -32,11 +32,30 @@ class TestEvaluarKm(unittest.TestCase):
         self.assertIsNotNone(msg)
         self.assertIn("excede", msg)
 
-    def test_tope_especial_100_gas_lp_y_electrico(self):
+    def test_tope_gas_lp_sigue_en_100(self):
+        # Montacargas Gas LP (solo módulo Combustible): 100 km entre cargas.
         self.assertIsNone(evaluar_km(50100, 50000, "Gas LP"))
         self.assertIsNotNone(evaluar_km(50101, 50000, "Gas LP"))
+
+    def test_tope_electrico_300(self):
+        # Reparto eléctrico (checklist semanal/mensual): 300 km entre revisiones.
         self.assertIsNone(evaluar_km(50100, 50000, "Electrico"))
-        self.assertIsNotNone(evaluar_km(50101, 50000, "Electrico"))
+        self.assertIsNone(evaluar_km(50300, 50000, "Electrico"))   # exactamente el tope
+        self.assertIsNotNone(evaluar_km(50301, 50000, "Electrico"))
+
+    def test_tope_por_combustible_ignora_acentos_y_mayusculas(self):
+        # El catálogo se edita a mano; el front ya normalizaba y el backend no.
+        for c in ("Eléctrico", "ELECTRICO", "electrico"):
+            self.assertIsNone(evaluar_km(50300, 50000, c), c)
+            self.assertIsNotNone(evaluar_km(50301, 50000, c), c)
+        for c in ("GAS LP", "gas lp", "Gas  LP"):
+            self.assertIsNone(evaluar_km(50100, 50000, c), c)
+            self.assertIsNotNone(evaluar_km(50101, 50000, c), c)
+
+    def test_mensaje_del_tope_dice_la_cifra_correcta(self):
+        self.assertIn("300", evaluar_km(50999, 50000, "Electrico"))
+        self.assertIn("100", evaluar_km(50999, 50000, "Gas LP"))
+        self.assertIn("1,000", evaluar_km(52000, 50000, "Gasolina"))
 
     def test_acepta_strings_del_front(self):
         self.assertIsNone(evaluar_km("50500", "50000"))

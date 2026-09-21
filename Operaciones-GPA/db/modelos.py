@@ -12,6 +12,7 @@
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
+import unicodedata
 from decimal import Decimal
 from typing import Any
 
@@ -84,8 +85,32 @@ def from_dynamo(value: Any) -> Any:
 
 # ── Regla de kilometraje (pura, sin dependencias) ────────────────
 # Tope de avance permitido desde el último km de la unidad, por combustible.
-KM_MAX_DELTA_ESPECIAL = 100      # Gas LP / Eléctrico (montacargas, etc.)
-KM_MAX_DELTA_DEFAULT  = 1000     # resto
+# En la práctica son poblaciones DISJUNTAS:
+#   · Gas LP    → montacargas; solo aparecen en Combustible (100 km entre cargas).
+#   · Eléctrico → unidad de reparto; solo aparece en Checklist semanal/mensual,
+#                 donde 100 km era demasiado estrecho para una semana de reparto.
+KM_MAX_DELTA_GASLP     = 100     # Gas LP (montacargas)
+KM_MAX_DELTA_ELECTRICO = 300     # Eléctrico (checklist de reparto)
+KM_MAX_DELTA_DEFAULT   = 1000    # resto
+KM_MAX_DELTA_ESPECIAL  = KM_MAX_DELTA_GASLP   # compat. con el nombre anterior
+
+
+def norm_combustible(valor) -> str:
+    """'Eléctrico' / 'GAS LP' / ' gas lp ' → 'electrico' / 'gaslp'.
+    Igual que normTxt() del front: sin acentos, minúsculas, sin espacios."""
+    txt = unicodedata.normalize("NFD", str(valor or ""))
+    txt = "".join(c for c in txt if not unicodedata.combining(c)).lower()
+    return "".join(txt.split())
+
+
+def max_delta_km(combustible: str | None) -> int:
+    """Tope de avance de km según el combustible de la unidad."""
+    c = norm_combustible(combustible)
+    if "gaslp" in c:
+        return KM_MAX_DELTA_GASLP
+    if "electric" in c:
+        return KM_MAX_DELTA_ELECTRICO
+    return KM_MAX_DELTA_DEFAULT
 
 
 def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | None:
@@ -98,7 +123,7 @@ def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | Non
         nuevo, ult = float(km_nuevo), float(km_ultimo)
     except (TypeError, ValueError):
         return "Kilometraje inválido"
-    max_delta = KM_MAX_DELTA_ESPECIAL if combustible in ("Gas LP", "Electrico") else KM_MAX_DELTA_DEFAULT
+    max_delta = max_delta_km(combustible)
     if nuevo < ult:
         return f"El kilometraje ({nuevo:g}) no puede ser menor al último de la unidad ({ult:g})."
     if nuevo - ult > max_delta:
