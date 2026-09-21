@@ -254,24 +254,22 @@ def campos_de(mod: dict) -> list:
 DOCUMENTOS = [
     # ── De la empresa ──
     {"id": "alta_hacienda", "n": "Alta de Hacienda o modificación de alta", "t": "PDF", "de": "empresa"},
-    {"id": "comp_dom", "n": "Comprobante de domicilio", "t": "PDF", "de": "empresa"},
+    {"id": "comp_dom", "n": "Comprobante de domicilio fiscal", "t": "PDF", "de": "empresa"},
     {"id": "fotos_negocio", "n": "Fotos del negocio e interiores", "t": "JPG", "de": "empresa"},
     {"id": "publicidad", "n": "Publicidad, cuando no hay exhibición", "t": "JPG", "de": "empresa"},
     {"id": "csf", "n": "Constancia de Situación Fiscal, no mayor a 3 meses", "t": "PDF", "de": "empresa"},
-    {"id": "rfc_doc", "n": "Cédula de identificación fiscal (RFC)", "t": "PDF", "de": "empresa"},
-    {"id": "comp_dom_ofi", "n": "Comprobante de domicilio de oficinas", "t": "PDF", "de": "empresa"},
     {"id": "acta_const", "n": "Acta constitutiva", "t": "PDF", "pm": True, "de": "empresa"},
-    {"id": "edos_cuenta", "n": "Últimos 2 estados de cuenta bancarios", "t": "PDF", "de": "empresa"},
-    # ── Del dueño o representante legal ──
-    {"id": "ine_rep", "n": "INE del dueño o representante legal", "t": "JPG", "de": "representante"},
-    {"id": "poder", "n": "Poder notarial del representante", "t": "PDF", "pm": True, "de": "representante"},
+    {"id": "edos_cuenta", "n": "Estados de cuenta bancarios de los últimos 3 meses",
+     "t": "PDF", "de": "empresa"},
+    # ── Del apoderado o representante legal ──
+    {"id": "ine_rep", "n": "INE del apoderado y/o representante legal", "t": "JPG", "de": "representante"},
     {"id": "comp_dom_dueno",
-     "n": "Comprobante de domicilio particular del principal accionista o dueño",
+     "n": "Comprobante de domicilio del apoderado y/o representante legal",
      "t": "PDF", "de": "representante"},
-    # ── Del aval y obligados solidarios ──
-    {"id": "ine_aval", "n": "INE del aval", "t": "JPG", "de": "aval"},
-    {"id": "comp_dom_aval", "n": "Comprobante de domicilio particular del aval", "t": "PDF", "de": "aval"},
-    {"id": "ine_obligados", "n": "INE del obligado solidario 1 y 2", "t": "JPG", "de": "aval"},
+    # ── Del obligado solidario (aval) ──
+    {"id": "ine_aval", "n": "INE del obligado solidario (aval)", "t": "JPG", "de": "aval"},
+    {"id": "comp_dom_aval", "n": "Comprobante de domicilio del obligado solidario (aval)",
+     "t": "PDF", "de": "aval"},
 ]
 _DOC_POR_ID = {d["id"]: d for d in DOCUMENTOS}
 
@@ -316,9 +314,9 @@ TIPOS = {
         "formato": "CYC-FT-001 Rev.03",
         "desc": "Línea de crédito: referencias, bancos, avales y buró.",
         "modulos": ["fiscal", "credito", "buro"],
-        "docs": ["rfc_doc", "alta_hacienda", "csf", "comp_dom", "comp_dom_ofi",
-                 "comp_dom_dueno", "acta_const", "poder", "ine_rep", "edos_cuenta",
-                 "ine_aval", "comp_dom_aval", "ine_obligados"],
+        # Los 8 del expediente de crédito, en el orden en que los pide GPA.
+        "docs": ["csf", "comp_dom", "acta_const", "ine_rep", "ine_aval",
+                 "comp_dom_dueno", "comp_dom_aval", "edos_cuenta"],
         "autoriza": "dosNiveles",  # nivel 1: 1 firma · nivel 2: 2 firmas distintas
     },
 }

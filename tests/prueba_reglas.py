@@ -115,7 +115,7 @@ ok(set(caso_alta["docs"]) == set(c.TIPOS["alta"]["docs"]),
 ok("edos_cuenta" not in caso_alta["docs"], "un alta no puede pedir estados de cuenta bancarios")
 
 caso_cred, clave_cred = e.crear_caso(nueva("credito"), ADMIN)
-ok(len(caso_cred["docs"]) == 13, "un crédito guarda sus 13 documentos")
+ok(len(caso_cred["docs"]) == 8, "un crédito guarda sus 8 documentos")
 ok(caso_cred["folio"] != caso_alta["folio"], "los folios no se repiten")
 
 # Los documentos y secciones NO se eligen: van completos por tipo de solicitud.
@@ -124,7 +124,7 @@ recortado["docs"] = {"csf": True}                 # la pantalla manda solo uno
 recortado["modulos"] = {"fiscal": True}           # y una sola sección
 caso_r, _ = e.crear_caso(recortado, ADMIN)
 ok(set(caso_r["docs"]) == set(c.TIPOS["credito"]["docs"]) and all(caso_r["docs"].values()),
-   "aunque la pantalla mande 1 documento, el servidor pone los 13 del tipo")
+   "aunque la pantalla mande 1 documento, el servidor pone los 8 del tipo")
 ok(set(caso_r["modulos"]) == set(c.TIPOS["credito"]["modulos"]) and all(caso_r["modulos"].values()),
    "y las 3 secciones completas, no la que mandó la pantalla")
 vacio = nueva("alta")
@@ -170,7 +170,7 @@ ok(c.valores_fijos({"tipo": "credito", "modulos": {"fiscal": 1, "credito": 1, "b
 
 # ── De quién es cada documento ──
 sin_grupo = [d["id"] for d in c.DOCUMENTOS if d.get("de") not in c.ORDEN_GRUPOS]
-ok(not sin_grupo, f"los 15 documentos dicen de quién son (sin grupo: {sin_grupo})")
+ok(not sin_grupo, f"los {len(c.DOCUMENTOS)} documentos dicen de quién son (sin grupo: {sin_grupo})")
 ok(c.documento("ine_rep")["de"] == "representante" and c.documento("ine_aval")["de"] == "aval",
    "el INE del representante y el del aval quedan en grupos distintos")
 ok(len({c.GRUPOS_DOC[g]["c"] for g in c.ORDEN_GRUPOS}) == 3,
@@ -181,8 +181,9 @@ fis = nueva("credito", regimen="612", rfc="CAGR850101AB1")
 caso_fis, clave_fis = e.crear_caso(fis, VENTAS)
 aplic_fis = c.docs_aplicables("credito", caso_fis["docs"], c.persona_de("612", "CAGR850101AB1"))
 aplic_mor = c.docs_aplicables("credito", caso_cred["docs"], c.persona_de("601", "ASV180412H23"))
-ok(len(aplic_mor) - len(aplic_fis) == 2, f"persona física pide 2 documentos menos ({len(aplic_fis)} vs {len(aplic_mor)})")
-ok(all(d["id"] not in ("acta_const", "poder") for d in aplic_fis), "sin acta constitutiva ni poder notarial")
+ok(len(aplic_mor) - len(aplic_fis) == 1,
+   f"persona física pide un documento menos: el acta constitutiva ({len(aplic_fis)} vs {len(aplic_mor)})")
+ok(all(d["id"] != "acta_const" for d in aplic_fis), "a persona física no se le pide acta constitutiva")
 ok(c.persona_de("626", "ASV180412H23") == "Moral" and c.persona_de("626", "CAGR850101AB1") == "Física",
    "en RESICO (626) el RFC decide el tipo de persona")
 ok(bool(c.conflicto_regimen_rfc("601", "CAGR850101AB1")), "avisa si el régimen y el RFC no concuerdan")
