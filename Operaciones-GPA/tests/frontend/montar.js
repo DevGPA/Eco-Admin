@@ -46,7 +46,7 @@ const metodos={
 class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>metodos[k]||(async()=>[]) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   {serviceWorker:undefined},localStorage,noop,console);
 

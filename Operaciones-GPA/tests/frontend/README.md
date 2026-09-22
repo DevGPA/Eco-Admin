@@ -47,6 +47,13 @@ dinámicos (FormDinamico):
 - Un borrador anterior a este cambio se migra solo y no traba al operador.
 - El reporte de carga sigue exigiendo la foto de ANTES y la de FINALIZAR.
 
+`test_escala_na.js` — opción N/A en la bitácora de extintores:
+- «Ruedas en buen estado (si aplica)» tiene Sí / No / N/A, con N/A en verde.
+- Al marcar N/A no se pide foto ni descripción del daño y el extintor queda
+  «Óptimo / operativo»; al marcar «No» sí pide evidencia y queda en rojo.
+- Los registros anteriores no cambian de significado ([0] sigue siendo «Sí» y
+  [1] «No»), porque la opción nueva se agregó AL FINAL.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.
