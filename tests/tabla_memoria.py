@@ -90,7 +90,10 @@ class TablaMemoria:
         else:
             raise NotImplementedError(f"expresión no soportada: {expr}")
 
-        return {"Attributes": nuevos} if ReturnValues else {}
+        if not ReturnValues:
+            return {}
+        # ALL_NEW devuelve el item completo; UPDATED_NEW solo lo que cambió.
+        return {"Attributes": dict(item) if str(ReturnValues).startswith("ALL_") else nuevos}
 
     # ── ayuda para las pruebas ──
     def casos(self):

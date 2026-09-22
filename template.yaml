@@ -176,6 +176,18 @@ Resources:
         Firmantes:
           Type: HttpApi
           Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /firmantes }
+        VetoListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: GET, Path: /veto }
+        VetoAgregar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /veto }
+        VetoQuitar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /veto/quitar }
+        VetoRevisar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref AltaHttpApi, Method: POST, Path: /veto/revisar }
 
       Policies:
         - DynamoDBCrudPolicy:

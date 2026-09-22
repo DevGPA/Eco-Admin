@@ -193,6 +193,12 @@ class GpaApi {
   }
   rechazar(folio, motivo) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/rechazar`, { motivo }); }
 
+  // ── Clientes vetados: a quiénes NO se les da de alta ──
+  veto() { return this._http("GET", "/veto"); }
+  vetoAgregar(datos) { return this._http("POST", "/veto", datos); }
+  vetoQuitar(id, motivo) { return this._http("POST", "/veto/quitar", { id, motivo }); }
+  vetoRevisar(datos) { return this._http("POST", "/veto/revisar", datos); }
+
   // ── Usuarios ──
   usuarios() { return this._http("GET", "/usuarios"); }
   guardarUsuario(datos) { return this._http("POST", "/usuarios", datos); }

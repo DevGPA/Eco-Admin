@@ -10,11 +10,11 @@ import secrets
 
 from boto3.dynamodb.conditions import Attr
 
-from catalogos import (TIPOS, ESTADOS, ESTADOS_CERRADOS,
+from catalogos import (TIPOS, ESTADOS, ESTADOS_CERRADOS, ROL_ADMIN,
                        ESTADOS_ABIERTOS_AL_CLIENTE, docs_aplicables, persona_de,
                        modulos_activos, campos_de, documento, revisa_campo,
                        revisa_captura, valores_fijos, etiquetas_campos,
-                       campo_fijo, ID_OTRO, OTRO)
+                       campo_fijo, ID_OTRO)
 from . import tabla
 from .modelos import (SK_META, MAX_INTENTOS, pk_caso, sk_log, llaves_caso, iso_mx,
                       legible_mx, prefijo_folio, arma_folio, nuevo_token, nueva_clave,
@@ -22,6 +22,7 @@ from .modelos import (SK_META, MAX_INTENTOS, pk_caso, sk_log, llaves_caso, iso_m
                       id_documento_valido, vence_en, ya_vencio, fecha_larga,
                       sk_comentario)
 from .queries import get_caso
+from . import veto as lista_veto
 
 
 class ReglaRota(Exception):
@@ -63,7 +64,9 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
     tipo = TIPOS[tipo_id]
 
     razon = limpia_texto(datos.get("razonSocial"))
-    rfc = limpia_texto(datos.get("rfc")).upper().replace(" ", "")
+    # Se quitan guiones, puntos y espacios antes de medirlo: quien pega
+    # "DMO-150301-XY4" tiene un RFC válido, no uno de 14 caracteres.
+    rfc = "".join(ch for ch in limpia_texto(datos.get("rfc")).upper() if ch.isalnum())
     correo = limpia_texto(datos.get("correo"))
     celular = limpia_texto(datos.get("celular"))
     if not razon:
@@ -85,6 +88,34 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
         if not "".join(ch for ch in monto_req if ch.isdigit()):
             raise ReglaRota("Falta el monto de crédito requerido. Lo captura GPA, "
                             "no el cliente.")
+
+    # ¿Está en la lista de clientes a los que GPA no le da de alta?
+    hits = lista_veto.revisa({
+        "rfc": rfc, "razonSocial": razon, "correo": correo, "celular": celular,
+        "nombreComercial": limpia_texto(datos.get("nombreComercial")),
+    })
+    omitido = None
+    if hits["bloqueos"]:
+        motivo_veto = limpia_texto(datos.get("motivoVeto"), area=True)
+        es_admin = usuario.get("rol") == ROL_ADMIN
+        # Solo un Administrador levanta el bloqueo, y tiene que decir por qué:
+        # esa justificación se queda en el expediente y en la bitácora.
+        if not (datos.get("omitirVeto") and es_admin and motivo_veto):
+            detalle = lista_veto.resumen(hits)
+            if es_admin:
+                raise ReglaRota(
+                    f"Este cliente está en la lista de los que no se pueden dar de alta: "
+                    f"{detalle}. Como Administrador puede continuar, pero tiene que escribir "
+                    "por qué; quedará en el expediente.")
+            raise ReglaRota(
+                f"Este cliente está en la lista de los que no se pueden dar de alta: "
+                f"{detalle}. Si cree que es un error, pídale a un Administrador que lo revise.")
+        omitido = {
+            "motivo": motivo_veto,
+            "quien": usuario.get("correo", ""), "nombreQuien": usuario.get("nombre", ""),
+            "cuando": iso_mx(), "cuandoLegible": legible_mx(),
+            "coincidencias": hits["bloqueos"],
+        }
 
     # Los módulos y documentos NO se eligen: cada tipo de solicitud trae los suyos
     # completos. Un alta pide sus 5 documentos y un crédito sus 13, siempre.
@@ -117,6 +148,9 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
         "valores": {}, "tablasVal": {}, "adjuntos": {}, "marcas": {},
         "autorizaciones": [], "rechazo": "",
         "montoRequerido": monto_req,
+        # Si se levantó un veto, queda escrito en el expediente para siempre.
+        "vetoOmitido": omitido,
+        "avisosVeto": hits["avisos"],
         "vence": vence_en(),
         "estado": "enviada", "creado": creado, "creadoPor": usuario.get("correo", ""),
         "creadoPorNombre": usuario.get("nombre", ""),
@@ -126,6 +160,12 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
     tabla().put_item(Item=caso, ConditionExpression=Attr("PK").not_exists())
     log(folio, "creada", usuario.get("correo", ""),
         f"{tipo['nombre']} · {razon} · liga y clave generadas")
+    if omitido:
+        log(folio, "veto-omitido", usuario.get("correo", ""),
+            "Se creó pese a estar en la lista de vetados. Motivo: " + omitido["motivo"])
+    for aviso in hits["avisos"]:
+        log(folio, "veto-aviso", usuario.get("correo", ""),
+            f"Se parece {aviso['similitud']}% a «{aviso['vetado']}» ({aviso['motivo']})")
     publico = {k: v for k, v in caso.items() if k not in ("claveHash", "claveSal")}
     return publico, clave
 

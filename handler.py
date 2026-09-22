@@ -27,6 +27,10 @@
 #   POST  /casos/{folio}/anexo-url        {nombre, contentType, tam} → URL de subida
 #   POST  /casos/{folio}/anexo            {nombre, key, tam, descripcion} o {quitar}
 #   GET   /usuarios · POST /usuarios      panel de usuarios (solo Administrador)
+#   GET   /veto                           lista de clientes vetados (Administrador)
+#   POST  /veto                           agregar a la lista (Administrador)
+#   POST  /veto/quitar                    sacar de la lista (Administrador)
+#   POST  /veto/revisar                   ¿este prospecto está vetado?
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -48,6 +52,7 @@ from db.escritura import (ReglaRota, crear_caso, regenerar_clave, verificar_clav
 from db.queries import (get_caso, listar_casos, bitacora, comentarios,
                         resumen_bandeja)
 from db.modelos import dias_desde, fecha_larga, ya_vencio
+from db import veto as lista_veto
 from s3.documentos import (DocumentoInvalido, ID_INTERNO, url_subida, url_lectura,
                            resuelve_urls)
 import auth_cognito
@@ -352,6 +357,36 @@ def _interno(ruta: str, event, usuario: dict):
             return _err(f"Su rol ({rol}) no puede administrar usuarios.", 403)
         guardado = auth_cognito.guardar_usuario(_body(event))
         return _resp({"usuario": guardado, "firmas": auth_cognito.salud_firmas()})
+
+    if ruta == "GET /veto":
+        if not puede(rol, "veto"):
+            return _err(f"Su rol ({rol}) no puede ver la lista de clientes vetados.", 403)
+        return _resp({"veto": lista_veto.listar(solo_activos=False)})
+
+    if ruta == "POST /veto":
+        if not puede(rol, "veto"):
+            return _err(f"Su rol ({rol}) no puede administrar la lista de vetados.", 403)
+        try:
+            return _resp({"entrada": lista_veto.agregar(_body(event), usuario),
+                          "veto": lista_veto.listar(solo_activos=False)})
+        except ValueError as e:
+            return _err(str(e), 400)
+
+    if ruta == "POST /veto/quitar":
+        if not puede(rol, "veto"):
+            return _err(f"Su rol ({rol}) no puede administrar la lista de vetados.", 403)
+        cuerpo_v = _body(event)
+        try:
+            lista_veto.quitar(str(cuerpo_v.get("id") or ""), cuerpo_v.get("motivo", ""), usuario)
+        except ValueError as e:
+            return _err(str(e), 400)
+        return _resp({"veto": lista_veto.listar(solo_activos=False)})
+
+    if ruta == "POST /veto/revisar":
+        # Se consulta mientras se captura, para avisar antes de generar la liga.
+        if not puede(rol, "crear"):
+            return _err(f"Su rol ({rol}) no puede crear pre-solicitudes.", 403)
+        return _resp(lista_veto.revisa(_body(event)))
 
     if ruta == "GET /firmantes":
         return _resp({"nivel1": auth_cognito.elegibles(1), "nivel2": auth_cognito.elegibles(2)})

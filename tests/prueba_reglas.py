@@ -13,11 +13,15 @@ os.environ.setdefault("USER_POOL_ID", "prueba")
 from tests.tabla_memoria import TablaMemoria           # noqa: E402
 import db.queries as q                                  # noqa: E402
 import db.escritura as e                                # noqa: E402
+import db.veto as v                                     # noqa: E402
 import catalogos as c                                   # noqa: E402
 
 MEM = TablaMemoria()
+# Cada módulo guarda su propia referencia a tabla(), así que hay que sustituirlas
+# TODAS aquí arriba: crear_caso consulta la lista de vetados en cada alta.
 q.tabla = lambda: MEM
 e.tabla = lambda: MEM
+v.tabla = lambda: MEM
 
 FALLAS = []
 TOTAL = 0
@@ -430,6 +434,75 @@ ok(any(m.get("tipo") == "firma-n1" for m in hilo_f),
 e.rechazar(ff, "Las referencias no confirmaron la relación.", ADMIN)
 ok(any(m.get("tipo") == "rechazo" for m in q.comentarios(ff)),
    "el rechazo también queda en el hilo, con su motivo")
+
+print("\n== 13. Clientes que no se pueden dar de alta ==")
+
+
+
+ok(c.puede(c.ROL_ADMIN, "veto") and not c.puede(c.ROL_COMITE, "veto"),
+   "solo el Administrador administra la lista de vetados")
+
+for malo, desc in [({"razonSocial": ""}, "sin nombre ni RFC"), ({"rfc": "VET010101AB1"}, "sin motivo")]:
+    try:
+        v.agregar(malo, ADMIN)
+        ok(False, f"deja agregar {desc} <<< no debería")
+    except ValueError as ex:
+        ok(True, f"no deja agregar {desc}: «{str(ex)[:40]}…»")
+
+v.agregar({"razonSocial": "Distribuidora Moroso, S.A. de C.V.",
+           "nombreComercial": "Moroso", "rfc": "DMO150301XY4",
+           "correo": "pagos@moroso.mx", "celular": "33 9999 8888",
+           "motivo": "Cartera incobrable desde 2024, pasó a jurídico."}, ADMIN)
+ok(len(v.listar()) == 1, "queda en la lista")
+
+# ── Lo idéntico bloquea, aunque venga escrito distinto ──
+def prospecto(**extra):
+    return {**nueva("alta"), "razonSocial": "Empresa Cualquiera", "rfc": "ECU010101AB1", **extra}
+
+rompe(lambda: e.crear_caso(prospecto(rfc="dmo-150301-xy4"), VENTAS), "no se pueden dar de alta",
+      "el mismo RFC con guiones no pasa")
+rompe(lambda: e.crear_caso(prospecto(razonSocial="DISTRIBUIDORA MOROSO S DE RL DE CV"), VENTAS),
+      "no se pueden dar de alta", "el mismo nombre con otra forma societaria tampoco")
+rompe(lambda: e.crear_caso(prospecto(celular="+52 33 9999 8888"), VENTAS),
+      "no se pueden dar de alta", "ni el mismo celular con lada de país")
+rompe(lambda: e.crear_caso(prospecto(correo="Pagos@Moroso.MX"), VENTAS),
+      "no se pueden dar de alta", "ni el mismo correo en mayúsculas")
+
+# ── Parecido: avisa, pero deja pasar ──
+casi = e.crear_caso(prospecto(razonSocial="Distribuidora Moroso del Norte, S.A. de C.V."), VENTAS)[0]
+ok(casi["folio"], "un nombre parecido SÍ deja crear la solicitud")
+ok(casi.get("avisosVeto"), "pero queda el aviso guardado en el expediente")
+ok(any(l["accion"] == "veto-aviso" for l in MEM.logs(casi["folio"])),
+   "y también en la bitácora")
+
+# ── El levantamiento es solo del Administrador, y con motivo ──
+rompe(lambda: e.crear_caso({**prospecto(rfc="DMO150301XY4"), "omitirVeto": True,
+                            "motivoVeto": "Yo digo que sí"}, VENTAS),
+      "pídale a un administrador", "Ventas no puede levantar el bloqueo")
+rompe(lambda: e.crear_caso({**prospecto(rfc="DMO150301XY4"), "omitirVeto": True}, ADMIN),
+      "tiene que escribir por qué", "ni el Administrador sin escribir el motivo")
+
+levantado = e.crear_caso({**prospecto(rfc="DMO150301XY4"), "omitirVeto": True,
+                          "motivoVeto": "Homónimo confirmado con Crédito; otro domicilio."},
+                         ADMIN)[0]
+ok(levantado["vetoOmitido"]["motivo"].startswith("Homónimo"),
+   "con motivo, el Administrador sí puede, y el motivo queda en el expediente")
+ok(levantado["vetoOmitido"]["quien"] == ADMIN["correo"], "con su nombre")
+ok(any(l["accion"] == "veto-omitido" for l in MEM.logs(levantado["folio"])),
+   "y en la bitácora, para poder explicarlo después")
+
+# ── Salir de la lista ──
+vid = v.listar()[0]["id"]
+try:
+    v.quitar(vid, "", ADMIN)
+    ok(False, "deja quitar sin motivo <<< no debería")
+except ValueError:
+    ok(True, "no deja sacar de la lista sin escribir por qué")
+v.quitar(vid, "Liquidó su adeudo el 15/09/2026.", ADMIN)
+ok(not v.listar(), "sale de la lista")
+ok(len(v.listar(solo_activos=False)) == 1, "pero no se borra: queda el registro de la baja")
+libre = e.crear_caso(prospecto(rfc="DMO150301XY4"), VENTAS)[0]
+ok(libre["folio"], "y ya se le puede dar de alta con normalidad")
 
 print("\n" + "=" * 62)
 if FALLAS:

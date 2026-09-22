@@ -121,6 +121,9 @@ PERMISOS = {
     # anexa, pero sigue sin poder firmar.
     "comentar":  {ROL_ADMIN, ROL_COMITE, ROL_VENTAS},
     "usuarios":  {ROL_ADMIN},
+    # Quien administra la lista de clientes vetados decide a quien NO se le
+    # vende: es una decision de direccion, no de captura.
+    "veto":      {ROL_ADMIN},
 }
 
 

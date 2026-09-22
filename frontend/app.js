@@ -28,6 +28,9 @@ var S = {
   firmaSel: {},
   firmando: null,        // {nivel, slot} mientras se escribe el motivo
   analisis: { comentarios: [], anexos: [] },
+  veto: [],
+  vetoHits: null,        // resultado de revisar al prospecto contra la lista
+  vetoTimer: null,
   cargando: false,
   error: "",
   aviso: "",
@@ -712,6 +715,62 @@ function actualizaPorRfc() {
   }
 }
 
+/** Pinta el resultado de revisar al prospecto contra la lista de vetados. */
+function bloqueVeto(n) {
+  var h = S.vetoHits;
+  if (!h || (!h.bloqueos.length && !h.avisos.length)) return "";
+  var esAdmin = api.sesion && api.sesion.rol === "Administrador";
+
+  var detalle = function (x, parecido) {
+    return "<li>El <b>" + esc(x.etiqueta) + "</b> " +
+      (parecido ? "se parece " + x.similitud + "% a" : "coincide con") +
+      " <b>" + esc(x.vetado) + "</b> — " + esc(x.motivo) +
+      (x.desde ? ' <span class="dim">(en la lista desde ' + esc(x.desde) + ")</span>" : "") + "</li>";
+  };
+
+  var salida = "";
+  if (h.bloqueos.length) {
+    salida += '<div class="banner banner-stop"><span>' +
+      "<b>No se le puede dar de alta a este cliente.</b>" +
+      '<ul class="lista-veto">' + h.bloqueos.map(function (b) { return detalle(b, false); }).join("") + "</ul>" +
+      (esAdmin
+        ? "Como Administrador puede continuar, pero tiene que escribir por qué. "
+          + "Su justificación queda en el expediente para siempre."
+        : "Si cree que es un error, pídale a un Administrador que lo revise.") +
+      "</span></div>";
+    if (esAdmin) {
+      salida += '<div class="field"><label for="motivo-veto">Motivo para darlo de alta de todos modos ' +
+        '<span class="req">*</span></label>' +
+        '<textarea id="motivo-veto" rows="2" placeholder="Ej. Es un homónimo: RFC distinto y otro domicilio. ' +
+        'Confirmado con Crédito el 22/09.">' + esc(n.motivoVeto || "") + "</textarea></div>";
+    }
+  }
+  if (h.avisos.length) {
+    salida += '<div class="banner banner-warn"><span><b>Se parece a un cliente vetado.</b> ' +
+      "No lo detiene, pero revíselo antes de seguir." +
+      '<ul class="lista-veto">' + h.avisos.map(function (a) { return detalle(a, true); }).join("") + "</ul>" +
+      "</span></div>";
+  }
+  return salida;
+}
+
+/** Revisa contra la lista mientras se captura, sin castigar cada tecla. */
+function revisaVeto() {
+  var n = S.nueva;
+  if (!n) return;
+  if (S.vetoTimer) clearTimeout(S.vetoTimer);
+  S.vetoTimer = setTimeout(function () {
+    var datos = { rfc: n.rfc, razonSocial: n.razon_social, nombreComercial: n.nombre_comercial,
+                  correo: n.correo, celular: n.celular };
+    if (!datos.rfc && !datos.razonSocial) { S.vetoHits = null; return; }
+    api.vetoRevisar(datos).then(function (r) {
+      var antes = JSON.stringify(S.vetoHits);
+      S.vetoHits = r;
+      if (JSON.stringify(r) !== antes) render();
+    }).catch(function () { /* si falla la revisión previa, el servidor bloquea igual al crear */ });
+  }, 500);
+}
+
 function vistaNueva() {
   var n = S.nueva;
   var T = CAT.tipos[n.tipo];
@@ -808,6 +867,7 @@ function vistaNueva() {
         : "") +
       '<div id="conflicto-rfc">' +
       (conflicto ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(conflicto) + "</span></div>" : "") +
+      bloqueVeto(n) +
       "</div></div>" +
       '<div class="card pad stack"><div class="spread"><div class="eyebrow">3 · Qué se le pide</div>' +
       '<span class="dim" id="conteo-docs">' + nDocs + " documento" + (nDocs === 1 ? "" : "s") + "</span></div>" +
@@ -1044,6 +1104,18 @@ function vistaExpediente() {
       av.pct + '%</div><div class="dim">' + av.hechos + " de " + av.total + " puntos</div></div></div>" +
       '<div class="progress"><i style="width:' + av.pct + '%"></i></div>' +
       (c.conflictoRfc ? '<div class="banner banner-warn"><span><b>Revise el régimen o el RFC.</b> ' + esc(c.conflictoRfc) + "</span></div>" : "") +
+      (c.vetoOmitido
+        ? '<div class="banner banner-stop"><span><b>Este cliente estaba en la lista de vetados ' +
+          "y se dio de alta de todos modos.</b><br>" + esc(c.vetoOmitido.motivo) +
+          '<br><span class="dim">Lo autorizó ' + esc(c.vetoOmitido.nombreQuien || c.vetoOmitido.quien) +
+          " el " + esc(c.vetoOmitido.cuandoLegible || "") + ".</span></span></div>"
+        : "") +
+      ((c.avisosVeto || []).length
+        ? '<div class="banner banner-warn"><span><b>Se parece a un cliente vetado.</b> ' +
+          esc(c.avisosVeto.map(function (a) {
+            return a.similitud + "% a «" + a.vetado + "» (" + a.motivo + ")";
+          }).join(" · ")) + "</span></div>"
+        : "") +
       (c.vencida
         ? '<div class="banner banner-stop"><span><b>La liga venció el ' + esc(c.venceLegible) +
           ".</b> El cliente ya no puede entrar. Genere una clave nueva: eso reinicia los 15 días.</span></div>"
@@ -1082,6 +1154,53 @@ function vistaExpediente() {
         "incorrecto o incompleto; al devolver, el cliente solo verá lo señalado.</p>" : "") +
       datos + "</div>" +
     "</div></div>";
+}
+
+function vistaVeto() {
+  var activos = S.veto.filter(function (v) { return v.activo !== false; });
+  var bajas = S.veto.filter(function (v) { return v.activo === false; });
+
+  function fila(v) {
+    return "<tr>" +
+      '<td><div style="font-weight:600">' + esc(v.razonSocial || "—") + "</div>" +
+      (v.nombreComercial ? '<div class="dim" style="font-size:12.5px">' + esc(v.nombreComercial) + "</div>" : "") +
+      '<div class="dim mono" style="font-size:12px">' + esc(v.rfc || "sin RFC") + "</div></td>" +
+      '<td style="font-size:13.5px">' + esc(v.motivo) + "</td>" +
+      '<td class="dim" style="font-size:12.5px">' + esc(v.nombreQuien || v.quien) + "<br>" + esc(v.cuandoLegible || "") + "</td>" +
+      "<td>" + (v.activo === false
+        ? '<span class="dim">Quitado' + (v.motivoBaja ? ": " + esc(v.motivoBaja) : "") + "</span>"
+        : '<button class="btn btn-sm" data-quitar-veto="' + esc(v.id) + '">Quitar de la lista</button>') +
+      "</td></tr>";
+  }
+
+  return '<div class="stack">' + bannerError() +
+    '<div><h1 style="font-size:22px">Clientes vetados</h1>' +
+    '<p class="dim" style="margin:3px 0 0">A estos no se les da de alta. Al capturar una ' +
+    "pre-solicitud, el sistema compara RFC, razón social, nombre comercial, correo y celular " +
+    "contra esta lista.</p></div>" +
+    '<div class="card pad"><div class="tablewrap"><table class="grid-t">' +
+    "<thead><tr><th>Cliente</th><th>Por qué</th><th>Lo puso</th><th></th></tr></thead><tbody>" +
+    (activos.map(fila).join("") || '<tr><td colspan="4" class="dim">La lista está vacía.</td></tr>') +
+    "</tbody></table></div></div>" +
+    '<div class="card pad stack"><div class="eyebrow">Agregar a la lista</div>' +
+    '<p class="dim" style="margin:0">Basta la razón social o el RFC. Entre más datos ponga, ' +
+    "más difícil será que el cliente se cuele con otro nombre.</p>" +
+    '<div class="grid">' +
+      '<div class="field f-full"><label for="v_razon">Razón social</label><input id="v_razon"></div>' +
+      '<div class="field f-half"><label for="v_comercial">Nombre comercial</label><input id="v_comercial"></div>' +
+      '<div class="field f-half"><label for="v_rfc">RFC</label><input id="v_rfc" class="mono"></div>' +
+      '<div class="field f-half"><label for="v_correo">Correo</label><input id="v_correo"></div>' +
+      '<div class="field f-half"><label for="v_celular">Celular</label><input id="v_celular" class="mono"></div>' +
+      '<div class="field f-full"><label for="v_motivo">¿Por qué no se le puede dar de alta? ' +
+      '<span class="req">*</span></label>' +
+      '<textarea id="v_motivo" rows="2" placeholder="Ej. Cartera incobrable desde 2024, pasó a jurídico."></textarea></div>' +
+    "</div>" +
+    '<button class="btn btn-primary" id="btn-veto-agregar">Agregar</button></div>' +
+    (bajas.length
+      ? '<div class="card pad stack"><div class="eyebrow">Salieron de la lista (' + bajas.length + ")</div>" +
+        '<div class="tablewrap"><table class="grid-t"><tbody>' + bajas.map(fila).join("") + "</tbody></table></div></div>"
+      : "") +
+    "</div>";
 }
 
 function vistaUsuarios() {
@@ -1145,7 +1264,9 @@ function render() {
     '<button data-ir="nueva" aria-current="' + (S.vista === "nueva") + '"' +
       (rol === "Consulta" ? " disabled" : "") + ">Nueva pre-solicitud</button>" +
     '<button data-ir="usuarios" aria-current="' + (S.vista === "usuarios") + '"' +
-      (rol !== "Administrador" ? " disabled" : "") + ">Usuarios</button>";
+      (rol !== "Administrador" ? " disabled" : "") + ">Usuarios</button>" +
+    '<button data-ir="veto" aria-current="' + (S.vista === "veto") + '"' +
+      (rol !== "Administrador" ? " disabled" : "") + ">Clientes vetados</button>";
   $("#sesion-box").innerHTML =
     '<span class="dim">' + esc(api.sesion.nombre) + " · " + esc(rol) + "</span>" +
     '<button class="btn btn-sm" id="btn-salir">Salir</button>';
@@ -1153,6 +1274,7 @@ function render() {
   var cuerpo =
     S.vista === "nueva" ? vistaNueva() :
     S.vista === "usuarios" ? vistaUsuarios() :
+    S.vista === "veto" ? vistaVeto() :
     S.vista === "expediente" ? vistaExpediente() : vistaBandeja();
   $("#app").innerHTML = '<div class="wrap">' + cuerpo + "</div>";
 }
@@ -1178,6 +1300,9 @@ var irA = conError(function (vista, folio) {
   if (vista === "nueva") { S.nueva = S.nueva || nuevaVacia(); S.ligaNueva = null; return; }
   if (vista === "usuarios") {
     return api.usuarios().then(function (r) { S.usuarios = r.usuarios || []; S.firmas = r.firmas; });
+  }
+  if (vista === "veto") {
+    return api.veto().then(function (r) { S.veto = r.veto || []; });
   }
   if (vista === "expediente") {
     S.folio = folio;
@@ -1315,6 +1440,9 @@ document.addEventListener("click", function (ev) {
         rfc: n.rfc, regimen: n.regimen, contacto: n.contacto, correo: n.correo,
         celular: n.celular, sucursal: n.sucursal, giro: n.giro, clasificacion: n.clasificacion,
         montoRequerido: n.montoRequerido,
+        // Si el prospecto está vetado, un Administrador puede levantarlo con motivo.
+        omitirVeto: !!(S.vetoHits && S.vetoHits.bloqueos.length),
+        motivoVeto: (($("#motivo-veto") || {}).value || "").trim(),
         // No se mandan módulos ni documentos: los fija el servidor según el tipo.
       }).then(function (r) {
         var base = (window.GPA_CONFIG && window.GPA_CONFIG.portalUrl) || (location.origin + location.pathname.replace(/[^/]*$/, ""));
@@ -1331,6 +1459,7 @@ document.addEventListener("click", function (ev) {
             r.clave + "\n\nNo la comparta. Sirve para entrar las veces que necesite.",
         };
         S.nueva = nuevaVacia(n.tipo);
+        S.vetoHits = null;
       });
     })();
     return;
@@ -1414,6 +1543,34 @@ document.addEventListener("click", function (ev) {
   }
 
   // ── usuarios ──
+  if (t.id === "btn-veto-agregar") {
+    var nuevoVeto = {
+      razonSocial: ($("#v_razon") || {}).value || "",
+      nombreComercial: ($("#v_comercial") || {}).value || "",
+      rfc: ($("#v_rfc") || {}).value || "",
+      correo: ($("#v_correo") || {}).value || "",
+      celular: ($("#v_celular") || {}).value || "",
+      motivo: ($("#v_motivo") || {}).value || "",
+    };
+    conError(function () {
+      return api.vetoAgregar(nuevoVeto).then(function (r) {
+        S.veto = r.veto || [];
+        toast("Agregado a la lista.");
+      });
+    })();
+    return;
+  }
+  if (d.quitarVeto) {
+    var motivoBaja = window.prompt("¿Por qué se saca de la lista? Queda registrado.", "");
+    if (!motivoBaja || !motivoBaja.trim()) return;
+    conError(function () {
+      return api.vetoQuitar(d.quitarVeto, motivoBaja.trim()).then(function (r) {
+        S.veto = r.veto || [];
+        toast("Salió de la lista.");
+      });
+    })();
+    return;
+  }
   if (t.id === "btn-nuevo-usuario") {
     var datos = {
       nombre: $("#u_nombre").value, correo: ($("#u_correo").value || "").trim().toLowerCase(),
@@ -1453,6 +1610,9 @@ document.addEventListener("input", function (ev) {
     // Aquí NO se llama a render(). Redibujar el formulario destruye el campo que
     // se está escribiendo y le quita el foco: obligaba a hacer clic tras cada letra.
     actualizaPorRfc();
+    if (["rfc", "razon_social", "nombre_comercial", "correo", "celular"].indexOf(d.nueva) !== -1) {
+      revisaVeto();
+    }
   }
 });
 
