@@ -39,6 +39,14 @@ dinámicos (FormDinamico):
   con retraso, que sí llegó a resucitarlo).
 - La vista previa de Admin no deja borradores.
 
+`test_foto_km_solicitud.js` — foto del kilometraje en Combustible:
+- La solicitud NO deja avanzar sin la foto del odómetro, y lo explica en pantalla.
+- Las fotos de apoyo (tanque) siguen siendo opcionales.
+- Lo que se envía lleva la foto del km como principal y al frente de la
+  evidencia, sin duplicarla.
+- Un borrador anterior a este cambio se migra solo y no traba al operador.
+- El reporte de carga sigue exigiendo la foto de ANTES y la de FINALIZAR.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

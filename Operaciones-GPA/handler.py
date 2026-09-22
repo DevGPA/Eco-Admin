@@ -285,6 +285,34 @@ def lambda_handler(event, context):
 
 
 # ── Operaciones de registro ──────────────────────────────────────
+def _foto_ok(v) -> bool:
+    """Una evidencia es válida si llegó como llave de S3 (o data URL) no vacía.
+    El cliente sube las imágenes ANTES de crear el registro, así que aquí lo que
+    viaja es la llave; una cadena vacía o None significa «sin foto»."""
+    return bool(v) and isinstance(v, str) and v.strip() != ""
+
+
+def _validar_foto_km(tipo, datos) -> str | None:
+    """Candado AUTORITATIVO de la foto del kilometraje en Combustible.
+    El bloqueo del celular puede saltarse (pantalla vieja en caché, otro
+    cliente); esta es la regla que de verdad manda. Devuelve el error o None.
+
+      · Reporte de carga → 'fotoAntes' (km y medidor antes de cargar).
+      · Solicitud        → la foto principal, que es la del odómetro.
+    """
+    if tipo != m.SOL:
+        return None
+    if datos.get("formato") == "reporte":
+        if not _foto_ok(datos.get("fotoAntes")):
+            return "Falta la foto del kilometraje (km y medidor antes de cargar)."
+        return None
+    fotos = datos.get("fotos") or []
+    principal = datos.get("photo") or (fotos[0] if fotos else None)
+    if not _foto_ok(principal):
+        return "Falta la foto del kilometraje."
+    return None
+
+
 def _validar_medidor(tipo, datos, cl):
     """Bloqueo AUTORITATIVO de odómetro/horómetro, comparando contra la lectura
     REAL de la unidad (todo el historial, no solo lo del operador):
@@ -371,6 +399,9 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
                         f"de la unidad ({cap:g} L).", 422)
         if precio_l <= 0 or precio_l > 100:
             return _err("El precio por litro debe ser mayor a $0 y no exceder $100.", 422)
+    err_foto = _validar_foto_km(tipo, datos)
+    if err_foto:
+        return _err(err_foto, 422)
     err_medidor = _validar_medidor(tipo, datos, cl)
     if err_medidor:
         return _err(err_medidor, 422)

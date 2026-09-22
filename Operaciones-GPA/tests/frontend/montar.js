@@ -36,11 +36,18 @@ const documentStub={createElement:elem,getElementById:()=>elem(),body:{appendChi
 const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},addEventListener:noop,removeEventListener:noop,
   location:{origin:"https://operaciones-gpa.amplifyapp.com"},matchMedia:()=>({matches:false,addListener:noop}),
   setTimeout,clearTimeout,localStorage};
-class GpaApiStub{constructor(){return new Proxy(this,{get:()=>async()=>[]});}}
+// api simulada: registra lo que se envía para poder revisar el payload real.
+const llamadas=[];
+const metodos={
+  subirEvidencias:async(tipo,obj)=>obj,          // identidad: aquí no hay S3
+  crear:async(tipo,datos)=>{llamadas.push({metodo:"crear",tipo,datos});return{id:"nuevo",ok:true};},
+  crearFormulario:async(clave,datos)=>{llamadas.push({metodo:"crearFormulario",clave,datos});return{id:"nuevo",ok:true};},
+};
+class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>metodos[k]||(async()=>[]) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
   js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   {serviceWorker:undefined},localStorage,noop,console);
 
-module.exports={M,React,TR,localStorage,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
+module.exports={M,React,TR,localStorage,llamadas,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
