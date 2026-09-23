@@ -86,9 +86,22 @@ def main():
     if privadas_con_portal:
         problemas.append(f"rutas del portal que quedaron detrás de Cognito: {sorted(privadas_con_portal)}")
 
-    # Firma quien tiene la sesión abierta. Si alguna capa vuelve a mandar o a
-    # aceptar un firmante en el cuerpo, se podría firmar a nombre de otro y el
-    # acta de autorización dejaría de valer.
+    # La vista del cliente se arma por lista blanca. Si algún día alguien mete
+    # ahí un campo interno, el cliente vería cosas que son solo de GPA: quién
+    # está vetado, qué comentó el comité, o el hash de su propia clave.
+    print("\nLo que el cliente NO debe ver:")
+    handler_txt = (RAIZ / "handler.py").read_text(encoding="utf-8")
+    cuerpo = handler_txt.split("def _vista_cliente")[1].split("\ndef ")[0]
+    prohibidos = ["avisosObligados", "avisosVeto", "vetoOmitido", "anexos",
+                  "comentarios", "autorizaciones", "claveHash", "claveSal",
+                  "creadoPor", "rechazo"]
+    filtrados = [p for p in prohibidos if f'"{p}"' in cuerpo]
+    if filtrados:
+        problemas.append(f"la vista del cliente expone campos internos: {filtrados}")
+        print("    FALLA — se filtran:", filtrados)
+    else:
+        print("    ninguno de los", len(prohibidos), "campos internos se asoma en _vista_cliente")
+
     print("\nQuién firma:")
     culpables = [n for n in ("handler.py", "frontend/app.js", "frontend/gpa-api.js")
                  if "correoFirmante" in (RAIZ / n).read_text(encoding="utf-8")]

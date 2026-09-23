@@ -215,8 +215,11 @@ MODULOS = [
              "cols": ["Banco", "No. de cuenta", "Sucursal", "Ciudad"], "n": 2},
             {"k": "proveedores", "l": "¿Con quién compra a crédito hoy?",
              "cols": ["Proveedor", "Teléfono", "Persona que atiende", "Ciudad"], "n": 3, "req": True},
+            # El RFC va al final a propósito: las respuestas se guardan por
+            # posición (obligados_0_2 …), y agregar una columna en medio
+            # recorrería lo que los clientes ya capturaron.
             {"k": "obligados", "l": "Obligados solidarios",
-             "cols": ["Nombre", "Domicilio", "Teléfono"], "n": 2},
+             "cols": ["Nombre", "Domicilio", "Teléfono", "RFC"], "n": 2},
         ],
     },
     {

@@ -76,6 +76,19 @@ def norm_tel(texto: str) -> str:
     return d[-10:] if len(d) >= 10 else d
 
 
+def mismo_nombre(a: str, b: str) -> bool:
+    """¿Son el mismo nombre, aunque esté escrito en otro orden?
+
+    Hace falta para las personas físicas: el SAT las escribe «PÉREZ GARCÍA JUAN»
+    y la gente las escribe «Juan Pérez García». Son la misma persona, y comparar
+    letra por letra las dejaba pasar. Las mismas palabras en otro orden son el
+    mismo nombre; que además coincidan por casualidad es prácticamente imposible.
+    """
+    if not a or not b:
+        return False
+    return a == b or sorted(a.split()) == sorted(b.split())
+
+
 def parecido(a: str, b: str) -> float:
     """Qué tan parecidos son dos nombres ya normalizados, de 0 a 1.
 
@@ -200,7 +213,10 @@ def revisa(datos: dict, lista: list | None = None) -> dict:
             for referencia, etiqueta_ref in contra:
                 if not referencia:
                     continue
-                if valor == referencia:
+                es_nombre = campo in ("razonSocial", "nombreComercial")
+                exacta = (mismo_nombre(valor, referencia) if es_nombre
+                          else valor == referencia)
+                if exacta:
                     bloqueos.append({
                         "campo": campo, "etiqueta": etiqueta, "valor": datos.get(campo),
                         "coincide": "exacta", "contra": etiqueta_ref,
@@ -209,7 +225,7 @@ def revisa(datos: dict, lista: list | None = None) -> dict:
                         "desde": entrada.get("cuandoLegible", ""),
                         "vetoId": entrada.get("id", ""),
                     })
-                elif campo in ("razonSocial", "nombreComercial"):
+                elif es_nombre:
                     ratio = parecido(valor, referencia)
                     if ratio >= UMBRAL_PARECIDO:
                         avisos.append({
@@ -232,6 +248,39 @@ def revisa(datos: dict, lista: list | None = None) -> dict:
         return salida
 
     return {"bloqueos": unicos(bloqueos), "avisos": unicos(avisos)}
+
+
+def revisa_obligados(tablas: dict, lista: list | None = None) -> list:
+    """Revisa a los obligados solidarios contra la lista de veto.
+
+    Se hace al RECIBIR el expediente, no en la pre-solicitud, porque al aval lo
+    captura el cliente y antes no existe. De nada sirve vetar a un moroso si
+    puede volver a entrar como obligado solidario de otro.
+
+    El resultado es SOLO para GPA: nunca se le enseña al cliente ni se le
+    rechaza el envío por esto. Decirle «su aval está vetado» sería entregarle
+    la lista, y además el aval no es asunto suyo sino de quien autoriza.
+    """
+    entradas = listar() if lista is None else lista
+    tablas = tablas or {}
+    salida = []
+    for fila in range(MAX_OBLIGADOS):
+        nombre = str(tablas.get(f"obligados_{fila}_0") or "").strip()
+        telefono = str(tablas.get(f"obligados_{fila}_2") or "").strip()
+        rfc = str(tablas.get(f"obligados_{fila}_3") or "").strip()
+        if not nombre and not rfc:
+            continue
+        hits = revisa({"razonSocial": nombre, "celular": telefono, "rfc": rfc}, entradas)
+        for h in hits["bloqueos"] + hits["avisos"]:
+            h["obligado"] = nombre or rfc
+            h["fila"] = fila + 1
+            salida.append(h)
+    return salida
+
+
+# Cuántos renglones de obligados solidarios se revisan. La forma pide 2; se
+# revisan de más por si algún día crece la tabla, sin costo alguno.
+MAX_OBLIGADOS = 10
 
 
 def resumen(hits: dict) -> str:

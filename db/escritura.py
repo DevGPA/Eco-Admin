@@ -415,9 +415,19 @@ def enviar_expediente(token: str, clave: str) -> dict:
         resto = f" y {cuantos - 5} más" if cuantos > 5 else ""
         raise ReglaRota(f"Faltan {cuantos} punto(s) por resolver: {muestra}{resto}. "
                         "Están marcados en rojo en el formulario.")
+    # Al aval lo captura el cliente, así que hasta aquí se puede revisar contra
+    # la lista de veto. No se le rechaza el envío ni se le dice nada: el aviso
+    # es solo para quien revisa y autoriza dentro de GPA.
+    avisos_ob = lista_veto.revisa_obligados(caso.get("tablasVal") or {})
     _fija_campos(caso["folio"], {"estado": "recibida", "marcas": {},
-                                 "enviado": iso_mx()}, caso)
+                                 "enviado": iso_mx(),
+                                 "avisosObligados": avisos_ob}, caso)
     log(caso["folio"], "enviado", "cliente", "El cliente envió su expediente")
+    if avisos_ob:
+        detalle = "; ".join(sorted({f"{h['obligado']} coincide con «{h['vetado']}» "
+                                    f"({h['etiqueta']}, {h['coincide']})" for h in avisos_ob}))
+        log(caso["folio"], "veto-obligado", "sistema",
+            f"Obligado solidario en la lista de veto: {detalle}")
     return get_caso(caso["folio"])
 
 

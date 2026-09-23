@@ -504,6 +504,48 @@ ok(len(v.listar(solo_activos=False)) == 1, "pero no se borra: queda el registro 
 libre = e.crear_caso(prospecto(rfc="DMO150301XY4"), VENTAS)[0]
 ok(libre["folio"], "y ya se le puede dar de alta con normalidad")
 
+# ── Personas físicas: el mismo nombre en otro orden es la misma persona ──
+print("\n   Personas físicas")
+v.agregar({"razonSocial": "PÉREZ GARCÍA JUAN CARLOS", "rfc": "PEGJ800101HJ5",
+           "motivo": "Quedó a deber una nota de 2023 y desapareció."}, ADMIN)
+rompe(lambda: e.crear_caso(prospecto(razonSocial="Juan Carlos Pérez García"), VENTAS),
+      "no se pueden dar de alta",
+      "el SAT lo escribe «Pérez García Juan Carlos» y la gente «Juan Carlos Pérez "
+      "García»: es la misma persona y no pasa")
+rompe(lambda: e.crear_caso(prospecto(razonSocial="perez garcia juan carlos"), VENTAS),
+      "no se pueden dar de alta", "sin acentos y en minúsculas, tampoco")
+ok(e.crear_caso(prospecto(razonSocial="Juan Carlos Pérez Gómez"), VENTAS)[0]["folio"],
+   "pero otro apellido SÍ pasa: no basta con compartir el nombre de pila")
+
+# ── Obligados solidarios: el vetado no puede volver como aval de otro ──
+print("\n   Obligados solidarios")
+vetado_aval = v.listar()[0]
+ok(vetado_aval["razonSocial"] == "PÉREZ GARCÍA JUAN CARLOS", "el vetado sigue en la lista")
+
+sin_aval = v.revisa_obligados({})
+ok(sin_aval == [], "sin obligados capturados, no hay nada que avisar")
+
+hits_aval = v.revisa_obligados({
+    "obligados_0_0": "Juan Carlos Pérez García",     # el vetado, en otro orden
+    "obligados_0_2": "33 1111 2222",
+    "obligados_1_0": "María López Ruiz",             # alguien limpio
+})
+ok(len(hits_aval) == 1, "solo se avisa del que está en la lista")
+ok(hits_aval[0]["obligado"] == "Juan Carlos Pérez García", "y se dice de quién se trata")
+ok(hits_aval[0]["coincide"] == "exacta", "la coincidencia es exacta, no un parecido")
+ok(hits_aval[0]["fila"] == 1, "y en qué renglón de la tabla viene")
+
+por_rfc = v.revisa_obligados({"obligados_0_0": "J. C. Pérez", "obligados_0_3": "pegj-800101-hj5"})
+ok(len(por_rfc) >= 1 and por_rfc[0]["etiqueta"] == "RFC",
+   "aunque escriba el nombre distinto, el RFC del aval lo delata")
+
+print("\n   Y el cliente nunca se entera:")
+fol_ob, _ = e.crear_caso({**nueva("credito"), "razonSocial": "Ferretería Aval",
+                          "rfc": "FAV010101AB1"}, VENTAS)
+ok(fol_ob["folio"], "se crea un crédito con un cliente limpio")
+ok("avisosObligados" not in fol_ob or not fol_ob.get("avisosObligados"),
+   "al crearse todavía no hay aviso: el aval lo captura el cliente después")
+
 print("\n" + "=" * 62)
 if FALLAS:
     print(f"FALLAS ({len(FALLAS)}) de {TOTAL} comprobaciones:")

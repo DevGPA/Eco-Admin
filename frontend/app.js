@@ -1139,6 +1139,18 @@ function vistaExpediente() {
             return a.similitud + "% a «" + a.vetado + "» (" + a.motivo + ")";
           }).join(" · ")) + "</span></div>"
         : "") +
+      // El aval también entra por la lista de veto. Esto solo lo ve GPA: al
+      // cliente no se le dice nada, ni se le rechaza el envío por este motivo.
+      ((c.avisosObligados || []).length
+        ? '<div class="banner banner-stop"><span><b>Un obligado solidario está en la ' +
+          "lista de vetados.</b><br>" +
+          c.avisosObligados.map(function (a) {
+            return esc(a.obligado) + " — coincidencia " + esc(a.coincide) +
+              (a.similitud ? " (" + a.similitud + "%)" : "") +
+              " por " + esc(a.etiqueta) + " con «" + esc(a.vetado) + "»: " + esc(a.motivo);
+          }).join("<br>") +
+          '<br><span class="dim">El cliente no fue avisado de esto.</span></span></div>'
+        : "") +
       (c.vencida
         ? '<div class="banner banner-stop"><span><b>La liga venció el ' + esc(c.venceLegible) +
           ".</b> El cliente ya no puede entrar. Genere una clave nueva: eso reinicia los 15 días.</span></div>"
@@ -1198,18 +1210,22 @@ function vistaVeto() {
 
   return '<div class="stack">' + bannerError() +
     '<div><h1 style="font-size:22px">Clientes vetados</h1>' +
-    '<p class="dim" style="margin:3px 0 0">A estos no se les da de alta. Al capturar una ' +
-    "pre-solicitud, el sistema compara RFC, razón social, nombre comercial, correo y celular " +
-    "contra esta lista.</p></div>" +
+    '<p class="dim" style="margin:3px 0 0">A estos no se les da de alta, sean empresas o ' +
+    "personas físicas. Al capturar una pre-solicitud se comparan RFC, nombre, nombre " +
+    "comercial, correo y celular contra esta lista; y al recibir un expediente de crédito, " +
+    "también los obligados solidarios.</p></div>" +
     '<div class="card pad"><div class="tablewrap"><table class="grid-t">' +
     "<thead><tr><th>Cliente</th><th>Por qué</th><th>Lo puso</th><th></th></tr></thead><tbody>" +
     (activos.map(fila).join("") || '<tr><td colspan="4" class="dim">La lista está vacía.</td></tr>') +
     "</tbody></table></div></div>" +
     '<div class="card pad stack"><div class="eyebrow">Agregar a la lista</div>' +
-    '<p class="dim" style="margin:0">Basta la razón social o el RFC. Entre más datos ponga, ' +
-    "más difícil será que el cliente se cuele con otro nombre.</p>" +
+    '<p class="dim" style="margin:0">Puede ser una empresa o una persona física. ' +
+    "Basta el nombre o el RFC; entre más datos ponga, más difícil será que se " +
+    "cuele con otro nombre. También se revisa contra los obligados solidarios " +
+    "de las solicitudes de crédito.</p>" +
     '<div class="grid">' +
-      '<div class="field f-full"><label for="v_razon">Razón social</label><input id="v_razon"></div>' +
+      '<div class="field f-full"><label for="v_razon">Razón social o nombre de la persona</label>' +
+      '<input id="v_razon" placeholder="Albercas del Valle S.A. de C.V.  ·  o  ·  Juan Pérez García"></div>' +
       '<div class="field f-half"><label for="v_comercial">Nombre comercial</label><input id="v_comercial"></div>' +
       '<div class="field f-half"><label for="v_rfc">RFC</label><input id="v_rfc" class="mono"></div>' +
       '<div class="field f-half"><label for="v_correo">Correo</label><input id="v_correo"></div>' +
