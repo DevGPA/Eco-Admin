@@ -54,6 +54,13 @@ dinámicos (FormDinamico):
 - Los registros anteriores no cambian de significado ([0] sigue siendo «Sí» y
   [1] «No»), porque la opción nueva se agregó AL FINAL.
 
+`test_checklist_bloquea_solicitud.js` — candado del checklist en Combustible:
+- Con el checklist de reparto vencido, la solicitud no deja avanzar y el aviso
+  dice cuál falta, cuándo vencía y dónde capturarlo.
+- Al día o todavía en plazo, no bloquea.
+- Una unidad sin checklist de reparto (montacargas) nunca se bloquea.
+- Tampoco pasa al enviar desde un borrador viejo que ya estaba en el último paso.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

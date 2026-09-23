@@ -12,6 +12,9 @@
 # ─────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
+import calendar
+import unicodedata
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -109,6 +112,79 @@ def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | Non
     if nuevo - ult > max_delta:
         return f"El kilometraje ({nuevo:g}) excede {max_delta:,} km del último de la unidad ({ult:g}). Verifica la lectura."
     return None
+
+
+# ── Cumplimiento del checklist de reparto (puro, sin dependencias) ──
+# Espejo EXACTO de lo que ya calcula el Tablero de Seguimiento en el front
+# (segLunes / segHabil / estIni). Si aquí y allá no dieran lo mismo, el operador
+# vería «cumplido» en el tablero y el servidor le bloquearía la solicitud.
+#
+#   · Semanal → la semana corre de LUNES a domingo; el límite es el LUNES.
+#     Desde el martes sin checklist de esa semana, está VENCIDO.
+#   · Mensual → el mes natural; el límite es el DÍA 5, recorrido al siguiente
+#     día hábil si cae sábado o domingo.
+
+MX_TZ = timezone(timedelta(hours=-6))    # Ciudad de México (UTC-6 fijo)
+
+
+def hoy_mx() -> date:
+    """Fecha de HOY en hora de México (no la del servidor, que va en UTC)."""
+    return datetime.now(MX_TZ).date()
+
+
+def lunes_de(d: date) -> date:
+    """Lunes de la semana de `d` (lunes = inicio de semana)."""
+    return d - timedelta(days=d.weekday())
+
+
+def dia_habil(d: date) -> date:
+    """Si cae sábado o domingo, se recorre al lunes siguiente."""
+    if d.weekday() == 5:
+        return d + timedelta(days=2)
+    if d.weekday() == 6:
+        return d + timedelta(days=1)
+    return d
+
+
+def periodo_checklist(tipo: str, hoy: date) -> tuple[str, str, str]:
+    """(inicio, fin, límite) del período vigente, en texto YYYY-MM-DD."""
+    if tipo == "semanal":
+        lun = lunes_de(hoy)
+        return lun.isoformat(), (lun + timedelta(days=6)).isoformat(), lun.isoformat()
+    ini = date(hoy.year, hoy.month, 1)
+    fin = date(hoy.year, hoy.month, calendar.monthrange(hoy.year, hoy.month)[1])
+    return ini.isoformat(), fin.isoformat(), dia_habil(date(hoy.year, hoy.month, 5)).isoformat()
+
+
+def estado_cumplimiento(hay: bool, limite: str, fin: str, hoy: str,
+                        inicio: str | None = None) -> str:
+    """cumplido · pendiente · vencido · na — igual que estIni() del tablero.
+    `inicio` es el día de arranque (go-live): antes de él nada se reclama."""
+    if hay:
+        return "cumplido"
+    if inicio and limite < inicio:
+        return "pendiente" if hoy <= fin else "na"
+    return "vencido" if hoy > limite else "pendiente"
+
+
+def norm_texto(valor) -> str:
+    """Sin acentos, minúsculas y sin espacios — para comparar textos capturados."""
+    txt = unicodedata.normalize("NFD", str(valor or ""))
+    txt = "".join(c for c in txt if not unicodedata.combining(c)).lower()
+    return "".join(txt.split())
+
+
+def categoria_vehiculo(v: dict) -> str:
+    """'reparto' o 'montacargas'. Espejo de catVeh() del front: manda la
+    categoría explícita; si no hay, el área ALMACEN o el Gas LP son montacargas."""
+    cat = str((v or {}).get("categoria") or "").strip()
+    if cat:
+        return cat
+    if "ALMACEN" in str((v or {}).get("responsable") or "").upper():
+        return "montacargas"
+    if "gaslp" in norm_texto((v or {}).get("combustible")):
+        return "montacargas"
+    return "reparto"
 
 
 HORAS_MAX_DELTA = 100            # tope de avance de horas por captura (montacargas)

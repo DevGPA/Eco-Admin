@@ -586,6 +586,18 @@ const esGasLP=v=>normTxt(v&&v.combustible).replace(/\s+/g,"").includes("gaslp");
 // UNO SOLO para toda la flota, sin excepciones por combustible ni por módulo.
 const MAX_DELTA_KM=1000;
 
+// ─── Candado: checklist de reparto vencido ───────────────────────────────────
+// El servidor no deja SOLICITAR combustible de una unidad de reparto con el
+// checklist vencido (semanal, límite lunes; mensual, límite día 5 hábil). El
+// estado llega YA CALCULADO en el catálogo (v.checklist), con la misma regla del
+// Tablero de Seguimiento, para avisar antes de que el operador llene todo.
+const CHK_LBL={semanal:"semanal",mensual:"mensual"};
+const chkVencidos=v=>{const c=v&&v.checklist;return c?["semanal","mensual"].filter(t=>c[t]==="vencido"):[];};
+const chkTexto=v=>{const f=chkVencidos(v);if(!f.length)return"";
+  const c=v.checklist;const lims=f.map(t=>`${CHK_LBL[t]}: vencía el ${c[t==="semanal"?"limiteSemanal":"limiteMensual"]}`).join(" · ");
+  return `Esta unidad tiene pendiente su checklist ${f.map(t=>CHK_LBL[t]).join(" y ")} (${lims}). `+
+         `Captúralo en Mtto → Reparto y podrás solicitar combustible.`;};
+
 // ─── Borrador local de captura ───────────────────────────────────────────────
 // Conserva lo ya llenado de un formulario largo para poder salir y volver sin
 // perderlo. NO es almacén de registros: el registro SIEMPRE se envía a la API;
@@ -1383,6 +1395,8 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const sigRef=useRef(null);const sigH=useSig(sigRef);
   const vehicle=cat.vehicles.find(v=>String(v.id)===String(veh));
   const user=solicitante;
+  // Checklist de reparto vencido = no se puede solicitar combustible de esa unidad.
+  const chkFalta=chkVencidos(vehicle);const chkBloq=chkFalta.length>0;
   const need=Math.max(0,1-tank);const litros=vehicle?Math.round(vehicle.tanque*need):0;const monto=vehicle?Math.round(litros*vehicle.precio):0;
   // Último km REAL de la unidad (del catálogo/backend), no solo lo que capturó este usuario.
   const lastKm=vehicle&&vehicle.ultimoKm!=null?vehicle.ultimoKm:null;
@@ -1392,6 +1406,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
   const puedeForzar=rol==="admin";const kmBloq=kmErr&&!(puedeForzar&&forzarKm);
   const submit=async()=>{
     if(!vehicle||!user||busy)return;
+    if(chkBloq){setStep(1);return showToast("⚠️ "+chkTexto(vehicle));}
     setBusy(true);
     try{
       const datos={vehicleId:vehicle.id,placas:vehicle.placas,subMarca:vehicle.subMarca,sucursal:vehicle.sucursal,economico:vehicle.economico,combustible:vehicle.combustible,producto:vehicle.producto,precio:vehicle.precio,tanque:vehicle.tanque,userId:user.id,responsable:user.nombre,mail:user.mail,km:kmN,tankBefore:tank,tankAfter:1,necesidad:need,litros,monto,obs,fotos:[fotoKm,...fotos].filter(Boolean),photo:fotoKm,firma:sig,status:"Pendiente",...(puedeForzar&&forzarKm&&kmErr?{forzar:true}:{})};
@@ -1413,6 +1428,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
           <div className="ct">Vehículo</div>
           <select value={veh} onChange={e=>setVeh(e.target.value)}><option value="">— Selecciona —</option>{availVeh.map(v=><option key={v.id} value={v.id}>#{v.economico} · {v.placas} · {v.subMarca}</option>)}</select>
           {vehicle&&<div style={{marginTop:8,fontSize:12}}><div className="dr"><span>Sucursal</span><span>{vehicle.sucursal}</span></div><div className="dr"><span>Combustible</span><span>{vehicle.combustible}</span></div><div className="dr"><span>Precio/L</span><span>${vehicle.precio.toFixed(2)}</span></div><div className="dr"><span>Tanque</span><span>{vehicle.tanque}L</span></div></div>}
+          {chkBloq&&<div className="eb" style={{marginTop:10}}>🚫 {chkTexto(vehicle)}</div>}
         </div>
         <div className="card">
           <div className="ct">Solicitante</div>
@@ -1436,7 +1452,7 @@ function SolForm({cat,items,session,rol,sucursalesUser,refrescar,showToast,onDon
         </div>
         <label>Observaciones</label>
         <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Notas adicionales..."/>
-        <button className="bp" disabled={!veh||!km||!fotoKm||!!kmBloq} onClick={()=>setStep(2)}>Siguiente →</button>
+        <button className="bp" disabled={!veh||!km||!fotoKm||!!kmBloq||chkBloq} onClick={()=>setStep(2)}>Siguiente →</button>
       </>}
       {step===2&&<>
         <div className="card">

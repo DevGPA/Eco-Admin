@@ -30,9 +30,10 @@ from db.escritura import (crear_registro, cambiar_estado, corregir_registro, edi
                           actualizar_precio_por_combustible,
                           guardar_modulo, guardar_plantilla,
                           guardar_responsable_alerta, reasignar_registro_unidad)
-from db.queries import (listar_registros, get_registro, cargar_catalogos,
+from db.queries import (listar_registros, get_registro, cargar_catalogos, cargar_config,
                         get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
-                        ultima_solicitud_vehiculo, solicitud_asignable_vehiculo)
+                        ultima_solicitud_vehiculo, solicitud_asignable_vehiculo,
+                        estados_checklist_reparto)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -313,6 +314,47 @@ def _validar_foto_km(tipo, datos) -> str | None:
     return None
 
 
+_CHK_LBL = {"semanal": "SEMANAL (límite: lunes)",
+            "mensual": "MENSUAL (límite: día 5)"}
+
+
+def _validar_checklist_al_dia(tipo, datos) -> str | None:
+    """Candado de proceso: no se puede SOLICITAR combustible para una unidad de
+    reparto que trae su checklist VENCIDO. Se desbloquea sola en cuanto se
+    captura el checklist que falta.
+
+    · Aplica solo a la SOLICITUD (el reporte de carga ya exige una solicitud
+      aprobada, así que la cadena queda cubierta).
+    · Solo a unidades de categoría «reparto»: los montacargas no llevan este
+      checklist y nunca se bloquean.
+    · «Vencido» es lo mismo que pinta el Tablero de Seguimiento: pasó el límite
+      del período sin capturar. Estando dentro del plazo («pendiente») NO bloquea.
+    """
+    if tipo != m.SOL or datos.get("formato") == "reporte":
+        return None
+    vid = str(datos.get("vehicleId") or "")
+    if not vid:
+        return None
+    veh = get_vehiculo(vid)
+    if not veh or m.categoria_vehiculo(veh) != "reparto":
+        return None
+    try:
+        estados = estados_checklist_reparto([veh], cargar_config())
+    except Exception:
+        logger.exception("No se pudo evaluar el checklist de la unidad %s", vid)
+        return None            # ante una falla de lectura NO se bloquea la operación
+    est = estados.get(vid) or {}
+    vencidos = [t for t in ("semanal", "mensual") if est.get(t) == "vencido"]
+    if not vencidos:
+        return None
+    unidad = str(veh.get("economico") or vid)
+    detalle = " y ".join(_CHK_LBL[t] for t in vencidos)
+    limites = ", ".join(f"{t}: {est.get('limite' + t.capitalize())}" for t in vencidos)
+    return (f"La unidad #{unidad} tiene pendiente su checklist {detalle}. "
+            f"Captúralo en Mtto → Reparto y vuelve a intentar la solicitud "
+            f"({limites}).")
+
+
 def _validar_medidor(tipo, datos, cl):
     """Bloqueo AUTORITATIVO de odómetro/horómetro, comparando contra la lectura
     REAL de la unidad (todo el historial, no solo lo del operador):
@@ -399,6 +441,9 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
                         f"de la unidad ({cap:g} L).", 422)
         if precio_l <= 0 or precio_l > 100:
             return _err("El precio por litro debe ser mayor a $0 y no exceder $100.", 422)
+    err_chk = _validar_checklist_al_dia(tipo, datos)
+    if err_chk:
+        return _err(err_chk, 409)
     err_foto = _validar_foto_km(tipo, datos)
     if err_foto:
         return _err(err_foto, 422)

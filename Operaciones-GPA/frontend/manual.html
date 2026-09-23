@@ -416,6 +416,15 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
       <p>Módulo para las cargas de combustible de las unidades. Tiene tres vistas: <b>Solicitud</b>, <b>Reporte de carga</b> e <b>Historial</b>.</p>
 
       <h3>Solicitud de combustible</h3>
+      <div class="note" style="border-left-color:#A32D2D"><span class="callout-t">Primero el checklist:</span>
+      una unidad de <b>reparto</b> con su checklist <b>vencido</b> no puede solicitar combustible.
+      Al elegirla aparece el aviso en rojo y el botón <kbd>Siguiente</kbd> no se activa.
+      <b>Se destraba sola</b> en cuanto capturas el checklist que falta en
+      <a href="#s6-1">Mtto → Reparto</a>: vuelve a la solicitud y ya te deja.
+      Vencido quiere decir que pasó el límite del período sin capturarlo —
+      <b>semanal: el lunes</b>; <b>mensual: el día 5</b> (o el siguiente día hábil si cae en fin de
+      semana). Mientras sigas <b>dentro</b> del plazo no se bloquea nada. Los <b>montacargas</b> no
+      llevan este checklist, así que nunca se bloquean por esto.</div>
       <p>Es el permiso para cargar. El flujo:</p>
       <ol class="steps">
         <li>Elige la <b>unidad</b> (se muestran las de tu sucursal).</li>
@@ -481,6 +490,11 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
         <li><b>Mensual</b> — se espera cada mes (límite: <b>día 5</b>, o el siguiente día hábil).</li>
       </ul>
       <p>Elige el tipo, selecciona la unidad, responde cada sección (incluye registro de <b>daños</b> con foto si aplica), firma y envía. El <b>responsable es tu propia cuenta</b> (ya no se elige de una lista). Estos checklists quedan <span class="st st-ok">Aprobados</span> al enviarse.</p>
+      <div class="note" style="border-left-color:#A32D2D"><span class="callout-t">Si no se hace a tiempo:</span>
+      pasado el límite (<b>lunes</b> el semanal, <b>día 5</b> el mensual), esa unidad <b>no puede
+      solicitar combustible</b> hasta que se capture el checklist que debe. Es el mismo «vencido»
+      que pinta en rojo el <a href="#s10">Tablero de Seguimiento</a>, así que ahí puedes ver de un
+      vistazo qué unidades están frenadas.</div>
 
       <h3 id="s6-2"><span class="h3n">6.2</span>Montacargas</h3>
       <p>Checklist <b>diario</b> por unidad. Hay dos variantes de preguntas: <b>Gas/Gasolina</b> y <b>Eléctrico</b>.</p>
@@ -745,7 +759,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v1.9. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.0. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>

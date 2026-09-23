@@ -5,6 +5,7 @@
 from __future__ import annotations
 import os
 import boto3
+from datetime import date, timedelta
 from boto3.dynamodb.conditions import Key
 
 from db import modelos as m
@@ -210,6 +211,84 @@ def _limpiar(item: dict) -> dict:
 
 
 # ── Catálogos ────────────────────────────────────────────────────
+def cargar_config() -> dict:
+    """Solo el item de configuración (fechaInicio, correos, etc.). Existe para no
+    tener que cargar TODOS los catálogos cuando únicamente hace falta esto."""
+    cfg = _t().get_item(Key={"PK": m.PK_CONFIG, "SK": m.SK_CONFIG}).get("Item") or {}
+    return _limpiar(m.from_dynamo(cfg))
+
+
+def _checklists_cl_en_rango(desde: str, hasta_excl: str) -> list:
+    """Checklists de reparto (CL) cuya fecha cae en [desde, hasta_excl).
+    Va por KeyCondition sobre la sort key del GSI1 (fecha): trae solo las ~5
+    semanas que hacen falta, no todo el historial."""
+    t = _t()
+    kwargs = dict(IndexName="tipo-fecha-idx",
+                  KeyConditionExpression=Key("GSI1PK").eq(m.CL) & Key("GSI1SK").between(desde, hasta_excl))
+    out = []
+    while True:
+        resp = t.query(**kwargs)
+        out.extend(_items(resp))
+        if "LastEvaluatedKey" not in resp:
+            return out
+        kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+
+
+def estados_checklist_reparto(vehiculos: list, config: dict | None = None,
+                              hoy=None) -> dict:
+    """Cumplimiento del checklist de reparto POR UNIDAD, con la misma regla del
+    Tablero de Seguimiento (semanal con límite lunes, mensual con límite día 5
+    hábil). Devuelve, solo para las unidades de categoría «reparto» y activas:
+
+        {vehicleId: {"semanal": estado, "mensual": estado,
+                     "limiteSemanal": "YYYY-MM-DD", "limiteMensual": "YYYY-MM-DD"}}
+
+    estado ∈ cumplido · pendiente · vencido · na
+    Es la base del candado que impide solicitar combustible con el checklist
+    vencido, y también lo que la app muestra antes de dejar capturar."""
+    hoy = hoy or m.hoy_mx()
+    hoy_str = hoy.isoformat()
+    inicio = (config or {}).get("fechaInicio") or None
+
+    ini_w, fin_w, lim_w = m.periodo_checklist("semanal", hoy)
+    ini_m, fin_m, lim_m = m.periodo_checklist("mensual", hoy)
+    # La semana en curso puede cruzar de mes: se consulta la unión de ambos rangos.
+    desde = min(ini_w, ini_m)
+    hasta = max(fin_w, fin_m)
+    hasta_excl = (date.fromisoformat(hasta) + timedelta(days=1)).isoformat()
+
+    hechos = {}          # {vid: {"semanal": True, "mensual": True}}
+    for it in _checklists_cl_en_rango(desde, hasta_excl):
+        d = m.from_dynamo(it)
+        # Un checklist anulado o rechazado no cumple.
+        if str(d.get("status") or "") in ("Anulado", "Rechazado", "Rechazada"):
+            continue
+        vid = str(d.get("vehicleId") or "")
+        tipo = str(d.get("tipo") or "")
+        fecha = str(d.get("fecha") or "")[:10]
+        if not vid or tipo not in ("semanal", "mensual") or not fecha:
+            continue
+        ini, fin = (ini_w, fin_w) if tipo == "semanal" else (ini_m, fin_m)
+        if ini <= fecha <= fin:
+            hechos.setdefault(vid, {})[tipo] = True
+
+    out = {}
+    for v in vehiculos or []:
+        if m.categoria_vehiculo(v) != "reparto":
+            continue
+        if str(v.get("activo", True)).lower() in ("false", "0", "no", "inactivo"):
+            continue
+        vid = str(v.get("id"))
+        h = hechos.get(vid, {})
+        out[vid] = {
+            "semanal": m.estado_cumplimiento(bool(h.get("semanal")), lim_w, fin_w, hoy_str, inicio),
+            "mensual": m.estado_cumplimiento(bool(h.get("mensual")), lim_m, fin_m, hoy_str, inicio),
+            "limiteSemanal": lim_w,
+            "limiteMensual": lim_m,
+        }
+    return out
+
+
 def cargar_catalogos() -> dict:
     t = _t()
     veh = _items(t.query(KeyConditionExpression=Key("PK").eq(m.PK_VEHICLE)))
@@ -236,6 +315,15 @@ def cargar_catalogos() -> dict:
         v["ultimoKmFecha"] = k["fecha"] if k else None
         v["ultimasHoras"] = h["valor"] if h else None
         v["ultimasHorasFecha"] = h["fecha"] if h else None
+    # Cumplimiento del checklist de reparto: la app lo necesita para avisar ANTES
+    # de que el operador llene una solicitud de combustible que el servidor va a
+    # rechazar. También es un derivado: no se persiste.
+    try:
+        chk = estados_checklist_reparto(veh, cfg)
+    except Exception:          # nunca tumbar los catálogos por este extra
+        chk = {}
+    for v in veh:
+        v["checklist"] = chk.get(str(v.get("id")))
     return {
         "vehicles":     sorted(veh, key=lambda v: str(v.get("economico", ""))),
         "users":        sorted(usr, key=lambda u: str(u.get("nombre", ""))),
