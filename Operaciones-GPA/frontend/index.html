@@ -670,6 +670,84 @@ function FiltroFechas({desde,hasta,setDesde,setHasta,onCSV,n,unidades,unidad,set
 }
 
 // ─── LOGIN ──────────────────────────────────────────────────────────
+// ─── Anclar la app en el teléfono (instalar la PWA) ──────────────────────────
+// Solo aparece cuando la abren desde el NAVEGADOR. Si ya está anclada (se abrió
+// desde el ícono) no se muestra nada.
+//   · Android / Chrome / Edge → el navegador ofrece instalarla: se guarda ese
+//     aviso (beforeinstallprompt) y el botón lo dispara.
+//   · iPhone / iPad → Safari no tiene ese aviso; el botón abre las instrucciones.
+const appInstalada=()=>{
+  try{
+    if(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)return true;
+    if(window.navigator&&window.navigator.standalone)return true;   // iOS
+  }catch(e){}
+  return false;
+};
+const esIOS=()=>{
+  try{
+    const ua=String(navigator.userAgent||"");
+    if(/iphone|ipad|ipod/i.test(ua))return true;
+    // iPad con iPadOS 13+ se anuncia como Mac: se distingue por el táctil.
+    return /macintosh/i.test(ua)&&(navigator.maxTouchPoints||0)>1;
+  }catch(e){return false;}
+};
+
+function BotonInstalar({compacto}){
+  const[aviso,setAviso]=useState(null);       // evento del navegador (Android/Chrome)
+  const[instalada,setInstalada]=useState(appInstalada);
+  const[pasos,setPasos]=useState(false);      // modal de instrucciones (iPhone)
+  // Si el usuario cierra el aviso del navegador, Chrome NO lo vuelve a ofrecer
+  // hasta recargar la página: el botón se queda, pero mostrando los pasos.
+  const[aMano,setAMano]=useState(false);
+  const ios=esIOS();
+  useEffect(()=>{
+    const cap=e=>{e.preventDefault();setAviso(e);};
+    const ya=()=>{setInstalada(true);setAviso(null);setPasos(false);};
+    window.addEventListener("beforeinstallprompt",cap);
+    window.addEventListener("appinstalled",ya);
+    return()=>{window.removeEventListener("beforeinstallprompt",cap);window.removeEventListener("appinstalled",ya);};
+  },[]);
+  // Ya anclada, o un navegador que no puede instalarla: no se estorba.
+  if(instalada||(!aviso&&!ios&&!aMano))return null;
+  const anclar=async()=>{
+    if(!aviso)return setPasos(true);
+    try{
+      aviso.prompt();
+      const r=await aviso.userChoice;
+      setAviso(null);
+      if(r&&r.outcome==="accepted")setInstalada(true);
+      else setAMano(true);       // lo cerró: el botón sigue, ahora con los pasos
+    }catch(e){setAviso(null);setAMano(true);setPasos(true);}
+  };
+  const etiqueta=compacto?"⤓ Anclar":"⤓ Anclar en mi teléfono";
+  return(
+    <>
+      {compacto
+        ? <button onClick={anclar} title="Anclar la app en la pantalla de inicio"
+            style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer",whiteSpace:"nowrap"}}>{etiqueta}</button>
+        : <button className="bs" onClick={anclar} style={{width:"100%",marginTop:10}}>{etiqueta}</button>}
+      {pasos&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:60,display:"flex",alignItems:"flex-end"}} onClick={()=>setPasos(false)}>
+        <div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:18,width:"100%",maxWidth:430,margin:"0 auto"}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:15,fontWeight:700,marginBottom:10}}>Anclar en la pantalla de inicio</div>
+          {ios
+            ? <ol style={{fontSize:13,lineHeight:1.7,paddingLeft:18,color:"#333"}}>
+                <li>Toca el botón <b>Compartir</b> <span style={{fontSize:15}}>⬆️</span> de abajo (o arriba, según tu iPhone).</li>
+                <li>Desliza y elige <b>«Agregar a inicio»</b>.</li>
+                <li>Toca <b>Agregar</b>. El ícono de GPA queda junto a tus demás apps.</li>
+              </ol>
+            : <ol style={{fontSize:13,lineHeight:1.7,paddingLeft:18,color:"#333"}}>
+                <li>Abre el menú <b>⋮</b> de tu navegador.</li>
+                <li>Elige <b>«Instalar aplicación»</b> o <b>«Agregar a pantalla principal»</b>.</li>
+                <li>Confirma. El ícono de GPA queda junto a tus demás apps.</li>
+              </ol>}
+          <div style={{fontSize:11.5,color:"#888",marginTop:10}}>Anclada abre más rápido, a pantalla completa y sin la barra del navegador.</div>
+          <button className="bp" style={{marginTop:14}} onClick={()=>setPasos(false)}>Entendido</button>
+        </div>
+      </div>}
+    </>
+  );
+}
+
 function Login({onLogin,onSetNewPassword}){
   const[u,setU]=useState("");const[p,setP]=useState("");const[err,setErr]=useState("");const[busy,setBusy]=useState(false);
   const[needNew,setNeedNew]=useState(false);const[np,setNp]=useState("");const[np2,setNp2]=useState("");
@@ -752,6 +830,7 @@ function Login({onLogin,onSetNewPassword}){
             <div style={{textAlign:"center",marginTop:10}}><a onClick={()=>{setErr("");setMsg("");setFp(1);}} style={{fontSize:12,color:C.blue,cursor:"pointer"}}>¿Olvidaste tu contraseña?</a></div>
           </>}
         </div>
+        <BotonInstalar/>
         <div style={{fontSize:11,color:"#aaa",textAlign:"center",marginTop:8}}>Credenciales asignadas por administrador</div>
       </div>
     </div>
@@ -877,7 +956,10 @@ function App(){
             <div style={{fontSize:10,opacity:.75}}>{session.nombre} · <span className={"bdg "+rolBadge(rol)} style={{fontSize:9,padding:"1px 6px"}}>{rolLabel(rol)}</span></div>
           </div>
         </div>
-        <button onClick={logout} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>Salir</button>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <BotonInstalar compacto/>
+          <button onClick={logout} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>Salir</button>
+        </div>
       </div>
       <div className="pg">
         {!cat&&loading&&<div className="spin"/>}

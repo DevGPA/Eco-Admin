@@ -61,6 +61,17 @@ dinámicos (FormDinamico):
 - Una unidad sin checklist de reparto (montacargas) nunca se bloquea.
 - Tampoco pasa al enviar desde un borrador viejo que ya estaba en el último paso.
 
+`test_boton_anclar.js` — botón para anclar la app en el teléfono:
+- No aparece si ya está anclada, ni en un navegador que no puede instalarla.
+- En Android aparece cuando el navegador ofrece la instalación y la dispara de
+  verdad; si el usuario la cierra, el botón se queda mostrando los pasos
+  (Chrome no vuelve a ofrecerla hasta recargar).
+- En iPhone aparece siempre y abre las instrucciones de Safari (Compartir →
+  Agregar a inicio), sin mezclarlas con las de Android.
+- Un iPad con iPadOS se detecta bien; una Mac de verdad no.
+- Está también en la pantalla de inicio de sesión, y se quita solo si la app se
+  instala desde el menú del navegador.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

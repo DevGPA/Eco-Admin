@@ -33,8 +33,18 @@ const elem=()=>({getContext:()=>({}),toDataURL:()=>"data:image/png;base64,FIRMA"
   getBoundingClientRect:()=>({left:0,top:0,width:340,height:120}),classList:{add:noop,remove:noop}});
 const documentStub={createElement:elem,getElementById:()=>elem(),body:{appendChild:noop,removeChild:noop,style:{}},
   addEventListener:noop,removeEventListener:noop,querySelector:()=>null};
-const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},addEventListener:noop,removeEventListener:noop,
-  location:{origin:"https://operaciones-gpa.amplifyapp.com"},matchMedia:()=>({matches:false,addListener:noop}),
+// window con bus de eventos de verdad: hace falta para probar el botón de
+// «anclar», que escucha beforeinstallprompt / appinstalled.
+const oyentes={};
+const navegador={userAgent:"Mozilla/5.0 (Linux; Android 13) Chrome/120",maxTouchPoints:0,standalone:false,serviceWorker:undefined};
+const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
+  addEventListener:(t,f)=>{(oyentes[t]=oyentes[t]||[]).push(f);},
+  removeEventListener:(t,f)=>{oyentes[t]=(oyentes[t]||[]).filter(x=>x!==f);},
+  dispatch:(t,ev)=>{(oyentes[t]||[]).slice().forEach(f=>f(ev));},
+  location:{origin:"https://operaciones-gpa.amplifyapp.com"},
+  matchMedia:q=>({matches:!!windowStub._standalone,addListener:noop,addEventListener:noop}),
+  _standalone:false,
+  navigator:navegador,
   setTimeout,clearTimeout,localStorage};
 // api simulada: registra lo que se envía para poder revisar el payload real.
 const llamadas=[];
@@ -46,8 +56,8 @@ const metodos={
 class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>metodos[k]||(async()=>[]) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
-  {serviceWorker:undefined},localStorage,noop,console);
+  navegador,localStorage,noop,console);
 
-module.exports={M,React,TR,localStorage,llamadas,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
+module.exports={M,React,TR,localStorage,llamadas,windowStub,navegador,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
