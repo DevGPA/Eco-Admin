@@ -86,6 +86,18 @@ def main():
     if privadas_con_portal:
         problemas.append(f"rutas del portal que quedaron detrás de Cognito: {sorted(privadas_con_portal)}")
 
+    # Firma quien tiene la sesión abierta. Si alguna capa vuelve a mandar o a
+    # aceptar un firmante en el cuerpo, se podría firmar a nombre de otro y el
+    # acta de autorización dejaría de valer.
+    print("\nQuién firma:")
+    culpables = [n for n in ("handler.py", "frontend/app.js", "frontend/gpa-api.js")
+                 if "correoFirmante" in (RAIZ / n).read_text(encoding="utf-8")]
+    if culpables:
+        problemas.append(f"se volvió a pasar el firmante en el cuerpo, en: {culpables}")
+        print("    FALLA — el firmante vuelve a venir del cuerpo:", culpables)
+    else:
+        print("    el firmante sale del token, no del cuerpo de la petición")
+
     print()
     if problemas:
         print("PROBLEMAS:")

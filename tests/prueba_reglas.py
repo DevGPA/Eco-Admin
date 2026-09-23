@@ -320,11 +320,11 @@ marcas.pop("campo:telefono")
 e._fija_campos(folio, {"marcas": marcas}, q.get_caso(folio))
 e.pasar_a_autorizacion(folio, ADMIN)
 ok(q.get_caso(folio)["estado"] == "por_autorizar", "con todo revisado, pasa a firmas")
-rompe(lambda: e.firmar(folio, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "una sola firma", "un alta no admite nivel 2")
-rompe(lambda: e.firmar(folio, 1, SIN_NIVEL, ADMIN, "Motivo de prueba de la firma"), "no está habilitado", "quien no tiene nivel 1 no firma")
-e.firmar(folio, 1, FIRMA1, ADMIN, "Motivo de prueba de la firma")
+rompe(lambda: e.firmar(folio, 2, FIRMA2A, "Motivo de prueba de la firma"), "una sola firma", "un alta no admite nivel 2")
+rompe(lambda: e.firmar(folio, 1, SIN_NIVEL, "Motivo de prueba de la firma"), "no está habilitado", "quien no tiene nivel 1 no firma")
+e.firmar(folio, 1, FIRMA1, "Motivo de prueba de la firma")
 ok(q.get_caso(folio)["estado"] == "autorizada", "con una firma, el alta queda autorizada")
-rompe(lambda: e.firmar(folio, 1, FIRMA1, ADMIN, "Motivo de prueba de la firma"), "no está en autorización", "cerrada, ya no admite firmas")
+rompe(lambda: e.firmar(folio, 1, FIRMA1, "Motivo de prueba de la firma"), "no está en autorización", "cerrada, ya no admite firmas")
 
 print("\n== 9. Autorización de un CRÉDITO: 1 + 2 firmas ==")
 fc, kc = caso_cred["folio"], clave_cred
@@ -335,17 +335,17 @@ e.enviar_expediente(tc, kc)
 for d in c.docs_aplicables("credito", caso_cred["docs"], "Moral"):
     e.marcar_documento(fc, d["id"], True, "", ADMIN)
 e.pasar_a_autorizacion(fc, ADMIN)
-rompe(lambda: e.firmar(fc, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "falta la firma de nivel 1",
+rompe(lambda: e.firmar(fc, 2, FIRMA2A, "Motivo de prueba de la firma"), "falta la firma de nivel 1",
       "el nivel 2 no puede firmarse antes que el nivel 1")
-e.firmar(fc, 1, FIRMA1, ADMIN, "Motivo de prueba de la firma")
+e.firmar(fc, 1, FIRMA1, "Motivo de prueba de la firma")
 ok(q.get_caso(fc)["estado"] == "por_autorizar", "con nivel 1 el crédito sigue sin autorizarse")
-rompe(lambda: e.firmar(fc, 1, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "ya está firmado", "el nivel 1 no se firma dos veces")
-rompe(lambda: e.firmar(fc, 2, FIRMA1, ADMIN, "Motivo de prueba de la firma"), "ya firmó", "quien firmó nivel 1 no puede firmar nivel 2")
-rompe(lambda: e.firmar(fc, 2, SIN_NIVEL, ADMIN, "Motivo de prueba de la firma"), "no está habilitado", "sin nivel 2 no firma")
-e.firmar(fc, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma")
+rompe(lambda: e.firmar(fc, 1, FIRMA2A, "Motivo de prueba de la firma"), "ya está firmado", "el nivel 1 no se firma dos veces")
+rompe(lambda: e.firmar(fc, 2, FIRMA1, "Motivo de prueba de la firma"), "ya firmó", "quien firmó nivel 1 no puede firmar nivel 2")
+rompe(lambda: e.firmar(fc, 2, SIN_NIVEL, "Motivo de prueba de la firma"), "no está habilitado", "sin nivel 2 no firma")
+e.firmar(fc, 2, FIRMA2A, "Motivo de prueba de la firma")
 ok(q.get_caso(fc)["estado"] == "por_autorizar", "con una firma de nivel 2 todavía no basta")
-rompe(lambda: e.firmar(fc, 2, FIRMA2A, ADMIN, "Motivo de prueba de la firma"), "ya firmó", "la misma persona no cubre las dos firmas del nivel 2")
-e.firmar(fc, 2, FIRMA2B, ADMIN, "Motivo de prueba de la firma")
+rompe(lambda: e.firmar(fc, 2, FIRMA2A, "Motivo de prueba de la firma"), "ya firmó", "la misma persona no cubre las dos firmas del nivel 2")
+e.firmar(fc, 2, FIRMA2B, "Motivo de prueba de la firma")
 ok(q.get_caso(fc)["estado"] == "autorizada", "con 1 + 2 firmas el crédito queda autorizado")
 ok(len(q.get_caso(fc)["autorizaciones"]) == 3, "quedan registradas las tres firmas")
 ok(all(a.get("fecha") and a.get("nombre") for a in q.get_caso(fc)["autorizaciones"]),
@@ -419,11 +419,11 @@ for d in c.docs_aplicables("credito", caso_f["docs"], "Moral"):
     e.marcar_documento(ff, d["id"], True, "", ADMIN)
 e.pasar_a_autorizacion(ff, ADMIN)
 
-rompe(lambda: e.firmar(ff, 1, FIRMA1, ADMIN, ""), "motivo de su firma",
+rompe(lambda: e.firmar(ff, 1, FIRMA1, ""), "motivo de su firma",
       "no se puede firmar sin escribir el motivo")
-rompe(lambda: e.firmar(ff, 1, FIRMA1, ADMIN, "   "), "motivo de su firma",
+rompe(lambda: e.firmar(ff, 1, FIRMA1, "   "), "motivo de su firma",
       "ni con espacios en blanco")
-e.firmar(ff, 1, FIRMA1, ADMIN, "Línea de 250,000 contra pagaré; revisar a los 6 meses.")
+e.firmar(ff, 1, FIRMA1, "Línea de 250,000 contra pagaré; revisar a los 6 meses.")
 firma = q.get_caso(ff)["autorizaciones"][0]
 ok(firma.get("comentario", "").startswith("Línea de 250,000"),
    "el motivo queda pegado a la firma")

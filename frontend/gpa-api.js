@@ -167,9 +167,10 @@ class GpaApi {
   señalarCampo(folio, campo, motivo) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/revision`, { campo, motivo }); }
   devolver(folio) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/devolver`); }
   aAutorizacion(folio) { return this._http("POST", `/casos/${encodeURIComponent(folio)}/autorizacion`); }
-  firmar(folio, nivel, correoFirmante, comentario) {
+  /** Firma quien tiene la sesión abierta: el servidor lo toma del token, no de aquí. */
+  firmar(folio, nivel, comentario) {
     return this._http("POST", `/casos/${encodeURIComponent(folio)}/firmar`,
-                      { nivel, correoFirmante, comentario });
+                      { nivel, comentario });
   }
 
   // ── Análisis interno: comentarios y anexos. El cliente nunca ve nada de esto. ──

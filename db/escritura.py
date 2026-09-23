@@ -580,9 +580,12 @@ def anexos_de(caso: dict) -> list:
 
 
 # ── Autorización ─────────────────────────────────────────────────
-def firmar(folio: str, nivel: int, firmante: dict, usuario: dict,
-           comentario: str = "") -> dict:
-    """Registra una firma con el porqué de quien la da.
+def firmar(folio: str, nivel: int, firmante: dict, comentario: str = "") -> dict:
+    """Registra la firma de quien la está dando, con su porqué.
+
+    «firmante» es SIEMPRE quien tiene la sesión abierta: esta función no recibe
+    por separado un autor y un capturista, justamente para que no exista manera
+    de firmar a nombre de otro.
 
     El comentario es obligatorio en los tres niveles y queda pegado a la firma:
     después no se puede editar, porque es parte del acta de autorización.
@@ -619,16 +622,16 @@ def firmar(folio: str, nivel: int, firmante: dict, usuario: dict,
 
     fid = firmante.get("correo", "")
     if any(a.get("usuarioId") == fid for a in firmas):
-        raise ReglaRota(f"{firmante.get('nombre') or fid} ya firmó este expediente.")
+        raise ReglaRota("Usted ya firmó este expediente. El nivel 2 pide dos firmas "
+                        "de personas distintas.")
     if not firmante.get(f"n{nivel}"):
-        raise ReglaRota(f"{firmante.get('nombre') or fid} no está habilitado "
-                        f"para firmar nivel {nivel}.")
+        raise ReglaRota(f"Usted no está habilitado para firmar el nivel {nivel}. "
+                        "Pídale al Administrador que se lo habilite en Usuarios.")
 
     firmas.append({"nivel": nivel, "usuarioId": fid,
                    "nombre": firmante.get("nombre", ""), "rol": firmante.get("rol", ""),
                    "comentario": comentario,
-                   "fecha": legible_mx(), "cuando": iso_mx(),
-                   "registradaPor": usuario.get("correo", "")})
+                   "fecha": legible_mx(), "cuando": iso_mx()})
 
     completa = len([a for a in firmas if a["nivel"] == 1]) >= 1 and (
         tipo["autoriza"] == "simple" or len([a for a in firmas if a["nivel"] == 2]) >= 2)
@@ -637,7 +640,7 @@ def firmar(folio: str, nivel: int, firmante: dict, usuario: dict,
         campos["estado"] = "autorizada"
         campos["autorizado"] = iso_mx()
     _fija_campos(folio, campos, caso)
-    log(folio, "firma", usuario.get("correo", ""),
+    log(folio, "firma", fid,
         f"Nivel {nivel} firmado por {firmante.get('nombre') or fid}: {comentario[:120]}"
         + (" · expediente AUTORIZADO" if completa else ""))
     # La firma también queda en el hilo, para leer el expediente de corrido.

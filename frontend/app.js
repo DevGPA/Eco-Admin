@@ -25,7 +25,6 @@ var S = {
   nueva: null,
   ligaNueva: null,          // { liga, clave, folio } — la clave se ve una sola vez
   borrador: "",
-  firmaSel: {},
   firmando: null,        // {nivel, slot} mientras se escribe el motivo
   analisis: { comentarios: [], anexos: [] },
   veto: [],
@@ -595,22 +594,41 @@ function vistaBandeja() {
       '<td style="font-size:13.5px">' + falta + "</td></tr>";
   }).join("");
 
-  function cuenta(e) { return S.bandeja.filter(function (x) { return x.estado === e; }).length; }
-  var abiertos = S.bandeja.filter(function (x) { return x.estado !== "autorizada" && x.estado !== "rechazada"; }).length;
-  var lentos = S.bandeja.filter(function (x) { return x.estado !== "autorizada" && x.estado !== "rechazada" && x.dias > 7; }).length;
+  // Altas y créditos se cuentan por separado: son solicitudes distintas, con
+  // documentos y autorización distintos. Juntas, el atraso de una se escondía
+  // detrás del avance de la otra.
+  function delTipo(tipo) { return S.bandeja.filter(function (x) { return x.tipo === tipo; }); }
+  function vivos(lista) {
+    return lista.filter(function (x) { return x.estado !== "autorizada" && x.estado !== "rechazada"; });
+  }
+  function ficha(n, etiqueta, color) {
+    return '<div class="tile"><div class="k"' +
+      (color && n ? ' style="color:var(--' + color + ')"' : "") + ">" + n + "</div>" +
+      '<div class="l">' + etiqueta + "</div></div>";
+  }
+  function resumenDe(tipo, titulo) {
+    var lista = delTipo(tipo);
+    function cuenta(e) { return lista.filter(function (x) { return x.estado === e; }).length; }
+    var abiertos = vivos(lista).length;
+    var lentos = vivos(lista).filter(function (x) { return x.dias > 7; }).length;
+    return '<div><div class="eyebrow" style="margin-bottom:8px">' + titulo +
+      " · " + abiertos + (abiertos === 1 ? " abierto" : " abiertos") + "</div>" +
+      '<div class="tiles">' +
+      ficha(cuenta("enviada") + cuenta("captura"), "Esperando al cliente") +
+      ficha(cuenta("recibida"), "Por revisar") +
+      ficha(cuenta("por_autorizar"), "Por autorizar", "warn") +
+      ficha(cuenta("devuelta"), "Devueltos", "stop") +
+      ficha(lentos, "Más de 7 días", "warn") +
+      ficha(cuenta("autorizada"), "Autorizados") +
+      "</div></div>";
+  }
 
   return '<div class="stack">' + bannerError() +
     '<div><h1 style="font-size:22px">Bandeja de expedientes</h1>' +
     '<p class="dim" style="margin:3px 0 0">Altas y créditos son solicitudes separadas, ' +
-    "cada una con su liga y sus documentos.</p></div>" +
-    '<div class="tiles">' +
-      '<div class="tile"><div class="k">' + abiertos + '</div><div class="l">Abiertos</div></div>' +
-      '<div class="tile"><div class="k">' + (cuenta("enviada") + cuenta("captura")) + '</div><div class="l">Esperando al cliente</div></div>' +
-      '<div class="tile"><div class="k">' + cuenta("recibida") + '</div><div class="l">Por revisar</div></div>' +
-      '<div class="tile"><div class="k" style="color:' + (cuenta("por_autorizar") ? "var(--warn)" : "inherit") + '">' + cuenta("por_autorizar") + '</div><div class="l">Por autorizar</div></div>' +
-      '<div class="tile"><div class="k" style="color:' + (cuenta("devuelta") ? "var(--stop)" : "inherit") + '">' + cuenta("devuelta") + '</div><div class="l">Devueltos</div></div>' +
-      '<div class="tile"><div class="k" style="color:' + (lentos ? "var(--warn)" : "inherit") + '">' + lentos + '</div><div class="l">Más de 7 días</div></div>' +
-    "</div>" +
+    "cada una con su liga, sus documentos y su autorización.</p></div>" +
+    resumenDe("alta", "Altas de cliente") +
+    resumenDe("credito", "Solicitudes de crédito") +
     '<div class="card pad"><div class="tablewrap"><table class="grid-t">' +
     "<thead><tr><th>Folio</th><th>Tipo</th><th>Cliente</th><th>Creó</th><th>Sucursal</th>" +
     '<th>Estado</th><th class="num">Días</th><th>Qué falta</th></tr></thead><tbody>' +
@@ -955,23 +973,28 @@ function bloqueFirmas(c) {
     }
     var faltaN1 = nivel === 2 && firmadas.filter(function (a) { return a.nivel === 1; }).length < 1;
     var yaFirmaron = firmadas.map(function (a) { return a.usuarioId; });
-    var opciones = (nivel === 1 ? S.firmantes.nivel1 : S.firmantes.nivel2)
-      .filter(function (u) { return yaFirmaron.indexOf(u.correo) === -1; });
-    var clave = "n" + nivel + "_" + indice;
-    var sel = S.firmaSel[clave] || (opciones[0] ? opciones[0].correo : "");
+    var yo = api.sesion || {};
     var abierto = !!(S.firmando && S.firmando.nivel === nivel && S.firmando.slot === indice);
+
+    // Firma quien está con la sesión abierta. Ya no se elige a nadie: una firma
+    // puesta por otro no valdria como acta. El servidor lo vuelve a comprobar.
+    var habilitados = (nivel === 1 ? S.firmantes.nivel1 : S.firmantes.nivel2)
+      .filter(function (u) { return yaFirmaron.indexOf(u.correo) === -1; });
     var motivo = !listo ? "Falta que el expediente pase a autorización"
       : faltaN1 ? "Espera la firma de nivel 1"
-      : !opciones.length ? "No hay usuarios habilitados disponibles"
-      : !puedo ? "Su rol (" + (api.sesion ? api.sesion.rol : "") + ") no autoriza" : "";
+      : !puedo ? "Su rol (" + (yo.rol || "") + ") no autoriza"
+      : yaFirmaron.indexOf(yo.correo) !== -1 ? "Usted ya firmó este expediente"
+      : !yo["n" + nivel] ? "Usted no está habilitado para firmar el nivel " + nivel
+      : "";
+    // Cuando usted no puede firmar, decir quién sí puede ahorra media hora de preguntas.
+    var quienes = motivo && habilitados.length
+      ? " · pueden firmarlo: " + habilitados.map(function (u) { return u.nombre; }).join(", ")
+      : "";
     return '<div class="firma"><div class="n">' + (indice + 1) + "</div>" +
       '<div class="firma-body"><div class="firma-t">' + esc(titulo) + "</div>" +
-      '<div class="firma-d">' + (motivo ? esc(motivo) : "Elija quién firma") + "</div></div>" +
+      '<div class="firma-d">' + (motivo ? esc(motivo + quienes)
+        : "Firma usted: " + esc(yo.nombre || yo.correo || "")) + "</div></div>" +
       (motivo ? "" :
-        '<select data-firmasel="' + clave + '">' +
-        opciones.map(function (u) {
-          return '<option value="' + esc(u.correo) + '" ' + (sel === u.correo ? "selected" : "") + ">" + esc(u.nombre) + "</option>";
-        }).join("") + "</select>" +
         '<button class="btn btn-sm btn-primary" data-firmar="' + nivel + '" data-slot="' + indice + '">Firmar</button>') +
       // El motivo de la firma va en el acta y no se puede cambiar: por eso un
       // cuadro de texto de verdad y no una ventanita del navegador.
@@ -1497,8 +1520,6 @@ document.addEventListener("click", function (ev) {
   }
   if (d.firmar) {
     // Primero se pide el motivo; la firma se confirma en el siguiente paso.
-    var caja = document.querySelector('[data-firmasel="n' + d.firmar + "_" + d.slot + '"]');
-    if (caja) S.firmaSel["n" + d.firmar + "_" + d.slot] = caja.value;
     S.firmando = { nivel: Number(d.firmar), slot: Number(d.slot) };
     render();
     var ta = $("#motivo-firma");
@@ -1507,16 +1528,15 @@ document.addEventListener("click", function (ev) {
   }
   if (t.id === "btn-cancelar-firma") { S.firmando = null; render(); return; }
   if (d.confirmarFirma) {
-    var niv = Number(d.confirmarFirma), sl = Number(d.slot);
+    var niv = Number(d.confirmarFirma);
     var motivoFirma = ($("#motivo-firma") || {}).value || "";
     if (!motivoFirma.trim()) {
       S.error = "Escriba el motivo de su firma. Queda en el acta y no se puede cambiar después.";
       render();
       return;
     }
-    var quien = S.firmaSel["n" + niv + "_" + sl];
     conError(function () {
-      return api.firmar(S.folio, niv, quien, motivoFirma.trim()).then(function () {
+      return api.firmar(S.folio, niv, motivoFirma.trim()).then(function () {
         S.firmando = null;
         return recargaCaso();
       });
@@ -1658,7 +1678,6 @@ document.addEventListener("change", function (ev) {
     return;
   }
   if (d.nueva === "regimen") { S.nueva.regimen = el.value; actualizaPorRfc(); return; }
-  if (d.firmasel) { S.firmaSel[d.firmasel] = el.value; return; }
   if (el.id === "privacidad") { var b = $("#btn-enviar-portal"); if (b) b.disabled = !el.checked; return; }
 
   if (el.id === "anexo-file") {

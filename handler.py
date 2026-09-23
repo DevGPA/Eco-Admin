@@ -20,7 +20,7 @@
 #   POST  /casos/{folio}/revision         marcar documento o señalar campo
 #   POST  /casos/{folio}/devolver         regresárselo al cliente
 #   POST  /casos/{folio}/autorizacion     pasar a firmas
-#   POST  /casos/{folio}/firmar           {nivel, correoFirmante}
+#   POST  /casos/{folio}/firmar           {nivel, comentario}  firma el de la sesión
 #   POST  /casos/{folio}/rechazar         {motivo}
 #   GET   /casos/{folio}/analisis         comentarios y anexos internos
 #   POST  /casos/{folio}/comentario       {texto}
@@ -332,14 +332,18 @@ def _interno(ruta: str, event, usuario: dict):
             if not puede(rol, "autorizar"):
                 return _err(f"Su rol ({rol}) no autoriza expedientes.", 403)
             nivel = int(cuerpo.get("nivel") or 0)
-            correo = str(cuerpo.get("correoFirmante") or usuario["correo"])
-            firmante = auth_cognito.get_usuario(correo)
+            # Firma quien tiene la sesión abierta, y punto: el cuerpo de la
+            # petición no puede decir a nombre de quién se firma. Una firma
+            # puesta por otro no valdría como acta de autorización.
+            # Se relee la cuenta en Cognito en vez de creerle al token: si a
+            # alguien le acaban de quitar el nivel de firma, debe surtir efecto ya.
+            firmante = auth_cognito.get_usuario(usuario["correo"])
             if not firmante:
-                return _err("Ese usuario ya no existe en el sistema.", 404)
+                return _err("Su cuenta ya no existe en el sistema.", 404)
             if not firmante["activo"]:
-                return _err(f"{firmante['nombre']} está dado de baja y no puede firmar.", 409)
+                return _err("Su cuenta está dada de baja y no puede firmar.", 409)
             return _resp(_vista_interna(
-                firmar(folio, nivel, firmante, usuario, cuerpo.get("comentario", ""))))
+                firmar(folio, nivel, firmante, cuerpo.get("comentario", ""))))
 
         if ruta == "POST /casos/{folio}/rechazar":
             if not puede(rol, "autorizar"):
