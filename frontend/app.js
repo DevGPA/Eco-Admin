@@ -1696,12 +1696,26 @@ document.addEventListener("change", function (ev) {
     var u = S.usuarios.filter(function (x) { return x.correo === correo; })[0];
     if (!u) return;
     var datos = { correo: u.correo, nombre: u.nombre, rol: u.rol, n1: u.n1, n2: u.n2, activo: u.activo };
-    if (d.urol) datos.rol = el.value;
-    if (d.un1) datos.n1 = el.checked;
-    if (d.un2) datos.n2 = el.checked;
-    if (d.uact) datos.activo = el.checked;
+    var quecambio = "";
+    if (d.urol) { datos.rol = el.value; quecambio = "rol " + el.value; }
+    if (d.un1) { datos.n1 = el.checked; quecambio = (el.checked ? "con" : "sin") + " firma de nivel 1"; }
+    if (d.un2) { datos.n2 = el.checked; quecambio = (el.checked ? "con" : "sin") + " firma de nivel 2"; }
+    if (d.uact) { datos.activo = el.checked; quecambio = el.checked ? "activo" : "dado de baja"; }
     conError(function () {
-      return api.guardarUsuario(datos).then(function () { return irA("usuarios"); });
+      return api.guardarUsuario(datos).then(function (r) {
+        // Se usa lo que DEVUELVE el servidor, que lo lee con admin_get_user.
+        // Antes se volvía a pedir la lista completa, y list_users de Cognito tarda
+        // en reflejar un cambio recién hecho: pintaba el valor viejo y parecía
+        // que no se había guardado nada.
+        if (r && r.usuario) {
+          S.usuarios = S.usuarios.map(function (x) {
+            return x.correo === r.usuario.correo ? r.usuario : x;
+          });
+        }
+        if (r && r.firmas) S.firmas = r.firmas;
+        render();
+        toast((datos.nombre || datos.correo) + ": " + quecambio);
+      });
     })();
   }
 });

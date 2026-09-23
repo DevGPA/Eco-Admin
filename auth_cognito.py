@@ -9,11 +9,24 @@ from __future__ import annotations
 import os
 
 import boto3
+from botocore.exceptions import ClientError
 
 from catalogos import (GRUPO_A_ROL, ROL_A_GRUPO, ROLES, ROL_ADMIN, ROL_COMITE,
                        ROL_CONSULTA)
 
 _IDP = None
+
+# Los fallos de Cognito que un administrador puede corregir, dichos en su idioma.
+_FALLOS_COGNITO = {
+    "AliasExistsException":    "Ese correo ya está ocupado por otra cuenta.",
+    "UserNotFoundException":   "Esa cuenta ya no existe en el sistema.",
+    "InvalidParameterException": "Cognito rechazó uno de los datos de la cuenta.",
+    "InvalidPasswordException": "La contraseña no cumple la política: mínimo 10 caracteres, "
+                                "con mayúscula, minúscula y número.",
+    "UsernameExistsException": "Ya existe una cuenta con ese correo.",
+    "NotAuthorizedException":  "AWS no autorizó la operación sobre esa cuenta.",
+    "LimitExceededException":  "Demasiados intentos seguidos. Espere un momento y reintente.",
+}
 
 
 def idp():
@@ -112,7 +125,22 @@ def elegibles(nivel: int) -> list:
 
 
 def guardar_usuario(datos: dict) -> dict:
-    """Crea o actualiza una cuenta interna: rol, niveles de firma y alta/baja."""
+    """Crea o actualiza una cuenta interna: rol, niveles de firma y alta/baja.
+
+    Traduce los fallos de Cognito: si no, cualquiera de ellos cae en el «except
+    Exception» del handler y el administrador solo ve «algo falló del lado de
+    GPA», sin manera de saber qué corregir.
+    """
+    try:
+        return _guardar_usuario(datos)
+    except ClientError as e:
+        error = e.response.get("Error", {})
+        codigo = error.get("Code", "")
+        detalle = _FALLOS_COGNITO.get(codigo) or error.get("Message") or codigo
+        raise CuentaInvalida(f"No se pudo guardar la cuenta. {detalle} ({codigo})") from e
+
+
+def _guardar_usuario(datos: dict) -> dict:
     correo = str(datos.get("correo", "")).strip().lower()
     if "@" not in correo:
         raise CuentaInvalida("El correo no es válido.")
@@ -129,18 +157,32 @@ def guardar_usuario(datos: dict) -> dict:
     if rol not in (ROL_COMITE, ROL_ADMIN):
         n1 = n2 = "0"
 
-    atributos = [
-        {"Name": "email", "Value": correo},
-        {"Name": "email_verified", "Value": "true"},
+    # Lo único que este panel cambia de una cuenta ya creada.
+    perfil = [
         {"Name": "custom:nombre", "Value": nombre},
         {"Name": "custom:n1", "Value": n1},
         {"Name": "custom:n2", "Value": n2},
     ]
 
     existente = get_usuario(correo)
+
+    # El sistema no puede quedarse sin Administradores: si eso pasara, ya no
+    # habría quien diera de alta usuarios ni quien deshiciera el error.
+    if (existente and existente["rol"] == ROL_ADMIN and existente["activo"]
+            and (rol != ROL_ADMIN or not activo)):
+        otros = [u for u in listar_usuarios()
+                 if u["rol"] == ROL_ADMIN and u["activo"] and u["correo"] != correo]
+        if not otros:
+            raise CuentaInvalida(
+                "Es el único Administrador activo. Nombre antes a otro Administrador; "
+                "si no, nadie podría volver a entrar a administrar usuarios.")
+
     creado = False
     if existente is None:
-        kw = {"UserPoolId": pool(), "Username": correo, "UserAttributes": atributos,
+        # En el alta sí se manda el correo: aquí es donde nace el usuario.
+        kw = {"UserPoolId": pool(), "Username": correo,
+              "UserAttributes": [{"Name": "email", "Value": correo},
+                                 {"Name": "email_verified", "Value": "true"}] + perfil,
               "DesiredDeliveryMediums": ["EMAIL"]}
         temporal = str(datos.get("password") or "").strip()
         if temporal:
@@ -149,8 +191,11 @@ def guardar_usuario(datos: dict) -> dict:
         idp().admin_create_user(**kw)
         creado = True
     else:
+        # NO se reenvía «email»: en este pool el correo ES el nombre de usuario
+        # (UsernameAttributes: [email]). Reasignarlo hace que Cognito responda
+        # AliasExistsException y el cambio de rol o de nivel de firma se pierde.
         idp().admin_update_user_attributes(UserPoolId=pool(), Username=correo,
-                                           UserAttributes=atributos)
+                                           UserAttributes=perfil)
         nueva = str(datos.get("password") or "").strip()
         if nueva:
             idp().admin_set_user_password(UserPoolId=pool(), Username=correo,

@@ -65,6 +65,8 @@ amplify-vars:
 
 pruebas:
 	PYTHONUTF8=1 python tests/prueba_reglas.py
+	PYTHONUTF8=1 python tests/prueba_usuarios.py
+	PYTHONUTF8=1 python tests/rutas.py
 
 logs:
 	sam logs --stack-name $(STACK) --region $(REGION) --tail
