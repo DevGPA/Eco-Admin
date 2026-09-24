@@ -22,6 +22,7 @@ var S = {
   usuarios: [],
   firmas: null,
   firmantes: { nivel1: [], nivel2: [] },
+  tipoBandeja: "alta",        // qué pestaña de la bandeja se está viendo
   nueva: null,
   ligaNueva: null,          // { liga, clave, folio } — la clave se ve una sola vez
   borrador: "",
@@ -574,7 +575,17 @@ function vistaLogin() {
 }
 
 function vistaBandeja() {
-  var filas = S.bandeja.map(function (x) {
+  // Altas y créditos son dos bandejas, no una. Son solicitudes distintas, con
+  // documentos y autorización distintos, y quien revisa altas rara vez es quien
+  // autoriza créditos. Mezcladas, el atraso de una se escondía detrás de la otra.
+  var tipo = S.tipoBandeja === "credito" ? "credito" : "alta";
+  function delTipo(t) { return S.bandeja.filter(function (x) { return x.tipo === t; }); }
+  function vivos(lista) {
+    return lista.filter(function (x) { return x.estado !== "autorizada" && x.estado !== "rechazada"; });
+  }
+
+  var lista = delTipo(tipo);
+  var filas = lista.map(function (x) {
     var falta;
     if (x.estado === "autorizada") falta = '<span class="dim">Nada</span>';
     else if (x.estado === "rechazada") falta = '<span style="color:var(--stop)">Rechazada</span>';
@@ -582,9 +593,10 @@ function vistaBandeja() {
     else if (x.estado === "por_autorizar") falta = '<span style="color:var(--warn)">' + x.firmas + " de " + x.firmasRequeridas + " firmas</span>";
     else if (x.pedidos - x.ok > 0) falta = (x.pedidos - x.ok) + " de " + x.pedidos + " documentos";
     else falta = "Listo para revisar";
+    // Sin columna «Tipo»: la pestaña ya lo dice, y en el celular cada columna
+    // que sobra empuja a las demás fuera de la pantalla.
     return '<tr class="clickable" data-folio="' + esc(x.folio) + '">' +
       '<td class="mono" style="font-size:13px">' + esc(x.folio) + "</td>" +
-      "<td>" + etiquetaTipo(x.tipo) + "</td>" +
       '<td><div style="font-weight:600">' + esc(x.razonSocial) + "</div>" +
       '<div class="dim mono" style="font-size:12px">' + esc(x.rfc) + " · régimen " + esc(x.regimen) + "</div></td>" +
       "<td>" + esc(x.creadoPor || "—") + "</td>" +
@@ -594,45 +606,44 @@ function vistaBandeja() {
       '<td style="font-size:13.5px">' + falta + "</td></tr>";
   }).join("");
 
-  // Altas y créditos se cuentan por separado: son solicitudes distintas, con
-  // documentos y autorización distintos. Juntas, el atraso de una se escondía
-  // detrás del avance de la otra.
-  function delTipo(tipo) { return S.bandeja.filter(function (x) { return x.tipo === tipo; }); }
-  function vivos(lista) {
-    return lista.filter(function (x) { return x.estado !== "autorizada" && x.estado !== "rechazada"; });
-  }
   function ficha(n, etiqueta, color) {
     return '<div class="tile"><div class="k"' +
       (color && n ? ' style="color:var(--' + color + ')"' : "") + ">" + n + "</div>" +
       '<div class="l">' + etiqueta + "</div></div>";
   }
-  function resumenDe(tipo, titulo) {
-    var lista = delTipo(tipo);
-    function cuenta(e) { return lista.filter(function (x) { return x.estado === e; }).length; }
-    var abiertos = vivos(lista).length;
-    var lentos = vivos(lista).filter(function (x) { return x.dias > 7; }).length;
-    return '<div><div class="eyebrow" style="margin-bottom:8px">' + titulo +
-      " · " + abiertos + (abiertos === 1 ? " abierto" : " abiertos") + "</div>" +
-      '<div class="tiles">' +
+  function cuenta(e) { return lista.filter(function (x) { return x.estado === e; }).length; }
+  var lentos = vivos(lista).filter(function (x) { return x.dias > 7; }).length;
+
+  // La pestaña trae su pendiente al lado: se ve dónde está el trabajo sin entrar.
+  function pestaña(t, etiqueta) {
+    var pend = vivos(delTipo(t)).length;
+    return '<button data-bandeja="' + t + '" aria-current="' + (tipo === t) + '">' +
+      etiqueta + (pend ? " · " + pend : "") + "</button>";
+  }
+
+  var T = (CAT.tipos && CAT.tipos[tipo]) || {};
+  return '<div class="stack">' + bannerError() +
+    '<div><h1 style="font-size:22px">Bandeja de expedientes</h1>' +
+    '<p class="dim" style="margin:3px 0 0">Altas y créditos son solicitudes separadas, ' +
+    "cada una con su liga, sus documentos y su autorización.</p></div>" +
+    '<div class="subnav" role="tablist" style="margin-bottom:0">' +
+      pestaña("alta", "Altas de cliente") +
+      pestaña("credito", "Solicitudes de crédito") +
+    "</div>" +
+    '<div class="tiles">' +
       ficha(cuenta("enviada") + cuenta("captura"), "Esperando al cliente") +
       ficha(cuenta("recibida"), "Por revisar") +
       ficha(cuenta("por_autorizar"), "Por autorizar", "warn") +
       ficha(cuenta("devuelta"), "Devueltos", "stop") +
       ficha(lentos, "Más de 7 días", "warn") +
       ficha(cuenta("autorizada"), "Autorizados") +
-      "</div></div>";
-  }
-
-  return '<div class="stack">' + bannerError() +
-    '<div><h1 style="font-size:22px">Bandeja de expedientes</h1>' +
-    '<p class="dim" style="margin:3px 0 0">Altas y créditos son solicitudes separadas, ' +
-    "cada una con su liga, sus documentos y su autorización.</p></div>" +
-    resumenDe("alta", "Altas de cliente") +
-    resumenDe("credito", "Solicitudes de crédito") +
+    "</div>" +
     '<div class="card pad"><div class="tablewrap"><table class="grid-t">' +
-    "<thead><tr><th>Folio</th><th>Tipo</th><th>Cliente</th><th>Creó</th><th>Sucursal</th>" +
+    "<thead><tr><th>Folio</th><th>Cliente</th><th>Creó</th><th>Sucursal</th>" +
     '<th>Estado</th><th class="num">Días</th><th>Qué falta</th></tr></thead><tbody>' +
-    (filas || '<tr><td colspan="8" class="dim">Todavía no hay expedientes. Empiece con una pre-solicitud.</td></tr>') +
+    (filas || '<tr><td colspan="7" class="dim">No hay ' +
+      esc(String(T.nombre || "").toLowerCase() || "expedientes") +
+      ' todavía. Empiece con una pre-solicitud.</td></tr>') +
     "</tbody></table></div></div></div>";
 }
 
@@ -1449,6 +1460,7 @@ document.addEventListener("click", function (ev) {
 
   // ── navegación ──
   if (d.ir) { irA(d.ir); return; }
+  if (d.bandeja) { S.tipoBandeja = d.bandeja; render(); return; }
   if (d.abrir) { irA("expediente", d.abrir); return; }
   if (t.matches("tr[data-folio]")) { irA("expediente", d.folio); return; }
   if (d.tipo) {

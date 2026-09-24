@@ -57,7 +57,7 @@ function veces(texto, aguja) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-console.log("\n1. El resumen de la bandeja separa altas de créditos");
+console.log("\n1. La bandeja se separa en dos pestañas");
 // ═══════════════════════════════════════════════════════════════
 ctx.api.sesion = { correo: "oscar@gpa.com.mx", nombre: "Oscar Cabrera",
                    rol: "Administrador", n1: true, n2: true };
@@ -77,46 +77,71 @@ ctx.S.bandeja = [
   fila("credito", "autorizada", 40),    // cerrada: no es "abierta" ni "lenta"
 ];
 
-const html = ctx.vistaBandeja();
-ok(html.includes("Altas de cliente"), "hay un bloque «Altas de cliente»");
-ok(html.includes("Solicitudes de crédito"), "y otro «Solicitudes de crédito»");
-
-// Se parte el html en los dos bloques para leer los números de cada uno.
-const iAlta = html.indexOf("Altas de cliente");
-const iCred = html.indexOf("Solicitudes de crédito");
-ok(iAlta > -1 && iCred > iAlta, "el de altas va primero");
-const bloqueAlta = html.slice(iAlta, iCred);
-const bloqueCred = html.slice(iCred, html.indexOf("<table"));
-
-function valor(bloque, etiqueta) {
-  // Cada ficha es …>N</div><div class="l">Etiqueta</div>
-  const re = new RegExp(">(\\d+)</div><div class=\"l\">" + etiqueta);
-  const m = bloque.match(re);
+function valor(html, etiqueta) {
+  // Cada ficha es …>N</div><div class="l">Etiqueta</div>. Se busca sin armar
+  // una expresión regular con texto: las barras invertidas se pierden al pasar
+  // por una cadena, y la comparación quedaba siempre en nulo sin avisar.
+  const i = html.indexOf('</div><div class="l">' + etiqueta);
+  if (i < 0) return null;
+  const m = html.slice(0, i).match(/>(\d+)$/);
   return m ? Number(m[1]) : null;
 }
+function folios(html) {
+  return (html.match(/data-folio="([^"]+)"/g) || []).map((s) => s.slice(12, -1));
+}
 
-console.log("\n   Altas: 3 expedientes, todos abiertos");
-ok(bloqueAlta.includes("Altas de cliente · 3 abiertos"), "cuenta 3 altas abiertas");
-ok(valor(bloqueAlta, "Esperando al cliente") === 1, "1 esperando al cliente");
-ok(valor(bloqueAlta, "Por revisar") === 1, "1 por revisar");
-ok(valor(bloqueAlta, "Por autorizar") === 1, "1 por autorizar");
-ok(valor(bloqueAlta, "Devueltos") === 0, "0 devueltos");
-ok(valor(bloqueAlta, "Más de 7 días") === 1, "1 con más de 7 días");
-ok(valor(bloqueAlta, "Autorizados") === 0, "0 autorizados");
+// Sin elegir nada, se abre en altas: lo predecible vale más que lo listo.
+ctx.S.tipoBandeja = "alta";
+let html = ctx.vistaBandeja();
+ok(html.includes('data-bandeja="alta"'), "hay una pestaña de altas");
+ok(html.includes('data-bandeja="credito"'), "y otra de créditos");
+ok(html.includes('data-bandeja="alta" aria-current="true"'), "la de altas está activa");
+ok(html.includes('data-bandeja="credito" aria-current="false"'), "la de créditos no");
 
-console.log("\n   Créditos: 4 expedientes, 3 abiertos y 1 ya autorizado");
-ok(bloqueCred.includes("Solicitudes de crédito · 3 abiertos"), "cuenta 3 créditos abiertos");
-ok(valor(bloqueCred, "Esperando al cliente") === 0, "0 esperando al cliente");
-ok(valor(bloqueCred, "Por revisar") === 0, "0 por revisar");
-ok(valor(bloqueCred, "Por autorizar") === 2, "2 por autorizar");
-ok(valor(bloqueCred, "Devueltos") === 1, "1 devuelto");
-ok(valor(bloqueCred, "Más de 7 días") === 2, "2 con más de 7 días (el autorizado no cuenta)");
-ok(valor(bloqueCred, "Autorizados") === 1, "1 autorizado");
+console.log("\n   Cada pestaña trae su pendiente al lado:");
+ok(html.includes("Altas de cliente · 3"), "altas: 3 abiertas");
+ok(html.includes("Solicitudes de crédito · 3"), "créditos: 3 abiertos (el autorizado no cuenta)");
 
-console.log("\n   Y no se mezclan:");
-ok(valor(bloqueAlta, "Por autorizar") + valor(bloqueCred, "Por autorizar") === 3,
-   "los 3 «por autorizar» quedan repartidos entre los dos bloques, no sumados en uno");
-ok(veces(html, 'class="tiles"') === 2, "son exactamente dos resúmenes, no uno solo ni tres");
+console.log("\n   En altas solo se ven altas:");
+ok(folios(html).length === 3, "la tabla trae 3 renglones, no los 7");
+ok(folios(html).every((f) => f.startsWith("alta-")), "y todos son altas");
+ok(valor(html, "Esperando al cliente") === 1, "1 esperando al cliente");
+ok(valor(html, "Por revisar") === 1, "1 por revisar");
+ok(valor(html, "Por autorizar") === 1, "1 por autorizar");
+ok(valor(html, "Devueltos") === 0, "0 devueltos");
+ok(valor(html, "Más de 7 días") === 1, "1 con más de 7 días");
+ok(valor(html, "Autorizados") === 0, "0 autorizados");
+ok(veces(html, 'class="tiles"') === 1, "un solo resumen en pantalla, el de la pestaña abierta");
+
+console.log("\n   Al cambiar de pestaña cambia todo: tabla y cifras");
+ctx.S.tipoBandeja = "credito";
+html = ctx.vistaBandeja();
+ok(html.includes('data-bandeja="credito" aria-current="true"'), "ahora manda la de créditos");
+ok(folios(html).length === 4, "se ven los 4 créditos (incluido el autorizado)");
+ok(folios(html).every((f) => f.startsWith("credito-")), "y ninguna alta se cuela");
+ok(valor(html, "Esperando al cliente") === 0, "0 esperando al cliente");
+ok(valor(html, "Por revisar") === 0, "0 por revisar");
+ok(valor(html, "Por autorizar") === 2, "2 por autorizar");
+ok(valor(html, "Devueltos") === 1, "1 devuelto");
+ok(valor(html, "Más de 7 días") === 2, "2 con más de 7 días (el autorizado no cuenta)");
+ok(valor(html, "Autorizados") === 1, "1 autorizado");
+
+console.log("\n   Y la pestaña sigue diciendo el pendiente de la OTRA:");
+ok(html.includes("Altas de cliente · 3"),
+   "desde créditos se ve que hay 3 altas pendientes, sin tener que entrar");
+
+console.log("\n   La columna «Tipo» sobra: la pestaña ya lo dice");
+ok(!html.includes("<th>Tipo</th>"), "no está la columna Tipo");
+// Se cuentan los cierres: «<th» también aparece dentro de «<thead>».
+ok(veces(html, "</th>") === 7, "quedan 7 columnas, una menos que antes");
+
+console.log("\n   Una pestaña vacía lo dice con nombre propio:");
+ctx.S.bandeja = [fila("alta", "captura", 1)];
+ctx.S.tipoBandeja = "credito";
+html = ctx.vistaBandeja();
+ok(html.includes("No hay solicitud de crédito todavía"),
+   "en créditos dice que no hay créditos, no un «no hay expedientes» genérico");
+ok(html.includes("Altas de cliente · 1"), "y la otra pestaña sigue marcando su pendiente");
 
 // ═══════════════════════════════════════════════════════════════
 console.log("\n2. Firma quien tiene la sesión abierta");
