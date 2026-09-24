@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<title>Manual · Alta de Clientes GPA</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="estilos.css">
+<style>
+  /* Estilos propios del manual. La app manda en todo lo demás. */
+  .man{max-width:840px; margin:0 auto; padding:26px 16px 80px}
+  .man h1{font-size:27px; line-height:1.18; margin:0}
+  .man h2{font-size:20px; margin:0 0 4px; scroll-margin-top:20px}
+  .man h3{font-size:15.5px; margin:0 0 6px}
+  .man p{margin:0 0 11px; line-height:1.62}
+  .man section{margin-top:40px}
+  .man ul,.man ol{margin:0 0 12px; padding-left:22px; line-height:1.62}
+  .man li{margin-bottom:6px}
+  .man li::marker{color:var(--ink-3)}
+
+  .cabecera{display:flex; align-items:center; gap:13px; margin-bottom:26px}
+  .cabecera img{width:44px; height:44px; object-fit:contain}
+
+  /* Índice: una liga por sección, no un árbol. */
+  .indice{display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:1px;
+          background:var(--line-2); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
+  .indice a{display:block; background:var(--surface); padding:12px 15px; text-decoration:none; color:var(--ink)}
+  .indice a:hover{background:var(--surface-3)}
+  .indice .n{font-size:11.5px; color:var(--ink-3); letter-spacing:.07em; text-transform:uppercase}
+  .indice .t{font-family:var(--font); font-weight:600; font-size:14.5px; margin-top:2px}
+
+  /* Pasos numerados: el número manda, el texto explica. */
+  .pasos{list-style:none; margin:0; padding:0; counter-reset:paso}
+  .pasos > li{counter-increment:paso; position:relative; padding:0 0 20px 46px; margin:0}
+  .pasos > li::before{content:counter(paso); position:absolute; left:0; top:-1px;
+    width:29px; height:29px; border-radius:50%; background:var(--ink); color:var(--ground);
+    font-family:var(--font); font-weight:600; font-size:14px; display:flex;
+    align-items:center; justify-content:center}
+  .pasos > li:not(:last-child)::after{content:""; position:absolute; left:14px; top:33px;
+    bottom:4px; width:1px; background:var(--line)}
+  .pasos h3{margin-bottom:4px}
+  .pasos p:last-child{margin-bottom:0}
+
+  .ve{background:var(--surface-3); border-left:3px solid var(--line-2); border-radius:0 6px 6px 0;
+      padding:9px 13px; margin:0 0 11px; font-size:13.5px; color:var(--ink-2)}
+  .ve b{font-family:var(--font); color:var(--ink)}
+
+  .man table{width:100%; border-collapse:collapse; font-size:13.8px}
+  .man th{text-align:left; font-family:var(--font); font-size:11.5px; letter-spacing:.06em;
+          text-transform:uppercase; color:var(--ink-3); padding:0 12px 8px 0; font-weight:600;
+          border-bottom:1px solid var(--line)}
+  .man td{padding:10px 12px 10px 0; border-bottom:1px solid var(--line-2); vertical-align:top; line-height:1.5}
+  .man tr:last-child td{border-bottom:0}
+  .si{color:var(--ok); font-weight:600}
+  .no{color:var(--ink-3)}
+
+  .volver{position:sticky; bottom:16px; margin-top:34px; text-align:center}
+  .volver a{display:inline-block; background:var(--ink); color:var(--ground); text-decoration:none;
+            padding:9px 17px; border-radius:100px; font-family:var(--font); font-size:13.5px}
+
+  @media print{
+    .indice,.volver{display:none}
+    .man{max-width:none; padding:0}
+    .man section{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<main class="man">
+
+  <div class="cabecera">
+    <img src="logo.png" alt="GPA">
+    <div>
+      <h1>Alta de Clientes</h1>
+      <p class="dim" style="margin:2px 0 0">Manual de uso · versión 1.0 · General de Productos para el Agua</p>
+    </div>
+  </div>
+
+  <div class="banner banner-info" style="margin-bottom:26px"><span>
+    <b>En una línea:</b> GPA le manda al cliente una liga, el cliente llena su expediente desde
+    su celular o su computadora, y GPA lo revisa y lo autoriza. El cliente <b>no se registra
+    en nada</b> y no crea contraseñas.
+  </span></div>
+
+  <nav class="indice">
+    <a href="#empezar"><div class="n">Para empezar</div><div class="t">Qué es y qué no es</div></a>
+    <a href="#ventas"><div class="n">Ventas</div><div class="t">Generar la liga</div></a>
+    <a href="#cliente"><div class="n">Cliente</div><div class="t">Qué ve y qué hace</div></a>
+    <a href="#revisar"><div class="n">Mesa de control</div><div class="t">Revisar y devolver</div></a>
+    <a href="#autorizar"><div class="n">Comité</div><div class="t">Firmar y autorizar</div></a>
+    <a href="#admin"><div class="n">Administrador</div><div class="t">Usuarios y vetados</div></a>
+    <a href="#problemas"><div class="n">Ayuda</div><div class="t">Cuando algo falla</div></a>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="empezar">
+    <div class="eyebrow">Para empezar</div>
+    <h2>Qué es y qué no es</h2>
+
+    <p>Este portal sirve para <b>armar el expediente de un cliente nuevo</b>: juntar sus datos
+    y sus documentos, revisarlos y dejar por escrito quién los autorizó.</p>
+
+    <p><b>No da de alta al cliente en SAP.</b> Eso se sigue haciendo a mano, igual que siempre.
+    Lo que cambia es que cuando le toque capturarlo, ya va a tener todo completo, revisado
+    y autorizado en un solo lugar.</p>
+
+    <h3 style="margin-top:22px">Alta y crédito son dos solicitudes distintas</h3>
+    <p>No se piden juntas y no se autorizan igual. Un cliente puede tener alta sin crédito.</p>
+
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>&nbsp;</th><th>Alta de cliente</th><th>Solicitud de crédito</th></tr></thead>
+      <tbody>
+        <tr><td><b>Para qué</b></td>
+            <td>Poder facturarle y entregarle.</td>
+            <td>Darle una línea de crédito.</td></tr>
+        <tr><td><b>Formato</b></td>
+            <td class="mono">PNO-VE01-F3</td>
+            <td class="mono">CYC-FT-001 Rev.03</td></tr>
+        <tr><td><b>Qué se le pide</b></td>
+            <td>Datos fiscales y de facturación · Entrega y horarios · Contactos</td>
+            <td>Datos fiscales y de facturación · Crédito (bancos, referencias, obligados solidarios) · Autorización de buró</td></tr>
+        <tr><td><b>Documentos</b></td>
+            <td>5</td>
+            <td>8</td></tr>
+        <tr><td><b>Firmas</b></td>
+            <td><b>1 firma</b></td>
+            <td><b>3 firmas:</b> una de nivel 1 y dos de nivel 2, de personas distintas</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 style="margin-top:26px">Quién puede hacer qué</h3>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>Puede…</th><th>Administrador</th><th>Comité de Crédito</th><th>Ventas</th><th>Consulta</th></tr></thead>
+      <tbody>
+        <tr><td>Crear pre-solicitudes y generar ligas</td><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td><td class="no">—</td></tr>
+        <tr><td>Revisar, señalar y devolver al cliente</td><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td><td class="no">—</td></tr>
+        <tr><td>Comentar en el análisis interno</td><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td><td class="no">—</td></tr>
+        <tr><td>Firmar y autorizar</td><td class="si">Sí</td><td class="si">Sí</td><td class="no">—</td><td class="no">—</td></tr>
+        <tr><td>Administrar usuarios</td><td class="si">Sí</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+        <tr><td>Administrar la lista de vetados</td><td class="si">Sí</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+        <tr><td>Ver expedientes</td><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="dim" style="margin-top:10px">Firmar además pide que el Administrador le haya
+    habilitado el nivel de firma. Tener el rol de Comité no basta por sí solo.</p>
+
+    <h3 style="margin-top:26px">Por dónde pasa un expediente</h3>
+    <div class="row" style="flex-wrap:wrap; gap:7px; margin-bottom:11px">
+      <span class="pill p-enviada">Enviada</span> →
+      <span class="pill p-captura">En captura</span> →
+      <span class="pill p-recibida">Recibida</span> →
+      <span class="pill p-autorizar">Por autorizar</span> →
+      <span class="pill p-autorizada">Autorizada</span>
+    </div>
+    <p>Y dos desvíos: <span class="pill p-devuelta">Devuelta</span> cuando GPA le regresa
+    algo al cliente para que lo corrija, y <span class="pill p-rechazada">Rechazada</span>
+    cuando se decide no seguir.</p>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="ventas">
+    <div class="eyebrow">Ventas · Mesa de control</div>
+    <h2>Generar la liga del cliente</h2>
+    <p>El cliente nunca se da de alta solo. Siempre empieza aquí.</p>
+
+    <ol class="pasos">
+      <li>
+        <h3>Entre a <b>Nueva pre-solicitud</b></h3>
+        <p>Está en la barra de arriba.</p>
+      </li>
+      <li>
+        <h3>Elija si es <b>Alta de cliente</b> o <b>Solicitud de crédito</b></h3>
+        <p>Si el cliente necesita las dos cosas, se generan dos ligas por separado.</p>
+      </li>
+      <li>
+        <h3>Capture los datos que el cliente <b>no</b> va a poder cambiar</h3>
+        <p>Razón social, RFC, nombre comercial y régimen fiscal. El cliente los ve, pero
+        no los edita: así nadie cambia a nombre de quién se está facturando.</p>
+        <p>Escriba el RFC primero. El sistema le propone solo el régimen que corresponde,
+        según el catálogo oficial del SAT. Si el régimen y el RFC no concuerdan, se lo avisa.</p>
+        <div class="ve"><b>En crédito:</b> aquí también captura el <b>monto requerido</b>.
+        Lo fija GPA, no el cliente; el cliente solo lo ve.</div>
+      </li>
+      <li>
+        <h3>Presione <b>Generar liga y clave</b></h3>
+        <p>Se crea el folio y salen dos cosas en pantalla.</p>
+        <div class="banner banner-stop" style="margin:0 0 11px"><span>
+          <b>La clave se muestra una sola vez.</b> Cópiela en ese momento. Si cierra la
+          pantalla sin copiarla, tendrá que generar una clave nueva desde el expediente.
+        </span></div>
+      </li>
+      <li>
+        <h3>Mande la liga <b>por correo</b></h3>
+        <p>Use <b>Copiar liga</b>, o <b>Borrador de correo</b> si quiere el texto ya redactado
+        para pegarlo en Outlook.</p>
+      </li>
+      <li>
+        <h3>Mande la clave <b>por otro camino</b></h3>
+        <p>WhatsApp, una llamada, un mensaje. Hay un botón <b>Mensaje para WhatsApp</b> con
+        el texto listo.</p>
+        <div class="banner banner-warn" style="margin:0"><span>
+          <b>Nunca en el mismo correo que la liga.</b> Si ese correo se reenvía por error, la
+          liga sola no abre nada. Ahí está toda la protección del expediente.
+        </span></div>
+      </li>
+    </ol>
+
+    <h3 style="margin-top:8px">Cosas que conviene saber</h3>
+    <ul>
+      <li>La liga <b>dura 15 días</b>. Si se vence, desde el expediente se genera una clave
+        nueva y los 15 días vuelven a empezar.</li>
+      <li>Es la <b>misma liga</b> siempre. El cliente puede salir y volver cuantas veces quiera,
+        y si le devolvemos algo, vuelve a entrar por la misma.</li>
+      <li>A los <b>5 intentos fallidos</b> de clave, la liga se bloquea. Se desbloquea
+        generando una clave nueva.</li>
+      <li>Si el cliente está en la <b>lista de vetados</b>, el sistema no lo deja crear la
+        pre-solicitud y le dice por qué. Solo un Administrador puede levantar el bloqueo,
+        y tiene que escribir el motivo.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="cliente">
+    <div class="eyebrow">El cliente</div>
+    <h2>Qué ve y qué hace</h2>
+    <p>Esto es lo que pasa del otro lado. Sirve para poder ayudarlo por teléfono.</p>
+
+    <ol class="pasos">
+      <li>
+        <h3>Abre la liga y teclea su clave</h3>
+        <p>No crea usuario, no crea contraseña, no instala nada. Su navegador recuerda la
+        clave en esa pestaña, así que las siguientes veces entra directo.</p>
+      </li>
+      <li>
+        <h3>Llena el formulario</h3>
+        <p>Funciona en celular y en computadora. Puede <b>guardar incompleto</b> y volver
+        después: se guarda solo conforme escribe.</p>
+      </li>
+      <li>
+        <h3>Adjunta sus documentos</h3>
+        <p>Vienen <b>agrupados por dueño</b>, con un color para cada grupo, para que no se
+        confunda entre lo del negocio y lo del aval:</p>
+        <ul>
+          <li><b style="color:#185FA5">De la empresa</b> — papeles del negocio y de su domicilio.</li>
+          <li><b style="color:#6D4AA0">Del dueño o representante legal</b> — de la persona que firma por la empresa.</li>
+          <li><b style="color:#0D6E6E">Del aval y obligados solidarios</b> — de quienes responden si el cliente no paga.</li>
+        </ul>
+        <p>Hay además un espacio libre, de hasta 10 archivos, por si quiere subir algo que
+        no le pedimos. Cada archivo puede pesar hasta 15 MB.</p>
+      </li>
+      <li>
+        <h3>Revisa y envía</h3>
+        <p>Antes de enviar tiene que aceptar el aviso de privacidad.</p>
+        <div class="ve"><b>No puede enviar incompleto.</b> Si algo falta, el sistema le dice
+        exactamente qué, por su nombre, y lo marca en rojo en el formulario. Guardar
+        incompleto sí puede; enviar incompleto no.</div>
+      </li>
+    </ol>
+
+    <div class="banner banner-info"><span>
+      <b>Lo que el cliente nunca ve:</b> los comentarios del comité, los anexos internos, las
+      firmas, la lista de vetados, ni si su aval está en ella. Solo ve su propio expediente y,
+      si se lo devolvemos, lo que le señalamos.
+    </span></div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="revisar">
+    <div class="eyebrow">Mesa de control · Ventas</div>
+    <h2>Revisar y devolver</h2>
+
+    <p>Cuando el cliente envía, el expediente aparece en la bandeja como
+    <span class="pill p-recibida">Recibida</span>. La bandeja está partida en dos pestañas,
+    <b>Altas de cliente</b> y <b>Solicitudes de crédito</b>, y cada pestaña trae al lado
+    cuántos expedientes tiene pendientes.</p>
+
+    <h3 style="margin-top:22px">Si algo está mal</h3>
+    <ol class="pasos">
+      <li>
+        <h3><b>Señale</b> lo que esté mal, una cosa a la vez</h3>
+        <p>En cada documento hay un botón <b>Señalar</b>; en cada dato mal capturado, también.
+        Se le pide un motivo, y ese texto <b>lo va a leer el cliente tal cual</b>. Escríbalo
+        pensando en él: «la constancia es de 2024, necesitamos una de los últimos 3 meses».</p>
+      </li>
+      <li>
+        <h3>Presione <b>Devolver al cliente</b></h3>
+        <p>El botón está apagado hasta que señale al menos una cosa. Es a propósito: devolver
+        sin decir qué está mal solo hace que el cliente vuelva a mandar lo mismo.</p>
+        <p>El cliente entra por la misma liga y <b>solo puede tocar lo señalado</b>. Lo demás
+        se queda como estaba.</p>
+      </li>
+    </ol>
+
+    <h3>Si está todo bien</h3>
+    <p>Presione <b>Pasar a autorización</b>. Ese botón se enciende solo cuando no falta nada;
+    si falta algo, arriba le dice qué.</p>
+
+    <div class="ve"><b>Un expediente de crédito con aval vetado</b> le va a mostrar un aviso
+    rojo con el nombre del obligado solidario y el motivo por el que está en la lista.
+    El cliente no fue avisado de eso: la decisión es de quien autoriza.</div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="autorizar">
+    <div class="eyebrow">Comité de Crédito</div>
+    <h2>Firmar y autorizar</h2>
+
+    <h3>Cómo funcionan las firmas</h3>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>&nbsp;</th><th>Alta de cliente</th><th>Solicitud de crédito</th></tr></thead>
+      <tbody>
+        <tr><td><b>Firmas</b></td><td>1</td><td>3</td></tr>
+        <tr><td><b>Quiénes</b></td>
+            <td>Una persona con nivel 1.</td>
+            <td>Una con nivel 1, más <b>dos personas distintas</b> con nivel 2.</td></tr>
+        <tr><td><b>Orden</b></td>
+            <td>—</td>
+            <td>El nivel 2 no se puede firmar antes que el nivel 1.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <ul style="margin-top:14px">
+      <li><b>Firma quien tiene la sesión abierta.</b> No se puede firmar a nombre de otro:
+        la pantalla dice «Firma usted: <i>su nombre</i>».</li>
+      <li><b>Nadie firma dos veces</b> el mismo expediente. Las dos firmas de nivel 2 tienen
+        que ser de dos personas.</li>
+      <li><b>El motivo es obligatorio</b> en todas las firmas, y queda pegado al acta.
+        No se puede editar ni borrar después. Escríbalo como lo escribiría en un acta:
+        «Línea de 250,000 contra pagaré firmado; revisar a los 6 meses».</li>
+      <li>Si usted no puede firmar, la pantalla le dice por qué y <b>le da el nombre de quien
+        sí puede</b>.</li>
+    </ul>
+
+    <h3 style="margin-top:24px">El análisis interno</h3>
+    <p>Arriba de las firmas hay un espacio donde el comité puede <b>dejar comentarios</b> y
+    <b>subir anexos</b> —un buró consultado, una nota de cartera, una minuta—. Todo eso queda
+    con nombre y fecha, y <b>el cliente nunca lo ve</b>.</p>
+    <p class="dim">Los comentarios no se pueden editar ni borrar. Es a propósito: son parte
+    del expediente de la decisión.</p>
+
+    <h3 style="margin-top:24px">Rechazar</h3>
+    <p>Si se decide no seguir, <b>Rechazar expediente</b> pide el motivo y cierra el caso.
+    Queda registrado quién lo rechazó y por qué.</p>
+
+    <div class="banner banner-ok" style="margin-top:18px"><span>
+      <b>Cuando se completan las firmas</b>, el expediente queda <b>Autorizada</b>. Ahí se puede
+      capturar el cliente en SAP, con todo a la mano y con el respaldo de quién lo autorizó.
+    </span></div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="admin">
+    <div class="eyebrow">Administrador</div>
+    <h2>Usuarios y clientes vetados</h2>
+
+    <h3>Usuarios</h3>
+    <p>En <b>Usuarios</b> se da de alta a la gente de GPA, se le pone su rol y se le habilitan
+    los niveles de firma. Cada cambio se guarda al momento y aparece un aviso abajo
+    confirmando qué quedó guardado.</p>
+    <ul>
+      <li><b>Para crear una cuenta</b> llene nombre, correo, rol y una contraseña temporal.
+        Entréguesela usted: el correo automático todavía no está configurado. Al entrar,
+        la persona elige su propia contraseña.</li>
+      <li><b>Solo Comité y Administrador</b> pueden llevar nivel de firma. Si le pone nivel
+        a alguien de Ventas, el sistema se lo quita.</li>
+      <li><b>No se puede quedar sin Administradores.</b> Si usted es el único y trata de
+        cambiarse el rol o darse de baja, el sistema no lo deja: nadie podría volver a entrar
+        a administrar.</li>
+      <li>Si no hay suficiente gente habilitada para firmar, arriba aparece un aviso rojo.
+        Un crédito necesita <b>dos</b> personas con nivel 2, o nunca se va a poder autorizar.</li>
+    </ul>
+
+    <h3 style="margin-top:24px">Clientes vetados</h3>
+    <p>La lista de clientes a los que GPA no les da de alta: cartera incobrable, fraude,
+    juicio, relación terminada. Pueden ser <b>empresas o personas físicas</b>.</p>
+    <ul>
+      <li><b>Basta el nombre o el RFC</b>, pero entre más datos ponga (nombre comercial,
+        correo, celular), más difícil es que se cuelen con otro nombre.</li>
+      <li><b>El motivo es obligatorio.</b> Sin él, dentro de un año nadie va a saber si sigue
+        vigente.</li>
+      <li><b>Se compara sin distraerse con la forma de escribir:</b> el RFC con o sin guiones,
+        el celular con o sin lada, el nombre con o sin acentos, con o sin «S.A. de C.V.»,
+        y el nombre de una persona aunque esté en otro orden
+        (<span class="mono">Pérez García Juan</span> = <span class="mono">Juan Pérez García</span>).</li>
+      <li><b>Un nombre parecido avisa, no bloquea.</b> «Albercas del Valle» y «Albercas del
+        Valle del Norte» pueden ser dos empresas distintas; el aviso queda guardado en el
+        expediente para que quien autorice lo vea.</li>
+      <li><b>También se revisa a los obligados solidarios</b> de las solicitudes de crédito,
+        al momento en que el cliente envía su expediente. De nada sirve vetar a alguien si
+        puede volver a entrar como aval de otro.</li>
+      <li><b>Sacar a alguien de la lista</b> también pide motivo, y no se borra: queda el
+        registro de la baja, con quién la hizo.</li>
+    </ul>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="problemas">
+    <div class="eyebrow">Ayuda</div>
+    <h2>Cuando algo falla</h2>
+
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>El cliente dice…</th><th>Qué hacer</th></tr></thead>
+      <tbody>
+        <tr><td>«La liga me dice que venció»</td>
+            <td>Abra su expediente y presione <b>Generar clave nueva</b>. Eso reinicia los
+            15 días. Dele la clave nueva al momento: tampoco se vuelve a mostrar.</td></tr>
+        <tr><td>«Me dice que la liga está bloqueada»</td>
+            <td>Falló la clave 5 veces. Se arregla igual: <b>Generar clave nueva</b>.</td></tr>
+        <tr><td>«Perdí la clave»</td>
+            <td>Igual. La clave no se puede consultar, ni por usted: el sistema guarda solo
+            una huella de ella, nunca la clave misma.</td></tr>
+        <tr><td>«No me deja enviar»</td>
+            <td>Le falta algo. El propio mensaje le dice qué, por su nombre, y queda marcado
+            en rojo en el formulario.</td></tr>
+        <tr><td>«Subí el documento equivocado»</td>
+            <td>Puede quitarlo y subir otro mientras no haya enviado. Si ya envió, señáleselo
+            y devuélvaselo.</td></tr>
+        <tr><td>«¿Tengo que registrarme?»</td>
+            <td>No. Nunca. Solo la liga y la clave.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 style="margin-top:26px">Si algo sale mal del lado de GPA</h3>
+    <p>Cuando el sistema no pueda hacer algo, se lo va a decir en rojo, con el motivo.
+    Si el mensaje no le dice qué corregir, avise a Administración <b>con el folio a la mano</b>:
+    todo lo que pasa en un expediente queda en su bitácora, con quién lo hizo y cuándo.</p>
+  </section>
+
+  <div class="volver"><a href="index.html">← Volver al portal</a></div>
+
+  <p class="dim" style="text-align:center; margin-top:30px">
+    Manual versión 1.0 · Formatos <span class="mono">PNO-VE01-F3</span> y
+    <span class="mono">CYC-FT-001 Rev.03</span> · Régimen fiscal según el catálogo
+    <span class="mono">c_RegimenFiscal</span> del SAT.
+  </p>
+
+</main>
+</body>
+</html>

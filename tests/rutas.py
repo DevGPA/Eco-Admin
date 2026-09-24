@@ -102,6 +102,24 @@ def main():
     else:
         print("    ninguno de los", len(prohibidos), "campos internos se asoma en _vista_cliente")
 
+    # El manual se despliega junto a la app y se actualiza con ella. Si no está
+    # en el paquete, o nadie lo enlaza, es como si no existiera.
+    print("\nManual:")
+    manual = RAIZ / "frontend" / "manual.html"
+    indice = (RAIZ / "frontend" / "index.html").read_text(encoding="utf-8")
+    if not manual.exists():
+        problemas.append("falta frontend/manual.html")
+        print("    FALLA — no existe frontend/manual.html")
+    elif 'href="manual.html"' not in indice:
+        problemas.append("el manual existe pero nada lo enlaza desde index.html")
+        print("    FALLA — el manual existe pero nadie lo enlaza")
+    else:
+        v = re.search(r"versión (\d+\.\d+)", manual.read_text(encoding="utf-8"))
+        print("    manual v" + (v.group(1) if v else "?") + ", enlazado desde el portal")
+
+    # Firma quien tiene la sesión abierta. Si alguna capa vuelve a mandar o a
+    # aceptar un firmante en el cuerpo, se podría firmar a nombre de otro y el
+    # acta de autorización dejaría de valer.
     print("\nQuién firma:")
     culpables = [n for n in ("handler.py", "frontend/app.js", "frontend/gpa-api.js")
                  if "correoFirmante" in (RAIZ / n).read_text(encoding="utf-8")]
