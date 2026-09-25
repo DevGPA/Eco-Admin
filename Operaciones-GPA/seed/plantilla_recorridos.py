@@ -12,6 +12,8 @@
 #   · N/A       → verde. Un recorrido cubre cosas que no existen en toda
 #                 instalación (tapanco, montacargas, contratistas…), y forzar
 #                 «No cumple» las marcaría como falla inexistente.
+# El DOMICILIO no se captura: el encabezado del PDF ya imprime el de la sucursal
+# seleccionada, así que pedirlo sería capturar el mismo dato dos veces.
 # El criterio de revisión de cada punto (la columna «Revisión» del Excel) viaja
 # en el campo `ayuda` y se muestra bajo el título, para no inspeccionar de memoria.
 #
@@ -127,19 +129,17 @@ SECCIONES = [
 
 
 def plantilla() -> dict:
-    # El motor ya pide sucursal y responsable en su primer paso, así que el
-    # domicilio va al principio de la primera sección: una sección aparte solo
-    # para ese dato agregaría un paso entero al recorrido.
+    # NO se pide el domicilio: sale solo. El encabezado del PDF ya imprime el
+    # domicilio de la SUCURSAL seleccionada (tabla DOMICILIOS del front), así que
+    # escribirlo a mano sería capturar dos veces el mismo dato y arriesgar que no
+    # coincida con el de la sucursal.
     secs = []
     for sid, titulo, puntos in SECCIONES:
-        items = [{"id": pid, "label": lab, "ayuda": ayuda, "type": "escala",
-                  "opts": ESCALA, "req": True, "nota": True}
-                 for pid, lab, ayuda in puntos]
-        if not secs:
-            items.insert(0, {"id": "domicilio",
-                             "label": "Domicilio o instalación recorrida",
-                             "type": "text"})
-        secs.append({"id": sid, "title": titulo, "items": items})
+        secs.append({"id": sid, "title": titulo, "items": [
+            {"id": pid, "label": lab, "ayuda": ayuda, "type": "escala",
+             "opts": ESCALA, "req": True, "nota": True}
+            for pid, lab, ayuda in puntos
+        ]})
     return {
         "clave": CLAVE,
         "modulo": MODULO,
@@ -188,7 +188,8 @@ def main():
         print(f"\n   · {s['title']} ({len(s['items'])})")
         for it in s["items"]:
             print(f"       - {it['id'][:38]:40} {it['type']:7} {it['label'][:44]}")
-    print(f"\n   Total: {n} campos ({n - 1} puntos de revisión + 1 dato general)")
+    ns = len(p["secciones"])
+    print(f"\n   Total: {n} puntos de revisión en {ns} secciones")
 
     tabla = session.resource("dynamodb").Table(args.tabla)
     previo = tabla.get_item(Key={"PK": "CAT#PLANTILLA", "SK": f"PLT#{CLAVE}"}).get("Item")

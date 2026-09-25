@@ -53,7 +53,7 @@ console.log("── La plantilla ──");
 ok(puntos.length===36,"36 puntos de revisión");
 ok(plt.modulo==="seguridad","módulo Seguridad");
 ok(plt.secciones.length===6,"6 secciones → 8 pasos con el motor");
-ok(plt.secciones[0].items[0].id==="domicilio","el domicilio va con la primera sección, sin robar un paso");
+ok(plt.secciones.flatMap(x=>x.items).every(i=>i.type==="escala"),"solo puntos de revisión: el domicilio NO se captura a mano");
 
 let r;await act(async()=>{r=montar();});
 ok(plano(r).includes("Sucursal"),"el paso 1 pide la sucursal");
@@ -62,7 +62,7 @@ await act(async()=>{bt(r,"Siguiente").props.onClick();});
 
 console.log("\n── El criterio de revisión se ve en pantalla ──");
 const t1=plano(r);
-ok(t1.includes("Domicilio"),"la primera sección pide el domicilio");
+ok(!t1.includes("Domicilio"),"la app ya NO pide el domicilio (sale del catálogo de la sucursal)");
 ok(t1.includes("es-ayuda"),"cada punto trae su línea de criterio");
 ok(t1.includes("Sin obstrucción en ningún momento del día"),"con el texto del Excel (pasillos libres)");
 ok(t1.includes("Móviles: En condiciones de uso"),"y conserva el criterio de dos líneas (escaleras)");
@@ -92,11 +92,25 @@ const env=llamadas.find(l=>l.metodo==="crearFormulario");
 ok(!!env,"se envió el formulario");
 ok(env&&env.clave==="recorridos_instalaciones","con la clave correcta");
 const resp=env?Object.keys(env.datos.answers).filter(k=>!k.includes("__")):[];
-ok(resp.length===37,"llegan los 36 puntos + el domicilio ("+resp.length+"), más sus notas");
+ok(resp.length===36,"llegan los 36 puntos ("+resp.length+"), más sus notas");
 ok(env&&env.datos.resultado==="Óptimo / operativo","resultado: "+(env&&env.datos.resultado));
 ok(env&&env.datos.sucursal,"con sucursal: "+(env&&env.datos.sucursal));
 ok(enviado===true,"y regresa al historial");
 await act(async()=>{r1.unmount();});
+
+console.log("\n── El domicilio sale de la sucursal, hacia el PDF ──");
+// El generador del PDF lee area.dataset.pdfsucursal y busca el domicilio en
+// la tabla DOMICILIOS. Se comprueba que el detalle del formulario lo publique.
+const src=fs.readFileSync(path.resolve(__dirname,"../../frontend/index.html"),"utf8");
+ok(src.includes('data-pdfsucursal={reg.sucursal'),
+   "el detalle del formulario le pasa la sucursal al PDF");
+const iniD=src.indexOf("const DOMICILIOS={");
+const finD=src.indexOf("};",iniD);
+const dom=src.slice(iniD,finD);
+const claves=[...dom.matchAll(new RegExp(String.fromCharCode(34)+"([^"+String.fromCharCode(34)+"]+)"+String.fromCharCode(34)+"[ ]*:","g"))].map(m=>m[1]);
+const sinDom=cat.sucursales.filter(x=>!claves.includes(x));
+ok(sinDom.length===0,"las "+cat.sucursales.length+" sucursales tienen domicilio"+(sinDom.length?": faltan "+sinDom.join(", "):""));
+ok(claves.includes(env.datos.sucursal),"la sucursal del envío ("+env.datos.sucursal+") tiene domicilio para el PDF");
 
 console.log("\n── Un punto en «No cumple» ──");
 let r2;await act(async()=>{r2=montar();});
