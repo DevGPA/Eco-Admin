@@ -11,7 +11,8 @@ BUCKET = os.environ.get("EVIDENCIAS_BUCKET", "")
 TTL    = int(os.environ.get("URL_FIRMADA_TTL", "900"))
 _client = None
 
-_EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+_EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+        "application/pdf": "pdf"}   # factura de EPP como archivo
 
 
 def _c():

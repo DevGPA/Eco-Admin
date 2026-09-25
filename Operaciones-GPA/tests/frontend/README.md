@@ -94,6 +94,10 @@ Monta la App COMPLETA, sembrando lo que devuelve la api con `mundo`.
 - Existencias: lista solo artículos activos y avisa los saldos en negativo.
 - Historial e identificación (factura / #empleado), filtro por tipo.
 - El detalle sale como «Vale de entrega de EPP» y le pasa la sucursal al PDF.
+- La factura admite foto de cámara, de galería o archivo PDF (campo sin
+  `capture`, acepta `application/pdf`); es el ÚNICO campo así — se comprueba que
+  los del reporte de carga sigan con cámara directa. Un PDF se previsualiza como
+  archivo y en el detalle se abre con un enlace, nunca como <img> roto.
 
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene

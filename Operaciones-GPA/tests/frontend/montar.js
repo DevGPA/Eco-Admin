@@ -65,7 +65,7 @@ class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
   (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   navegador,localStorage,noop,console);
 

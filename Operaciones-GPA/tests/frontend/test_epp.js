@@ -139,5 +139,48 @@ ok(td.includes("data-pdfsucursal")||JSON.stringify(r7.root.findAll(n=>n.props&&n
    "le pasa la sucursal al PDF (para el domicilio del encabezado)");
 ok(td.includes("Playera"),"lista el artículo con su nombre, no su clave");
 ok(td.includes("Acepto y me comprometo"),"y reproduce la carta responsiva firmada");
+
+console.log("\n── FACTURA: archivo o foto de galería, SOLO en este campo ──");
+const S3PDF="https://gpa-ops-evidencias-prod.s3.amazonaws.com/EPP/abc123.pdf?AWSAccessKeyId=X&Expires=1&Signature=Y";
+const S3JPG="https://gpa-ops-evidencias-prod.s3.amazonaws.com/EPP/abc123.jpg?AWSAccessKeyId=X";
+ok(M.esPDF("data:application/pdf;base64,JVBERi0=")===true,"reconoce un PDF recién elegido");
+ok(M.esPDF(S3PDF)===true,"reconoce un PDF ya guardado en S3 (ruta .pdf con firma)");
+ok(M.esPDF(S3JPG)===false,"una foto .jpg no es PDF");
+ok(M.esPDF("data:image/jpeg;base64,/9j/")===false,"una foto recién tomada no es PDF");
+ok(M.esPDF(null)===false&&M.esPDF("")===false,"vacío no es PDF");
+// El campo de factura: acepta PDF y NO fuerza la cámara
+localStorage.removeItem("gpa_epp_draft_entrada_almacen@gpa.com.mx");
+let r8;await act(async()=>{r8=montar(M.EppForm,props("entrada"));});
+const fileFactura=r8.root.findAllByType("input").find(x=>x.props.type==="file");
+ok(!!fileFactura,"la entrada tiene un campo de archivo");
+ok(String(fileFactura.props.accept).includes("application/pdf"),"acepta PDF: "+fileFactura.props.accept);
+ok(fileFactura.props.capture===undefined,"NO trae capture → el celular ofrece cámara, galería o archivos");
+ok(plano(r8).includes("archivo o foto"),"el texto invita a elegir archivo o foto");
+await act(async()=>{r8.unmount();});
+// Los demás campos de foto NO cambian: el reporte de carga sigue abriendo la cámara
+localStorage.removeItem("gpa_rep_draft_almacen@gpa.com.mx");
+let r9;await act(async()=>{r9=montar(M.RepForm,{cat,items:[],session,rol:"operador",sucursalesUser:null,refrescar:async()=>{},showToast:()=>{},onDone:()=>{}});});
+const filesRep=r9.root.findAllByType("input").filter(x=>x.props.type==="file");
+ok(filesRep.length>0&&filesRep.every(x=>x.props.capture!==undefined),"los "+filesRep.length+" campos de foto del reporte de carga siguen con cámara directa");
+ok(filesRep.every(x=>!String(x.props.accept).includes("pdf")),"y ninguno acepta PDF");
+await act(async()=>{r9.unmount();});
+// Vista previa: un PDF no se pinta como <img>
+let r10;await act(async()=>{r10=montar(M.FotoCampo,{val:"data:application/pdf;base64,JVBERi0=",set:()=>{},label:"Factura",archivo:true});});
+ok(plano(r10).includes("Archivo PDF cargado")&&r10.root.findAllByType("img").length===0,"un PDF elegido se muestra como archivo, no como imagen rota");
+await act(async()=>{r10.unmount();});
+let r11;await act(async()=>{r11=montar(M.FotoCampo,{val:"data:image/jpeg;base64,/9j/",set:()=>{},label:"Factura",archivo:true});});
+ok(r11.root.findAllByType("img").length===1,"una foto sí se previsualiza como imagen");
+await act(async()=>{r11.unmount();});
+// Detalle: PDF → enlace para abrirlo; foto → imagen
+const entPDF={id:"9",tipo_reg:"EPP",movimiento:"entrada",fecha:new Date().toISOString(),sucursal:"Cedis",factura:"A-9",fotoFactura:S3PDF,renglones:[{articuloId:"casco",cantidad:1}]};
+let r12;await act(async()=>{r12=montar(M.EppDetail,{reg:entPDF,cat,onBack:()=>{}});});
+const a=r12.root.findAllByType("a").find(x=>x.props.href===S3PDF);
+ok(!!a&&a.props.target==="_blank","el detalle ofrece «Abrir factura (PDF)» en pestaña nueva");
+ok(r12.root.findAllByType("img").length===0,"y no intenta pintar el PDF como imagen");
+ok(plano(r12).includes("Factura adjunta como archivo PDF"),"el PDF impreso deja constancia de la factura adjunta");
+await act(async()=>{r12.unmount();});
+let r13;await act(async()=>{r13=montar(M.EppDetail,{reg:{...entPDF,fotoFactura:S3JPG},cat,onBack:()=>{}});});
+ok(r13.root.findAllByType("img").some(i=>i.props.src===S3JPG),"una factura en foto sí se muestra como imagen");
+await act(async()=>{r13.unmount();});
 console.log("\n══ fin ══");
 })();

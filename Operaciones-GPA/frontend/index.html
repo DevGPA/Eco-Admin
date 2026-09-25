@@ -641,9 +641,22 @@ const catVeh=v=>v.categoria||(((v.responsable||"").toUpperCase().includes("ALMAC
 // y se plasma en el PDF y en los CSV descargados).
 const folioDe=r=>{if(!r||!r.id)return"";const t=String(r.tipo_reg||"REG").split("#")[0];return (t+"-"+String(r.id)).toUpperCase();};
 // Campo de foto reutilizable (comprime al capturar vía readFile)
-function FotoCampo({val,set,label,capture="environment"}){
+// ¿El valor es un PDF? Sirve para el dato recién elegido (data:application/pdf)
+// y para el ya guardado (URL firmada de S3 cuya ruta termina en .pdf).
+const esPDF=v=>{const t=String(v||"");return t.startsWith("data:application/pdf")||/\.pdf(\?|$)/i.test(t.split("?")[0]);};
+// `archivo`: SOLO para campos que aceptan un documento (hoy, la factura de EPP).
+// Quita `capture` —así el celular ofrece cámara, galería o archivos— y admite PDF.
+// Los demás campos no pasan la prop y siguen abriendo la cámara directo.
+function FotoCampo({val,set,label,capture="environment",archivo=false}){
+  const pdf=val&&esPDF(val);
   return(<div style={{marginBottom:8}}><label>{label}</label>
-    <div className="pb">{!val&&<><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>Toca para capturar</div></>}{val&&<img src={val} alt={label}/>}<input type="file" accept="image/*" capture={capture} onChange={e=>readFile(e,set)}/></div>
+    <div className="pb">
+      {!val&&<><div style={{fontSize:22}}>{archivo?"📄":"📷"}</div><div style={{marginTop:3}}>{archivo?"Toca para elegir archivo o foto":"Toca para capturar"}</div></>}
+      {val&&(pdf?<div style={{padding:"18px 8px",textAlign:"center",fontSize:12,color:"#444"}}><div style={{fontSize:26}}>📄</div>Archivo PDF cargado</div>:<img src={val} alt={label}/>)}
+      {archivo
+        ?<input type="file" accept="image/*,application/pdf" onChange={e=>readFile(e,set)}/>
+        :<input type="file" accept="image/*" capture={capture} onChange={e=>readFile(e,set)}/>}
+    </div>
     {val&&<button className="bs" style={{marginTop:4,width:"100%",fontSize:11}} onClick={()=>set(null)}>Cambiar</button>}
   </div>);
 }
@@ -1179,7 +1192,7 @@ function EppForm({movimiento,cat,session,rol,sucursalesUser,refrescar,showToast,
           <input type="text" value={factura} onChange={e=>setFactura(e.target.value)} placeholder="Ej. A-10245"/>
           <label>Proveedor</label>
           <input type="text" value={proveedor} onChange={e=>setProveedor(e.target.value)} placeholder="Opcional"/>
-          <FotoCampo val={fotoFactura} set={setFotoFactura} label="Foto de la factura *"/>
+          <FotoCampo val={fotoFactura} set={setFotoFactura} label="Factura (foto de cámara o galería, o archivo PDF) *" archivo/>
         </React.Fragment>:<React.Fragment>
           <label>Número de empleado <span style={{color:C.red}}>*</span></label>
           <input type="text" value={numEmpleado} onChange={e=>setNumEmpleado(e.target.value)} placeholder="Ej. 1042" inputMode="numeric"/>
@@ -1299,7 +1312,12 @@ function EppDetail({reg,cat,onBack}){
           </table>
         </div>
         {reg.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:12,color:"#444"}}>{reg.obs}</div></div>}
-        {ent&&reg.fotoFactura&&<div className="card"><div className="ct">Factura</div><img src={reg.fotoFactura} style={{width:"100%",borderRadius:8}} alt="factura"/></div>}
+        {ent&&reg.fotoFactura&&<div className="card"><div className="ct">Factura</div>
+          {esPDF(reg.fotoFactura)
+            ?<><a className="no-print" href={reg.fotoFactura} target="_blank" rel="noopener" style={{display:"block",textAlign:"center",padding:"14px 8px",fontSize:13,fontWeight:700,color:C.blue}}>📄 Abrir factura (PDF)</a>
+               <div style={{fontSize:11,color:"#777",textAlign:"center"}}>Factura adjunta como archivo PDF (se consulta en la app).</div></>
+            :<img src={reg.fotoFactura} style={{width:"100%",borderRadius:8}} alt="factura"/>}
+        </div>}
         {!ent&&<div className="card"><div className="ct">Conformidad de quien recibe</div>
           <div style={{fontSize:11,color:"#555",lineHeight:1.5,marginBottom:8}}>{reg.aviso||EPP_LEGAL}</div>
           {reg.firma&&<img src={reg.firma} style={{width:"100%",maxWidth:260,borderRadius:6}} alt="firma"/>}

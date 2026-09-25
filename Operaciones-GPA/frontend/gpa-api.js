@@ -290,7 +290,9 @@ class GpaApi {
   // Recorre un objeto y sube todas las imágenes base64, reemplazándolas por su clave S3.
   // Las subidas se hacen EN PARALELO (varias fotos a la vez) para que sea más rápido.
   async subirEvidencias(tipo, obj) {
-    if (typeof obj === "string") return obj.startsWith("data:image") ? this.subirEvidencia(tipo, obj) : obj;
+    // Todo lo que venga en base64 va a S3: imágenes y también el PDF de una
+    // factura. Un PDF incrustado en el registro rebasaría el tamaño máximo de DynamoDB.
+    if (typeof obj === "string") return (obj.startsWith("data:image") || obj.startsWith("data:application/pdf")) ? this.subirEvidencia(tipo, obj) : obj;
     if (Array.isArray(obj)) return Promise.all(obj.map(v => this.subirEvidencias(tipo, v)));
     if (obj && typeof obj === "object") {
       const entries = await Promise.all(Object.keys(obj).map(async k => [k, await this.subirEvidencias(tipo, obj[k])]));
