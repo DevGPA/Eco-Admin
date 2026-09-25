@@ -79,6 +79,13 @@ dinámicos (FormDinamico):
   botón está deshabilitado — es lo que hacía parecer que «no guardaba»).
 - «No cumple» pide evidencia y deja la instalación fuera de servicio; «N/A» no.
 
+`test_insignias_nav.js` — contador de pendientes en el menú:
+- Los responsables de cumplimiento ven el número sobre cada pestaña; quien no lo
+  es (o un admin que no está dado de alta como responsable) no ve nada.
+- Admin y Seguimiento nunca traen número.
+- Al capturar los checklists, el número baja y la insignia deja de estar roja.
+Monta la App COMPLETA, sembrando lo que devuelve la api con `mundo`.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

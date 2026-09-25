@@ -47,7 +47,9 @@ const GCS=`
 .logo{width:34px;height:34px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;color:${C.blue};font-size:12px;flex-shrink:0}
 .nav{display:flex;border-top:1px solid #e0e0e0;background:#fff;position:sticky;bottom:0;z-index:20;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .nav::-webkit-scrollbar{display:none}
-.nav button{flex:1 0 auto;min-width:62px;padding:8px 4px 6px;background:none;border:none;cursor:pointer;font-size:9px;color:#888;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap}
+.nav button{flex:1 0 auto;min-width:62px;padding:8px 4px 6px;background:none;border:none;cursor:pointer;font-size:9px;color:#888;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap;position:relative}
+.navb{position:absolute;top:3px;left:50%;margin-left:4px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:${C.amber};color:#fff;font-size:9px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px #fff}
+.navb.ven{background:${C.red}}
 .nav button.act{color:${C.blue};border-top:2px solid ${C.blue}}
 .nav svg{width:19px;height:19px}
 .pg{flex:1;padding:14px;overflow-y:auto;padding-bottom:20px}
@@ -864,7 +866,9 @@ function App(){
   const[loading,setLoading]=useState(false);
   const[module,setModule]=useState("combustible");
   const[toast,setToast]=useState(null);
-  const[alerta,setAlerta]=useState(null);const[alertaOff,setAlertaOff]=useState(false);const alertaFormRef=useRef(null);
+  const[alerta,setAlerta]=useState(null);
+  // Tareas por módulo (pendientes + vencidas) para las insignias del menú.
+  const[tareas,setTareas]=useState({});const[alertaOff,setAlertaOff]=useState(false);const alertaFormRef=useRef(null);
   const showToast=m=>{setToast(m);setTimeout(()=>setToast(null),3000);};
 
   const cargarTodo=async()=>{
@@ -901,9 +905,9 @@ function App(){
   // sucursal/global: admin, analista, supervisor). Los operadores reciben el aviso
   // por correo en la Fase 2 (SES), pues su acceso a datos es solo el propio.
   useEffect(()=>{
-    if(!cat||!session||!["admin","analista","supervisor"].includes(session.rol)){setAlerta(null);return;}
+    if(!cat||!session||!["admin","analista","supervisor"].includes(session.rol)){setAlerta(null);setTareas({});return;}
     const resp=(cat.responsables||[]).find(r=>r.email===session.email);
-    if(!resp){setAlerta(null);return;}
+    if(!resp){setAlerta(null);setTareas({});return;}
     const hoy=new Date();
     const sucU=(session.sucursales&&session.sucursales.length)?session.sucursales:null;
     // corporativo = todo su acceso; de sucursal = solo sus sucursales
@@ -913,10 +917,24 @@ function App(){
     const formMk=[...new Set((cat.plantillas||[]).map(p=>p.modulo).filter(mk=>mk&&mk!=="responsivas"))];
     const modKeys=["combustible","reparto","montacargas",...formMk].filter(puedeMk);
     // El aviso cuenta lo VENCIDO (fuera de plazo); los pendientes aún en tiempo no alarman.
-    const contar=fd=>segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd||{},sucs:sucScope,modKeys,hoy})
-      .reduce((n,m)=>n+((m.cargar||!m.resumen)?0:m.resumen.vencido),0);
+    const calc=fd=>segModulos({cat,combustible:data.combustible,checklist:data.checklist,montacargas:data.montacargas,formData:fd||{},sucs:sucScope,modKeys,hoy});
+    const contar=fd=>calc(fd).reduce((n,m)=>n+((m.cargar||!m.resumen)?0:m.resumen.vencido),0);
+    // Mismo cálculo, agrupado por la pestaña del menú donde vive cada módulo.
+    const porNav=fd=>{
+      const out={};
+      for(const m of calc(fd)){
+        if(m.cargar||!m.resumen)continue;
+        const nav=m.key==="combustible"?"combustible"
+          :["reparto","montacargas","sucursales"].includes(m.key)?"mtto"
+          :m.key;                                   // seguridad y módulos dinámicos
+        const a=out[nav]||(out[nav]={pendiente:0,vencido:0});
+        a.pendiente+=m.resumen.pendiente;a.vencido+=m.resumen.vencido;
+      }
+      return out;
+    };
     setAlerta({nombre:session.nombre,tipo:resp.tipo,n:contar(alertaFormRef.current)});
-    if(alertaFormRef.current===null){(async()=>{const fd={};for(const p of (cat.plantillas||[]).filter(x=>x.modulo&&x.modulo!=="responsivas"&&x.activo!==false)){try{fd[p.clave]=await api.listarFormulario(p.clave,{desde:SEG_FORM_INICIO()});}catch(e){fd[p.clave]=[];}}alertaFormRef.current=fd;setAlerta(a=>a?{...a,n:contar(fd)}:a);})();}
+    setTareas(porNav(alertaFormRef.current));
+    if(alertaFormRef.current===null){(async()=>{const fd={};for(const p of (cat.plantillas||[]).filter(x=>x.modulo&&x.modulo!=="responsivas"&&x.activo!==false)){try{fd[p.clave]=await api.listarFormulario(p.clave,{desde:SEG_FORM_INICIO()});}catch(e){fd[p.clave]=[];}}alertaFormRef.current=fd;setAlerta(a=>a?{...a,n:contar(fd)}:a);setTareas(porNav(fd));})();}
   },[cat,session,data]);
 
   if(!session)return<Login onLogin={login} onSetNewPassword={setNewPassword}/>;
@@ -978,12 +996,19 @@ function App(){
         </>}
       </div>
       <nav className="nav">
-        {modules.map(m=>(
-          <button key={m.id} className={mod===m.id?"act":""} onClick={()=>setModule(m.id)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={m.icon}/></svg>
-            {m.label}
-          </button>
-        ))}
+        {modules.map(m=>{
+          // Insignia de tareas por hacer en ese módulo. Solo la ven los responsables
+          // de cumplimiento (es el mismo cálculo del Tablero de Seguimiento).
+          const t=tareas[m.id];const n=t?t.pendiente+t.vencido:0;
+          return(
+            <button key={m.id} className={mod===m.id?"act":""} onClick={()=>setModule(m.id)}
+              title={n>0?`${t.pendiente} pendiente(s) y ${t.vencido} vencida(s) en ${m.label}`:undefined}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={m.icon}/></svg>
+              {m.label}
+              {n>0&&<span className={"navb"+(t.vencido>0?" ven":"")}>{n>99?"99+":n}</span>}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

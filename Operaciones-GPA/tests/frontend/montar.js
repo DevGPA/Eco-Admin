@@ -46,18 +46,26 @@ const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
   _standalone:false,
   navigator:navegador,
   setTimeout,clearTimeout,localStorage};
-// api simulada: registra lo que se envía para poder revisar el payload real.
+// api simulada: registra lo que se envía y permite sembrar lo que devuelve.
 const llamadas=[];
+// `mundo` es lo que "hay en el servidor" para una prueba: se rellena antes de montar.
+const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[]},formularios:{}};
 const metodos={
   subirEvidencias:async(tipo,obj)=>obj,          // identidad: aquí no hay S3
   crear:async(tipo,datos)=>{llamadas.push({metodo:"crear",tipo,datos});return{id:"nuevo",ok:true};},
   crearFormulario:async(clave,datos)=>{llamadas.push({metodo:"crearFormulario",clave,datos});return{id:"nuevo",ok:true};},
+  catalogos:async()=>mundo.catalogos||{vehicles:[],users:[],sucursales:[],modulos:[],plantillas:[],responsables:[],config:{}},
+  listar:async t=>mundo.registros[t]||[],
+  listarFormulario:async c=>mundo.formularios[c]||[],
 };
-class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>metodos[k]||(async()=>[]) });}}
+// isAuth y session son VALORES, no funciones: App los lee directo.
+const valores={get isAuth(){return !!mundo.sesion;},get session(){return mundo.sesion;}};
+class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
+  (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   navegador,localStorage,noop,console);
 
-module.exports={M,React,TR,localStorage,llamadas,windowStub,navegador,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
+module.exports={M,React,TR,localStorage,llamadas,mundo,windowStub,navegador,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
