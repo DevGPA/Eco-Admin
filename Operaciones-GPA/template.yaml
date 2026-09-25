@@ -229,6 +229,31 @@ Resources:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/formulario/{id}/estado' }
 
+        # ── Examen médico ──
+        # Liga PÚBLICA para el colaborador (sin sesión). El servidor valida el token
+        # de la campaña; el tráfico de estas dos rutas se limita aparte (RouteSettings).
+        ExamenPublicoCampana:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /publico/examen/campana, Auth: { Authorizer: NONE } }
+        ExamenPublicoEnviar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /publico/examen, Auth: { Authorizer: NONE } }
+        ExamenListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /examen }
+        ExamenCampanas:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /examen/campanas }
+        ExamenConcluir:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/examen/{id}/concluir' }
+        AdminExamenCampana:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/examen-campana }
+        AdminExpedienteMedico:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/expediente-medico }
+
         # Health (sin auth)
         Health:
           Type: HttpApi
@@ -310,6 +335,15 @@ Resources:
       DefaultRouteSettings:
         ThrottlingBurstLimit: !If [IsProd, 400, 20]
         ThrottlingRateLimit:  !If [IsProd, 200, 10]
+      # Las rutas públicas del examen médico van con un límite propio y bajo: una
+      # campaña son cientos de envíos en días, no miles por segundo.
+      RouteSettings:
+        "POST /publico/examen":
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 5
+        "GET /publico/examen/campana":
+          ThrottlingBurstLimit: 20
+          ThrottlingRateLimit: 10
 
   # ═══════════════════════════════════════════════════════════════
   # 4. DYNAMODB — single-table

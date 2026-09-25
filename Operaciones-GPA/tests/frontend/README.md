@@ -127,6 +127,20 @@ concluida (evidencias, quién concluyó, observación). La llamada final a /conc
 prueba en el servidor (tests/test_epp_prerregistro.py): en Node no hay FileReader para
 meter la foto por el <input>.
 
+`test_examen_publico.js` — la liga pública del examen médico (frontend/examen.html,
+montada con fetch simulado): liga incompleta/inactiva → aviso sin formulario; validación
+de campaña y token; paso a paso con obligatorios, edad calculada, «Negados» precargado,
+Sí/No obligatorios, gineco-obstétrico solo para mujeres; consentimiento + firma para
+enviar; payload exacto (campaña, token, consentimiento, firma PNG, sin datos de
+navegación); folio de recibido; borrador local retomado; el 409 del servidor se muestra.
+
+`test_examen_app.js` — el examen dentro de Responsivas: la tarjeta solo con la marca
+«Expediente médico» (sin distinguir mayúsculas); pendientes/concluidos con conteo;
+campañas y liga (con token) y alta de campaña; el médico no concluye sin diagnóstico,
+clasificación y firma, el IMC se calcula, y el envío lleva signos, exploración,
+antidoping, diagnóstico, clasificación, firma y nombre; el formato completo trae todas
+las secciones y ambas firmas; la lista de seguimiento CSV NO lleva datos clínicos.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

@@ -11,8 +11,8 @@
 //   await api.crear('combustible', { ...datos, photo: key });
 // ─────────────────────────────────────────────────────────────────
 
-const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas", epp: "epp" };
-const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM", epp: "EPP" };
+const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas", epp: "epp", examen: "examen" };
+const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM", epp: "EPP", examen: "EXM" };
 const SES_KEY = "gpa_ops_session";
 const MAX_SUBIDAS = 4;   // evidencias subiendo a la vez (cola; evita ráfagas → throttle)
 
@@ -234,6 +234,12 @@ class GpaApi {
   async eppPendientes()       { return (await this._fetch("GET", "/epp/pendientes")).items || []; }
   // El responsable concluye: firma del empleado + evidencias
   eppConcluir(id, datos)      { return this._fetch("POST", `/epp/${id}/concluir`, datos); }
+  // Examen médico periódico (solo cuentas con marca «Expediente médico»)
+  async examenListar(campana) { return (await this._fetch("GET", "/examen" + (campana ? "?campana=" + encodeURIComponent(campana) : ""))).items || []; }
+  async examenCampanas()      { return (await this._fetch("GET", "/examen/campanas")).items || []; }
+  examenConcluir(id, datos)   { return this._fetch("POST", `/examen/${id}/concluir`, datos); }
+  adminExamenCampana(c)       { return this._fetch("POST", "/admin/examen-campana", c); }
+  adminExpedienteMedico(email, activo) { return this._fetch("POST", "/admin/expediente-medico", { email, activo }); }
   adminEppArticulo(a)         { return this._fetch("POST", "/admin/epp-articulo", a); }
   cambiarEstado(tipo, id, st, comentario, campos) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st, comentario: comentario || "", campos: campos || [] }); }
   // Corrección de un registro de combustible marcado «Por corregir» (solo los campos autorizados)

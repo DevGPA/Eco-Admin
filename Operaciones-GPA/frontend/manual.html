@@ -579,6 +579,28 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
       <div class="sh"><span class="num">8</span><h2>Responsivas</h2></div>
       <p>Módulo para la <b>Carta Responsiva</b> (entrega de equipo o responsabilidad a una persona). Se llena como cualquier formulario, con firma, y queda en el historial para consulta y descarga.</p>
       <div class="note"><span class="callout-t">Nota:</span> las Responsivas <b>no</b> se incluyen en el Tablero de Seguimiento (no tienen periodicidad de cumplimiento).</div>
+      <h3>Examen médico periódico anual</h3>
+      <p>Dentro de Responsivas vive el <b>examen médico periódico</b>. Se llena en <b>dos manos</b>:</p>
+      <ol class="steps">
+        <li><b>El colaborador, desde una liga</b> (no necesita cuenta en la app). Recursos Humanos crea una
+          <b>campaña</b> (p. ej. «Examen 2026») y comparte su liga por WhatsApp o correo. Ahí el colaborador
+          captura su ficha de identificación, antecedentes familiares y personales, el cuestionario neurológico,
+          los antecedentes gineco-obstétricos (solo mujeres), laborales y el interrogatorio por aparatos;
+          lee el <b>aviso de privacidad</b>, da su <b>consentimiento</b> y <b>firma</b>. Recibe un folio.
+          Si se interrumpe, el teléfono guarda un borrador. Solo se admite <b>un examen por persona por campaña</b>.</li>
+        <li><b>El médico laboral, en la app.</b> En Responsivas → «Examen médico periódico» → <b>Pendientes de
+          médico</b> abre el examen, ve lo declarado, captura signos vitales (el IMC se calcula), exploración
+          física (con hallazgos normales precargados), antidoping, <b>diagnóstico</b>, <b>clasificación</b> y
+          <b>firma</b>. Con eso queda <span class="st st-ok">Concluido</span>.</li>
+        <li><b>PDF y resguardo.</b> Cada examen concluido se descarga en PDF (el formato completo con ambas firmas);
+          <kbd>Todos en PDF (ZIP)</kbd> baja los del filtro para imprimir y archivar. La <b>lista de seguimiento
+          (CSV)</b> trae solo identificación, estado y clasificación, sin datos clínicos.</li>
+      </ol>
+      <div class="note"><span class="callout-t">Datos sensibles:</span> son datos personales de salud. Solo las
+      cuentas con la marca <b>«Acceso al expediente médico»</b> (Admin → Cuentas; médico laboral y RH) ven esta
+      sección, la liga, los exámenes y los PDF. <b>Un administrador sin la marca no los ve.</b> Para cerrar una
+      campaña (la liga deja de aceptar envíos) usa <kbd>Cerrar</kbd> en «Campañas y liga»; el token de la liga
+      no cambia al reabrirla. No compartas capturas ni PDFs fuera del expediente.</div>
     </section>
 
     <!-- 9 -->
@@ -745,6 +767,8 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
       <h3><span class="h3n">11.4</span>Cuentas de acceso</h3>
       <ul class="bul">
         <li>Crear o editar logins. Se define <b>correo</b> (solo <span class="mono">@gpa.com.mx</span>), <b>nombre</b>, <b>rol</b>, <b>módulos</b> y <b>sucursales</b> con acceso.</li>
+        <li><b>Acceso al expediente médico:</b> casilla aparte del rol. Solo con ella se ve el examen médico
+          periódico (Responsivas). Dásela únicamente al médico laboral y a RH.</li>
         <li><b>Módulos que se pueden dar:</b> Combustible · Mtto (incluye reparto, montacargas y formularios de sucursales) ·
           Seguridad Industrial · EPP · los módulos de formularios que existan (p. ej. Responsivas) · Admin.
           <b>Sin ninguno marcado, la cuenta ve todos</b>; sin sucursal marcada, ve todas. Para quitarle algo a alguien,
@@ -846,7 +870,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.9. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v3.0. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>

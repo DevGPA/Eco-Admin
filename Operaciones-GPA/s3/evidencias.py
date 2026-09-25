@@ -38,6 +38,18 @@ def url_subida(tipo: str, content_type: str) -> dict:
     return {"key": key, "uploadUrl": upload_url}
 
 
+def guardar_dataurl(tipo: str, dataurl: str) -> str:
+    """Guarda un data URL (p. ej. la firma que llega por la liga PÚBLICA, donde no
+    hay sesión para pedir una URL prefirmada) directamente en S3 y devuelve la llave."""
+    import base64
+    cab, _, b64 = str(dataurl).partition(",")
+    content_type = cab[5:cab.index(";")] if cab.startswith("data:") and ";" in cab else "image/png"
+    ext = _EXT.get(content_type, "png")
+    key = f"{tipo}/{uuid.uuid4().hex}.{ext}"
+    _c().put_object(Bucket=BUCKET, Key=key, Body=base64.b64decode(b64), ContentType=content_type)
+    return key
+
+
 def url_lectura(key: str) -> str | None:
     """URL GET prefirmada para mostrar una evidencia. None si key vacío."""
     if not key:

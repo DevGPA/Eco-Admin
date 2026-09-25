@@ -47,7 +47,7 @@ const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
   addEventListener:(t,f)=>{(oyentes[t]=oyentes[t]||[]).push(f);},
   removeEventListener:(t,f)=>{oyentes[t]=(oyentes[t]||[]).filter(x=>x!==f);},
   dispatch:(t,ev)=>{(oyentes[t]||[]).slice().forEach(f=>f(ev));},
-  location:{origin:"https://operaciones-gpa.amplifyapp.com"},
+  location:{origin:"https://operaciones-gpa.amplifyapp.com",pathname:"/index.html"},
   matchMedia:q=>({matches:!!windowStub._standalone,addListener:noop,addEventListener:noop}),
   _standalone:false,
   navigator:navegador,
@@ -55,7 +55,7 @@ const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
 // api simulada: registra lo que se envía y permite sembrar lo que devuelve.
 const llamadas=[];
 // `mundo` es lo que "hay en el servidor" para una prueba: se rellena antes de montar.
-const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{},archivo:{},archivoForm:{}};
+const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{},archivo:{},archivoForm:{},examenes:[],campanas:[]};
 const metodos={
   subirEvidencias:async(tipo,obj)=>obj,          // identidad: aquí no hay S3
   crear:async(tipo,datos)=>{llamadas.push({metodo:"crear",tipo,datos});return{id:"nuevo",ok:true};},
@@ -67,6 +67,10 @@ const metodos={
   listarFormulario:async(c,rango)=>{llamadas.push({metodo:"listarFormulario",clave:c,rango});return (rango&&mundo.archivoForm&&mundo.archivoForm[c])||mundo.formularios[c]||[];},
   eppSaldos:async()=>mundo.saldos||{},
   eppPendientes:async()=>mundo.pendientes||{items:[],responsable:false},
+  examenListar:async()=>mundo.examenes||[],
+  examenCampanas:async()=>mundo.campanas||[],
+  examenConcluir:async(id,datos)=>{llamadas.push({metodo:"examenConcluir",id,datos});return{ok:true,id,status:"Concluido"};},
+  adminExamenCampana:async(c)=>{llamadas.push({metodo:"adminExamenCampana",c});(mundo.campanas=mundo.campanas||[]).push({...c,token:"tokNuevo"});return{ok:true};},
   eppConcluir:async(id,datos)=>{llamadas.push({metodo:"eppConcluir",id,datos});return{ok:true,id,status:"Aprobado"};},
   _fetch:async(metodo,ruta,body)=>{llamadas.push({metodo:"_fetch",ruta,body});
     if(ruta==="/epp/pendientes")return mundo.pendientes||{items:[],responsable:false};return {};},
@@ -76,9 +80,9 @@ const valores={get isAuth(){return !!mundo.sesion;},get session(){return mundo.s
 class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
   (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
-const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio,EppPendientes,EppConcluir};");
+const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console","location",
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio,EppPendientes,EppConcluir,ExamenMedico,ExamenLista,ExamenFormato,ExamenConcluir,ExamenDetalle,esExpMed};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
-  navegador,localStorage,noop,console);
+  navegador,localStorage,noop,console,windowStub.location);
 
 module.exports={M,React,TR,localStorage,llamadas,mundo,descargas,windowStub,navegador,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};

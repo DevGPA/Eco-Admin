@@ -30,13 +30,15 @@ from db.escritura import (crear_registro, cambiar_estado, corregir_registro, edi
                           actualizar_precio_por_combustible,
                           guardar_modulo, guardar_plantilla,
                           guardar_responsable_alerta, reasignar_registro_unidad,
-                          guardar_epp_articulo, eliminar_epp_articulo, merge_registro)
+                          guardar_epp_articulo, eliminar_epp_articulo, merge_registro,
+                          guardar_campana_examen, guardar_expediente_medico)
 from db.queries import (listar_registros, get_registro, cargar_catalogos, cargar_config,
                         get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
                         ultima_solicitud_vehiculo, solicitud_asignable_vehiculo,
                         estados_checklist_reparto, saldos_epp, responsables_alerta,
-                        epp_prerregistros)
-from s3.evidencias import url_subida, url_lectura
+                        epp_prerregistros, campanas_examen, campana_examen, expediente_medico,
+                        listar_examenes, examen_de)
+from s3.evidencias import url_subida, url_lectura, guardar_dataurl
 from auth_cognito import listar_cuentas, guardar_cuenta
 
 try:
@@ -199,6 +201,118 @@ def _notificar(asunto: str, mensaje: str):
 
 
 # ── Router ───────────────────────────────────────────────────────
+# ── Examen médico periódico ──────────────────────────────────────
+def _es_expediente_medico(cl) -> bool:
+    """Solo las cuentas con la marca «Expediente médico» ven/concluyen exámenes.
+    Un administrador sin la marca NO: son datos personales sensibles."""
+    return str(cl.get("email") or "").lower() in set(expediente_medico())
+
+
+def _examen_publico_campana(event):
+    qs = event.get("queryStringParameters") or {}
+    c = campana_examen(qs.get("c") or "")
+    if not c or not c.get("activa") or str(qs.get("t") or "") != str(c.get("token") or ""):
+        return _err("Esta liga no está activa. Pide una nueva a Recursos Humanos.", 404)
+    return _resp({"nombre": c.get("nombre"), "clave": c.get("clave")})
+
+
+def _examen_publico_enviar(event):
+    """Recibe la parte del COLABORADOR desde la liga pública (sin sesión)."""
+    b = _body(event)
+    c = campana_examen(b.get("campana") or "")
+    if not c or not c.get("activa") or str(b.get("token") or "") != str(c.get("token") or ""):
+        return _err("Esta liga no está activa. Pide una nueva a Recursos Humanos.", 403)
+    datos = dict(b.get("datos") or {})
+    err = m.validar_examen_colaborador(datos)
+    if err:
+        return _err(err, 422)
+    if examen_de(c["clave"], datos["numEmpleado"]):
+        return _err("Ya recibimos tu examen de esta campaña. Si necesitas corregir algo, "
+                    "acude con Recursos Humanos.", 409)
+    firma_key = guardar_dataurl("EXM", datos.pop("firma"))
+    req = event.get("requestContext") or {}
+    http = req.get("http") or {}
+    registro = {
+        **{k: v for k, v in datos.items() if k not in ("consentimiento",)},
+        "campana": c["clave"], "campanaNombre": c.get("nombre"),
+        "firma": firma_key,
+        "status": m.EXM_PENDIENTE,
+        "consentimiento": {"aceptado": True, "en": datetime.now(_MX).isoformat(),
+                           "version": m.EXM_AVISO_VERSION},
+        "edad": m.edad_de(datos["fechaNacimiento"], m.hoy_mx()),
+        "_auditoria": {"ip": http.get("sourceIp") or "", "ua": (http.get("userAgent") or "")[:200],
+                       "origen": "liga publica"},
+    }
+    res = crear_registro(m.EXM, registro, str(datos.get("sucursal") or "SIN_SUCURSAL"), "publico")
+    return _resp({"ok": True, "folio": ("EXM-" + res["id"]).upper()})
+
+
+def _examen_listar(event, cl):
+    if not _es_expediente_medico(cl):
+        return _err("Tu cuenta no tiene acceso al expediente médico.", 403)
+    qs = event.get("queryStringParameters") or {}
+    regs = listar_examenes()
+    if qs.get("campana"):
+        regs = [r for r in regs if str(r.get("campana")) == qs["campana"]]
+    return _resp_gz({"items": [_resolver_urls(r) for r in regs]}, event)
+
+
+def _examen_campanas(event, cl):
+    if not _es_expediente_medico(cl) and cl.get("rol") != "admin":
+        return _err("No autorizado", 403)
+    return _resp({"items": campanas_examen()})
+
+
+def _examen_concluir(event, cl):
+    """El médico laboral completa exploración/diagnóstico y firma."""
+    if not _es_expediente_medico(cl):
+        return _err("Tu cuenta no tiene acceso al expediente médico.", 403)
+    rid = (event.get("pathParameters") or {}).get("id")
+    reg = get_registro(m.EXM, rid) if rid else None
+    if not reg:
+        return _err("Examen no encontrado", 404)
+    if str(reg.get("status") or "") != m.EXM_PENDIENTE:
+        return _err("Este examen ya fue concluido.", 409)
+    b = _body(event)
+    medico = b.get("medico")
+    if not isinstance(medico, dict) or not str(medico.get("diagnostico") or "").strip():
+        return _err("Falta el diagnóstico.", 422)
+    if not str(medico.get("clasificacion") or "").strip():
+        return _err("Falta la clasificación.", 422)
+    if not _foto_ok(b.get("firmaMedico")):
+        return _err("Falta la firma del médico.", 422)
+    parche = {"medico": medico, "firmaMedico": b.get("firmaMedico"),
+              "nombreMedico": str(b.get("nombreMedico") or cl.get("nombre") or cl["email"])[:120],
+              "status": m.EXM_CONCLUIDO,
+              "concluidoPor": cl.get("nombre") or cl["email"], "concluidoEmail": cl["email"],
+              "concluidoEn": datetime.now(_MX).isoformat()}
+    merge_registro(m.EXM, rid, parche)
+    return _resp({"ok": True, "id": rid, "status": m.EXM_CONCLUIDO})
+
+
+def _admin_examen_campana(event, cl):
+    if cl.get("rol") != "admin" and not _es_expediente_medico(cl):
+        return _err("No autorizado", 403)
+    b = _body(event)
+    clave = re.sub(r"[^a-z0-9_-]+", "-", str(b.get("clave") or "").strip().lower()).strip("-")[:40]
+    if not clave:
+        return _err("Falta la clave de la campaña (p. ej. examen-2026).", 422)
+    previa = campana_examen(clave)
+    import secrets
+    token = (previa or {}).get("token") or secrets.token_urlsafe(18)
+    item = guardar_campana_examen(clave, str(b.get("nombre") or clave)[:80],
+                                  bool(b.get("activa", True)), token)
+    return _resp({"ok": True, "campana": {k: item[k] for k in ("clave", "nombre", "activa", "token")}})
+
+
+def _admin_expediente_medico(event, cl):
+    if cl.get("rol") != "admin":
+        return _err("Solo un administrador", 403)
+    b = _body(event)
+    guardar_expediente_medico(b.get("email") or "", bool(b.get("activo")))
+    return _resp({"ok": True})
+
+
 def lambda_handler(event, context):
     route = event.get("routeKey", "")
     try:
@@ -213,6 +327,23 @@ def lambda_handler(event, context):
             # para que el frontend sepa la ventana por defecto de los listados.
             cat.setdefault("config", {})["ventanaDias"] = VENTANA_DIAS
             return _resp(cat)
+
+        # ── Examen médico: liga PÚBLICA (sin sesión; la ruta no lleva autorizador) ──
+        if route == "GET /publico/examen/campana":
+            return _examen_publico_campana(event)
+        if route == "POST /publico/examen":
+            return _examen_publico_enviar(event)
+        # ── Examen médico: parte privada (marca «Expediente médico») ──
+        if route == "GET /examen":
+            return _examen_listar(event, cl)
+        if route == "GET /examen/campanas":
+            return _examen_campanas(event, cl)
+        if route == "POST /examen/{id}/concluir":
+            return _examen_concluir(event, cl)
+        if route == "POST /admin/examen-campana":
+            return _admin_examen_campana(event, cl)
+        if route == "POST /admin/expediente-medico":
+            return _admin_expediente_medico(event, cl)
 
         # ── Combustible ──
         if route == "POST /combustible":
@@ -295,6 +426,10 @@ def lambda_handler(event, context):
                 if "responsableAlerta" in b:
                     guardar_responsable_alerta(res.get("email") or b.get("email", ""),
                                                b.get("responsableAlerta"))
+                # Marca «Expediente médico» (CAT#EXPMED): igual, solo si el panel la manda.
+                if "expedienteMedico" in b:
+                    guardar_expediente_medico(res.get("email") or b.get("email", ""),
+                                              bool(b.get("expedienteMedico")))
                 return _resp(res)
             if route == "POST /admin/reasignar-unidad":
                 return _reasignar_unidad(_body(event), cl)

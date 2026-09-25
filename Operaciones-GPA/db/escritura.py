@@ -226,6 +226,24 @@ def eliminar_epp_articulo(aid: str) -> None:
     _t().delete_item(Key={"PK": m.PK_EPP_ART, "SK": m.sk_epp_art(str(aid))})
 
 
+def guardar_campana_examen(clave: str, nombre: str, activa: bool, token: str) -> dict:
+    item = {"PK": m.PK_EXM_CAMP, "SK": m.sk_exm_camp(clave), "clave": clave,
+            "nombre": nombre, "activa": bool(activa), "token": token, "creadaEn": _now_iso()}
+    _t().put_item(Item=item)
+    return item
+
+
+def guardar_expediente_medico(email: str, activo: bool) -> None:
+    """Marca (o quita) el acceso al expediente médico de una cuenta."""
+    email = (email or "").strip().lower()
+    if not email:
+        return
+    if activo:
+        _t().put_item(Item={"PK": m.PK_EXPMED, "SK": m.sk_expmed(email), "email": email, "desde": _now_iso()})
+    else:
+        _t().delete_item(Key={"PK": m.PK_EXPMED, "SK": m.sk_expmed(email)})
+
+
 def guardar_sucursal(nombre: str) -> None:
     _t().put_item(Item={"PK": m.PK_SUCURSAL, "SK": m.sk_sucursal(nombre), "nombre": nombre})
 

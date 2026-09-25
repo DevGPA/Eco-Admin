@@ -274,6 +274,38 @@ def epp_prerregistros() -> list:
     return out
 
 
+def campanas_examen() -> list:
+    """Campañas del examen médico (clave, nombre, activa, token)."""
+    return [_limpiar(m.from_dynamo(x))
+            for x in _items(_t().query(KeyConditionExpression=Key("PK").eq(m.PK_EXM_CAMP)))]
+
+
+def campana_examen(clave: str) -> dict | None:
+    it = _t().get_item(Key={"PK": m.PK_EXM_CAMP, "SK": m.sk_exm_camp(str(clave))}).get("Item")
+    return _limpiar(m.from_dynamo(it)) if it else None
+
+
+def expediente_medico() -> list:
+    """Correos con acceso al expediente médico (marca en Admin → Cuentas)."""
+    return [str(x.get("email") or "").lower()
+            for x in _items(_t().query(KeyConditionExpression=Key("PK").eq(m.PK_EXPMED))) if x.get("email")]
+
+
+def listar_examenes() -> list:
+    """TODOS los exámenes (son pocos al año); el llamador filtra por campaña."""
+    its = _query_todo(_t(), IndexName="tipo-fecha-idx",
+                      KeyConditionExpression=Key("GSI1PK").eq(m.EXM), ScanIndexForward=False)
+    return [_limpiar(m.from_dynamo(i)) for i in its]
+
+
+def examen_de(campana: str, num_empleado: str) -> dict | None:
+    """¿Ya existe un examen de ese empleado en esa campaña? (uno por persona y año)."""
+    for r in listar_examenes():
+        if str(r.get("campana")) == str(campana) and str(r.get("numEmpleado") or "").strip() == str(num_empleado).strip():
+            return r
+    return None
+
+
 def cargar_config() -> dict:
     """Solo el item de configuración (fechaInicio, correos, etc.). Existe para no
     tener que cargar TODOS los catálogos cuando únicamente hace falta esto."""
@@ -395,6 +427,7 @@ def cargar_catalogos() -> dict:
         "plantillas":   sorted(plt, key=lambda x: str(x.get("nombre", ""))),
         "responsables": [{"email": r.get("email"), "tipo": r.get("tipo")} for r in rsp if r.get("email")],
         "eppArticulos": articulos_epp(),
+        "expedienteMedico": expediente_medico(),   # solo correos: no es dato sensible
         "config":       cfg,
     }
 

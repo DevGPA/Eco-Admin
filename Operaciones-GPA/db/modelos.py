@@ -34,6 +34,14 @@ EPP_SALIDA  = "salida"    # entrega a un empleado: la respalda el vale firmado
 EPP_PRERREGISTRO = "Prerregistro"
 EPP_CONCLUIDA    = "Aprobado"
 
+# Examen médico periódico anual. DATOS PERSONALES SENSIBLES (salud): entra por
+# una liga pública con consentimiento, lo concluye el médico laboral en la app y
+# solo lo ven las cuentas con la marca «Expediente médico».
+EXM = "EXM"
+EXM_PENDIENTE = "Pendiente médico"   # el colaborador ya llenó su parte
+EXM_CONCLUIDO = "Concluido"          # el médico completó exploración y firmó
+EXM_AVISO_VERSION = "2026-09"        # versión del aviso de privacidad aceptado
+
 # ── Claves de catálogos ──────────────────────────────────────────
 PK_VEHICLE  = "CAT#VEHICLE"
 PK_USER     = "CAT#USER"
@@ -42,6 +50,8 @@ PK_MODULO   = "CAT#MODULO"     # módulos dinámicos (motor de formularios)
 PK_PLANTILLA= "CAT#PLANTILLA"  # plantillas de formularios dinámicos
 PK_RESPONSABLE = "CAT#RESPONSABLE"  # responsables de alertas del Tablero de Seguimiento
 PK_EPP_ART  = "CAT#EPPART"     # catálogo de artículos de EPP y uniforme
+PK_EXM_CAMP = "CAT#EXMCAMP"    # campañas del examen médico (la liga pública lleva su token)
+PK_EXPMED   = "CAT#EXPMED"     # cuentas con acceso al expediente médico
 PK_CONFIG   = "CONFIG"
 SK_CONFIG   = "CONFIG"
 
@@ -53,6 +63,8 @@ def sk_modulo(clave) -> str: return f"MOD#{clave}"
 def sk_plantilla(clave) -> str: return f"PLT#{clave}"
 def sk_responsable(email) -> str: return f"RESP#{email}"
 def sk_epp_art(aid)  -> str: return f"ART#{aid}"
+def sk_exm_camp(clave) -> str: return f"CAMP#{clave}"
+def sk_expmed(email) -> str: return f"EXP#{email}"
 
 
 def tipo_formulario(clave) -> str:
@@ -172,6 +184,68 @@ def saldo_epp(movimientos) -> dict:
                 if float(a[k]).is_integer():
                     a[k] = int(a[k])
     return out
+
+
+# ── Examen médico: validación pura de lo que manda el colaborador ──────
+import re as _re
+_YMD = _re.compile(r"^\d{4}-\d{2}-\d{2}$")
+EXM_MAX_FIRMA = 80_000          # caracteres del data URL de la firma (~60 KB)
+EXM_MAX_TEXTO = 2_000           # por campo de texto libre
+EXM_CAMPOS_ID = ("numEmpleado", "nombre", "sucursal", "fechaNacimiento")
+
+
+def edad_de(fecha_nac: str, hoy: date) -> int | None:
+    try:
+        f = date.fromisoformat(fecha_nac)
+    except (TypeError, ValueError):
+        return None
+    return hoy.year - f.year - ((hoy.month, hoy.day) < (f.month, f.day))
+
+
+def validar_examen_colaborador(d: dict, hoy: date | None = None) -> str | None:
+    """Parte A (la del colaborador). Devuelve el error o None."""
+    hoy = hoy or hoy_mx()
+    if not isinstance(d, dict):
+        return "Datos inválidos."
+    for k in EXM_CAMPOS_ID:
+        if not str(d.get(k) or "").strip():
+            return {"numEmpleado": "Falta el número de empleado.", "nombre": "Falta el nombre.",
+                    "sucursal": "Falta la sucursal.", "fechaNacimiento": "Falta la fecha de nacimiento."}[k]
+    fn = str(d.get("fechaNacimiento")).strip()
+    if not _YMD.match(fn):
+        return "La fecha de nacimiento debe ser AAAA-MM-DD."
+    edad = edad_de(fn, hoy)
+    if edad is None or edad < 15 or edad > 90:
+        return "La fecha de nacimiento no es válida."
+    if d.get("consentimiento") is not True:
+        return "Debes aceptar el aviso de privacidad para enviar el examen."
+    firma = str(d.get("firma") or "")
+    if not firma.startswith("data:image/"):
+        return "Falta tu firma."
+    if len(firma) > EXM_MAX_FIRMA:
+        return "La firma es demasiado grande; vuelve a firmar."
+    # Textos libres acotados (nada de pegar documentos enteros en un campo)
+    def _largo(v, ruta):
+        if isinstance(v, str) and len(v) > EXM_MAX_TEXTO:
+            return f"El campo {ruta} es demasiado largo."
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                e = _largo(v2, f"{ruta}.{k2}")
+                if e:
+                    return e
+        if isinstance(v, list):
+            for i, v2 in enumerate(v):
+                e = _largo(v2, f"{ruta}[{i}]")
+                if e:
+                    return e
+        return None
+    for k, v in d.items():
+        if k == "firma":
+            continue
+        e = _largo(v, k)
+        if e:
+            return e
+    return None
 
 
 # ── Cumplimiento del checklist de reparto (puro, sin dependencias) ──

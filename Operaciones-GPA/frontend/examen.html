@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#185FA5"/>
+<title>Examen médico periódico — GPA</title>
+<!--
+  Liga PÚBLICA del examen médico periódico anual (parte del colaborador).
+  No requiere cuenta: la liga lleva la campaña y su token (?c=…&t=…) y el
+  servidor valida ambos. Solo se captura lo que declara el colaborador
+  (antecedentes, cuestionarios y firma); la exploración la hace el médico
+  laboral dentro de la app. Los datos son de salud: se pide consentimiento
+  explícito y no se guarda nada en este teléfono más que un borrador local.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="config.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:#f5f6fa;color:#1a1a1a}
+.wrap{max-width:560px;margin:0 auto;padding:0 0 40px}
+.hdr{background:#185FA5;color:#fff;padding:14px 16px}
+.hdr .t{font-size:15px;font-weight:700}.hdr .s{font-size:11px;opacity:.85;margin-top:2px}
+.pg{padding:12px 14px}
+.card{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ct{font-size:13px;font-weight:700;color:#185FA5;margin-bottom:8px;text-transform:uppercase;letter-spacing:.3px}
+label{display:block;font-size:11.5px;color:#555;margin:8px 0 3px;font-weight:600}
+input[type=text],input[type=date],input[type=tel],input[type=number],select,textarea{width:100%;padding:9px 10px;border:1px solid #d8dce3;border-radius:8px;font-size:14px;background:#fff}
+textarea{resize:vertical}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.rr{display:flex;gap:6px;margin-top:4px}
+.rb{flex:1;padding:8px 0;border:1px solid #d8dce3;border-radius:8px;background:#fff;font-size:13px;cursor:pointer}
+.rb.si{background:#FCEBEB;border-color:#A32D2D;color:#A32D2D;font-weight:700}.rb.no{background:#EAF6EE;border-color:#2E7D32;color:#2E7D32;font-weight:700}
+.hint{font-size:11px;color:#777;margin-top:4px;line-height:1.45}
+.bp{width:100%;margin-top:14px;padding:13px;border:none;border-radius:10px;background:#185FA5;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.bp:disabled{background:#b9c6d6;cursor:not-allowed}
+.bs{padding:8px 12px;border:1px solid #d8dce3;border-radius:8px;background:#fff;font-size:12px;cursor:pointer}
+.eb{background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px;line-height:1.45}
+.ok{background:#EAF6EE;color:#1E5E2A;border-radius:8px;padding:9px 11px;font-size:12.5px;margin-top:10px}
+.wb{background:#FFF7E0;color:#7A5A00;border-radius:8px;padding:9px 11px;font-size:12px;margin-bottom:10px;line-height:1.45}
+.sig{width:100%;height:120px;border:1px dashed #9aa7b8;border-radius:8px;background:#fff;touch-action:none}
+.sb{display:flex;gap:4px;margin:8px 0 12px}.sd{flex:1;height:4px;border-radius:2px;background:#e0e0e0}
+.aviso{font-size:12px;color:#444;line-height:1.55;background:#f7f9fc;border:1px solid #e3e8ef;border-radius:8px;padding:10px 12px;max-height:180px;overflow:auto}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;margin-top:10px;line-height:1.4}.chk input{width:auto;margin-top:3px}
+.q{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:.5px solid #f0f0f0;font-size:12.5px}
+.q .rr{margin:0;flex:0 0 120px}
+.fin{text-align:center;padding:30px 10px}.fin .big{font-size:44px}.fin .f{font-size:20px;font-weight:800;color:#185FA5;margin:8px 0}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+const CFG=window.GPA_CONFIG||{};
+const API=(CFG.apiUrl||"").replace(/\/$/,"");
+const SUCURSALES=["Cabos","Cancun","Cedis","Ciudad de Mexico","Guadalajara","Monterrey","Vallarta"];
+const qs=new URLSearchParams(location.search);
+const CAMP=qs.get("c")||"", TOKEN=qs.get("t")||"";
+const DKEY="gpa_examen_"+CAMP;
+
+// Aviso de privacidad (resumen). El aviso íntegro lo entrega Recursos Humanos.
+const AVISO=`General de Productos para el Agua, S.A. de C.V. (GPA) recaba los datos de este formulario —incluidos datos personales sensibles de salud— con la única finalidad de integrar tu examen médico periódico anual, obligación en materia de seguridad y salud en el trabajo, y conservarlo en tu expediente de colaborador. Solo tendrán acceso el médico laboral y el personal de Recursos Humanos designado. No se comparten con terceros salvo obligación legal. Puedes ejercer tus derechos de acceso, rectificación, cancelación y oposición (ARCO) con Recursos Humanos. Al marcar la casilla otorgas tu consentimiento expreso para el tratamiento de tus datos sensibles con este fin.`;
+
+const HEREDO=[["abueloPaterno","Abuelo paterno"],["abueloMaterno","Abuelo materno"],["abuelaPaterna","Abuela paterna"],["abuelaMaterna","Abuela materna"],["padre","Padre"],["madre","Madre"],["tiosPaternos","Tíos paternos"],["tiosMaternos","Tíos maternos"],["hermanos","Hermanos"],["otros","Otros"]];
+const NOPAT=[["tabaquismo","Tabaquismo"],["alcoholismo","Alcoholismo"],["toxicomanias","Toxicomanías"]];
+const PAT=[["cirugias","Cirugías"],["fracturas","Fracturas"],["diabetes","Diabetes"],["hipertension","Hipertensión"],["cardiacas","Enfermedades cardiacas"],["varices","Várices en extremidades inferiores"],["rodillas","Dolor en rodillas"],["piePlano","Pie plano"],["espalda","Problemas en espalda"],["migrana","Migraña"],["hombro","Dolor de hombro"],["caminar","Problemas al caminar"]];
+const NEURO=[["q1","¿En la infancia te enfermabas constantemente y generabas fiebre?"],["q2","¿En la infancia sufriste alguna crisis convulsiva?"],["q3","¿Has presentado confusión o periodos de ausencia?"],["q4","¿Has presentado intolerancia a la luz?"],["q5","¿Alguna vez sufriste un traumatismo craneoencefálico (TCE)?"]];
+const GINE=[["fum","FUM (fecha de última menstruación)"],["ritmo","Ritmo"],["menarca","Menarca"],["ivsa","IVSA"],["embarazos","Embarazos"],["partos","Partos"],["cesareas","Cesáreas"],["abortos","Abortos"],["anticonceptivos","Anticonceptivos"],["exploracionMama","Exploración de mama"],["papanicolau","Papanicolau"],["colposcopia","Colposcopia"]];
+const APARATOS=[["respiratorio","Respiratorio"],["digestivo","Digestivo"],["urinarias","Vías urinarias"],["cardiacas","Cardiacas"],["nervioso","Nervioso"],["muscular","Muscular"],["piel","Piel"],["varices","Várices"]];
+
+const leer=()=>{try{return JSON.parse(localStorage.getItem(DKEY))||{};}catch{return{};}};
+const guardar=d=>{try{localStorage.setItem(DKEY,JSON.stringify(d));}catch{}};
+const borrar=()=>{try{localStorage.removeItem(DKEY);}catch{}};
+
+function useSig(ref){
+  const drawing=useRef(false);
+  const pt=(e,c)=>{const r=c.getBoundingClientRect();const p=e.touches?.[0]||e;return[(p.clientX-r.left)*(c.width/r.width),(p.clientY-r.top)*(c.height/r.height)];};
+  const start=e=>{e.preventDefault();drawing.current=true;const c=ref.current,ctx=c.getContext("2d");ctx.lineWidth=2;ctx.lineCap="round";const[x,y]=pt(e,c);ctx.beginPath();ctx.moveTo(x,y);};
+  const move=e=>{if(!drawing.current)return;e.preventDefault();const c=ref.current,ctx=c.getContext("2d");const[x,y]=pt(e,c);ctx.lineTo(x,y);ctx.stroke();};
+  const end=()=>{drawing.current=false;};
+  const clear=cb=>{const c=ref.current;c.getContext("2d").clearRect(0,0,c.width,c.height);cb&&cb(null);};
+  return{start,move,end,clear};
+}
+
+function SiNo({v,set}){
+  return(<div className="rr">
+    <button type="button" className={"rb"+(v===true?" si":"")} onClick={()=>set(true)}>Sí</button>
+    <button type="button" className={"rb"+(v===false?" no":"")} onClick={()=>set(false)}>No</button>
+  </div>);
+}
+
+function App(){
+  const[camp,setCamp]=useState(null);const[campErr,setCampErr]=useState("");
+  const D=useRef(leer()).current;
+  const[d,setD]=useState(()=>({
+    numEmpleado:"",nombre:"",sucursal:"",fechaNacimiento:"",lugarNacimiento:"",sexo:"",puesto:"",domicilio:"",telefono:"",escolaridad:"",estadoCivil:"",tipoSangre:"",
+    heredo:Object.fromEntries(HEREDO.map(([k])=>[k,"Negados"])),
+    noPatologicos:Object.fromEntries(NOPAT.map(([k])=>[k,{si:null,obs:""}])),
+    patologicos:Object.fromEntries(PAT.map(([k])=>[k,{si:null,cual:""}])),
+    patologicosOtras:"",patologicosObs:"",
+    neurologico:Object.fromEntries(NEURO.map(([k])=>[k,null])),
+    gineco:Object.fromEntries(GINE.map(([k])=>[k,""])),
+    laborales:[{empresa:"GPA",antiguedad:"",puesto:"",horario:"",exposicion:"",riesgos:""}],
+    laboralesObs:"",
+    aparatos:Object.fromEntries(APARATOS.map(([k])=>[k,""])),
+    ...D}));
+  const[step,setStep]=useState(D._step||0);
+  const[consent,setConsent]=useState(false);const[sig,setSig]=useState(null);
+  const[busy,setBusy]=useState(false);const[err,setErr]=useState("");const[folio,setFolio]=useState("");
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const up=(k,v)=>setD(x=>({...x,[k]:v}));
+  const upIn=(g,k,v)=>setD(x=>({...x,[g]:{...x[g],[k]:v}}));
+  const upIn2=(g,k,f,v)=>setD(x=>({...x,[g]:{...x[g],[k]:{...(x[g][k]||{}),[f]:v}}}));
+  useEffect(()=>{const t=setTimeout(()=>guardar({...d,_step:step}),400);return()=>clearTimeout(t);},[d,step]);
+  useEffect(()=>{(async()=>{
+    if(!CAMP||!TOKEN){setCampErr("La liga está incompleta. Pide a Recursos Humanos que te la vuelva a enviar.");return;}
+    try{const r=await fetch(`${API}/publico/examen/campana?c=${encodeURIComponent(CAMP)}&t=${encodeURIComponent(TOKEN)}`);
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||"Liga no válida");setCamp(j);}
+    catch(e){setCampErr(e.message||"No se pudo validar la liga.");}
+  })();},[]);
+
+  const edad=(()=>{if(!d.fechaNacimiento)return"";const f=new Date(d.fechaNacimiento+"T12:00:00"),h=new Date();let e=h.getFullYear()-f.getFullYear();if((h.getMonth(),h.getDate())<(f.getMonth(),f.getDate()))e--;return isNaN(e)?"":e;})();
+  const PASOS=["Identificación","Antecedentes familiares","Antecedentes personales","Cuestionario","Laborales y aparatos","Consentimiento y firma"];
+  const esMujer=d.sexo==="F";
+  const total=PASOS.length;
+  const puede1=d.numEmpleado.trim()&&d.nombre.trim()&&d.sucursal&&d.fechaNacimiento&&d.sexo;
+  const puede3=NOPAT.every(([k])=>d.noPatologicos[k].si!==null)&&PAT.every(([k])=>d.patologicos[k].si!==null);
+  const puede4=NEURO.every(([k])=>d.neurologico[k]!==null);
+
+  const enviar=async()=>{
+    if(busy)return;setErr("");
+    if(!consent)return setErr("Debes aceptar el aviso de privacidad.");
+    if(!sig)return setErr("Falta tu firma.");
+    setBusy(true);
+    try{
+      const datos={...d};delete datos._step;
+      datos.consentimiento=true;datos.firma=sig;
+      if(!esMujer)delete datos.gineco;
+      const r=await fetch(`${API}/publico/examen`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({campana:CAMP,token:TOKEN,datos})});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(j.error||"No se pudo enviar. Intenta de nuevo.");
+      borrar();setFolio(j.folio||"");
+    }catch(e){setErr(e.message||String(e));}
+    setBusy(false);
+  };
+
+  if(campErr)return(<div className="wrap"><div className="hdr"><div className="t">Examen médico periódico</div><div className="s">General de Productos para el Agua</div></div><div className="pg"><div className="eb">⚠️ {campErr}</div></div></div>);
+  if(!camp)return(<div className="wrap"><div className="hdr"><div className="t">Examen médico periódico</div></div><div className="pg"><div className="hint">Validando la liga…</div></div></div>);
+  if(folio)return(<div className="wrap"><div className="hdr"><div className="t">Examen médico periódico</div><div className="s">{camp.nombre}</div></div><div className="pg"><div className="fin"><div className="big">✅</div><div>Recibimos tu examen. Tu folio es</div><div className="f mono">{folio}</div><div className="hint">Guarda o toma captura de este folio. El médico laboral completará la exploración física en tu cita; ahí firmarás la conformidad final.</div></div></div></div>);
+
+  return(
+    <div className="wrap">
+      <div className="hdr"><div className="t">Examen médico periódico</div><div className="s">{camp.nombre} · General de Productos para el Agua</div></div>
+      <div className="pg">
+        <div className="sb">{PASOS.map((_,i)=><div key={i} className="sd" style={{background:step>=i?"#185FA5":"#e0e0e0"}}/>)}</div>
+        <div style={{fontSize:12,color:"#888",marginBottom:8}}>Paso {step+1} de {total} · <b>{PASOS[step]}</b></div>
+        {D&&D.numEmpleado&&<div className="wb">📝 Retomaste un borrador guardado en este teléfono. Si no es tuyo, <a onClick={()=>{borrar();location.reload();}} style={{textDecoration:"underline",cursor:"pointer"}}>empieza de cero</a>.</div>}
+
+        {step===0&&<div>
+          <div className="card"><div className="ct">Ficha de identificación</div>
+            <label>Número de empleado *</label><input type="text" inputMode="numeric" value={d.numEmpleado} onChange={e=>up("numEmpleado",e.target.value)} placeholder="Ej. 1042"/>
+            <label>Nombre completo *</label><input type="text" value={d.nombre} onChange={e=>up("nombre",e.target.value)} placeholder="Como aparece en tu credencial"/>
+            <label>Sucursal *</label><select value={d.sucursal} onChange={e=>up("sucursal",e.target.value)}><option value="">— Selecciona —</option>{SUCURSALES.map(s=><option key={s}>{s}</option>)}</select>
+            <div className="r2"><div><label>Fecha de nacimiento *</label><input type="date" value={d.fechaNacimiento} onChange={e=>up("fechaNacimiento",e.target.value)}/></div><div><label>Edad</label><input type="text" value={edad} disabled style={{background:"#f5f5f5"}}/></div></div>
+            <label>Sexo *</label>
+            <div className="rr"><button type="button" className={"rb"+(d.sexo==="M"?" no":"")} onClick={()=>up("sexo","M")}>Masculino</button><button type="button" className={"rb"+(d.sexo==="F"?" no":"")} onClick={()=>up("sexo","F")}>Femenino</button></div>
+            <label>Lugar de nacimiento</label><input type="text" value={d.lugarNacimiento} onChange={e=>up("lugarNacimiento",e.target.value)}/>
+            <label>Puesto</label><input type="text" value={d.puesto} onChange={e=>up("puesto",e.target.value)}/>
+            <label>Domicilio</label><input type="text" value={d.domicilio} onChange={e=>up("domicilio",e.target.value)}/>
+            <label>Teléfono</label><input type="tel" value={d.telefono} onChange={e=>up("telefono",e.target.value)}/>
+            <div className="r3">
+              <div><label>Escolaridad</label><input type="text" value={d.escolaridad} onChange={e=>up("escolaridad",e.target.value)}/></div>
+              <div><label>Estado civil</label><input type="text" value={d.estadoCivil} onChange={e=>up("estadoCivil",e.target.value)}/></div>
+              <div><label>Tipo de sangre</label><input type="text" value={d.tipoSangre} onChange={e=>up("tipoSangre",e.target.value)} placeholder="O+"/></div>
+            </div>
+          </div>
+          <button className="bp" disabled={!puede1} onClick={()=>setStep(1)}>Siguiente →</button>
+        </div>}
+
+        {step===1&&<div>
+          <div className="card"><div className="ct">Antecedentes heredofamiliares</div>
+            <div className="hint">Escribe el padecimiento (p. ej. DM2, hipertensión) o deja «Negados».</div>
+            <div className="r2">{HEREDO.map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d.heredo[k]} onChange={e=>upIn("heredo",k,e.target.value)}/></div>)}</div>
+          </div>
+          <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(0)}>← Atrás</button><button className="bp" style={{marginTop:0,flex:1}} onClick={()=>setStep(2)}>Siguiente →</button></div>
+        </div>}
+
+        {step===2&&<div>
+          <div className="card"><div className="ct">Antecedentes personales no patológicos</div>
+            {NOPAT.map(([k,l])=><div key={k}><div className="q"><span>{l}</span><SiNo v={d.noPatologicos[k].si} set={v=>upIn2("noPatologicos",k,"si",v)}/></div>
+              {d.noPatologicos[k].si&&<input type="text" placeholder="Observaciones (cuánto, desde cuándo)" value={d.noPatologicos[k].obs} onChange={e=>upIn2("noPatologicos",k,"obs",e.target.value)}/>}</div>)}
+          </div>
+          <div className="card"><div className="ct">Antecedentes personales patológicos</div>
+            <div className="hint">Marca Sí o No en cada uno. Si es Sí, indica qué tipo; en cirugías o fracturas, hace cuánto tiempo.</div>
+            {PAT.map(([k,l])=><div key={k}><div className="q"><span>{l}</span><SiNo v={d.patologicos[k].si} set={v=>upIn2("patologicos",k,"si",v)}/></div>
+              {d.patologicos[k].si&&<input type="text" placeholder="¿Cuál? ¿Hace cuánto?" value={d.patologicos[k].cual} onChange={e=>upIn2("patologicos",k,"cual",e.target.value)}/>}</div>)}
+            <label>Otras</label><input type="text" value={d.patologicosOtras} onChange={e=>up("patologicosOtras",e.target.value)}/>
+            <label>Observaciones</label><textarea rows={2} value={d.patologicosObs} onChange={e=>up("patologicosObs",e.target.value)}/>
+          </div>
+          <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(1)}>← Atrás</button><button className="bp" style={{marginTop:0,flex:1}} disabled={!puede3} onClick={()=>setStep(3)}>Siguiente →</button></div>
+        </div>}
+
+        {step===3&&<div>
+          <div className="card"><div className="ct">Cuestionario de detección de alteración neurológica</div>
+            {NEURO.map(([k,l])=><div key={k} className="q"><span>{l}</span><SiNo v={d.neurologico[k]} set={v=>upIn("neurologico",k,v)}/></div>)}
+          </div>
+          {esMujer&&<div className="card"><div className="ct">Antecedentes gineco-obstétricos</div>
+            <div className="r2">{GINE.map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d.gineco[k]} onChange={e=>upIn("gineco",k,e.target.value)}/></div>)}</div>
+          </div>}
+          <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(2)}>← Atrás</button><button className="bp" style={{marginTop:0,flex:1}} disabled={!puede4} onClick={()=>setStep(4)}>Siguiente →</button></div>
+        </div>}
+
+        {step===4&&<div>
+          <div className="card"><div className="ct">Antecedentes laborales</div>
+            {d.laborales.map((r,i)=><div key={i} style={{borderTop:i?".5px solid #f0f0f0":"none",paddingTop:i?8:0,marginTop:i?8:0}}>
+              <div className="r2"><div><label>Empresa</label><input type="text" value={r.empresa} onChange={e=>up("laborales",d.laborales.map((x,j)=>j===i?{...x,empresa:e.target.value}:x))}/></div><div><label>Antigüedad</label><input type="text" value={r.antiguedad} onChange={e=>up("laborales",d.laborales.map((x,j)=>j===i?{...x,antiguedad:e.target.value}:x))}/></div></div>
+              <div className="r2"><div><label>Puesto</label><input type="text" value={r.puesto} onChange={e=>up("laborales",d.laborales.map((x,j)=>j===i?{...x,puesto:e.target.value}:x))}/></div><div><label>Horario</label><input type="text" value={r.horario} onChange={e=>up("laborales",d.laborales.map((x,j)=>j===i?{...x,horario:e.target.value}:x))}/></div></div>
+              <div className="r2"><div><label>Exposición</label><input type="text" value={r.exposicion} onChange={e=>up("laborales",d.laborales.map((x,j)=>j===i?{...x,exposicion:e.target.value}:x))}/></div><div><label>Riesgos</label><input type="text" value={r.riesgos} onChange={e=>up("laborales",d.laborales.map((x,j)=>j===i?{...x,riesgos:e.target.value}:x))}/></div></div>
+              {i>0&&<button type="button" className="bs" style={{marginTop:6}} onClick={()=>up("laborales",d.laborales.filter((_,j)=>j!==i))}>Quitar</button>}
+            </div>)}
+            {d.laborales.length<5&&<button type="button" className="bs" style={{width:"100%",marginTop:10}} onClick={()=>up("laborales",[...d.laborales,{empresa:"",antiguedad:"",puesto:"",horario:"",exposicion:"",riesgos:""}])}>+ Agregar empleo anterior</button>}
+            <label>Observaciones</label><textarea rows={2} value={d.laboralesObs} onChange={e=>up("laboralesObs",e.target.value)}/>
+          </div>
+          <div className="card"><div className="ct">Interrogatorio por aparatos y sistemas</div>
+            <div className="hint">Escribe cuál padecimiento tienes en cada aparato, o déjalo vacío si ninguno.</div>
+            <div className="r2">{APARATOS.map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d.aparatos[k]} onChange={e=>upIn("aparatos",k,e.target.value)}/></div>)}</div>
+          </div>
+          <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(3)}>← Atrás</button><button className="bp" style={{marginTop:0,flex:1}} onClick={()=>setStep(5)}>Siguiente →</button></div>
+        </div>}
+
+        {step===5&&<div>
+          <div className="card"><div className="ct">Aviso de privacidad</div>
+            <div className="aviso">{AVISO}</div>
+            <label className="chk"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>He leído el aviso de privacidad y <b>doy mi consentimiento expreso</b> para el tratamiento de mis datos personales, incluidos los de salud, con el fin descrito.</span></label>
+          </div>
+          <div className="card"><div className="ct">Firma del colaborador</div>
+            <div className="hint" style={{marginBottom:6}}>Declaro que la información que proporcioné es verdadera.</div>
+            <canvas ref={sigRef} className="sig" width={340} height={120}
+              onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL("image/png"));}}
+              onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL("image/png"));}}/>
+            <button type="button" className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+            <div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{d.numEmpleado?"#"+d.numEmpleado+" · ":""}{d.nombre}</b></div>
+          </div>
+          {err&&<div className="eb">⚠️ {err}</div>}
+          <div style={{display:"flex",gap:8}}><button className="bs" onClick={()=>setStep(4)}>← Atrás</button><button className="bp" style={{marginTop:0,flex:1}} disabled={busy||!consent||!sig} onClick={enviar}>{busy?"Enviando…":"Enviar examen"}</button></div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

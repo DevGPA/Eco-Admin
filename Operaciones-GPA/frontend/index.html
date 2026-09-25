@@ -1455,6 +1455,226 @@ function EppDetail({reg,cat,onBack}){
   );
 }
 
+// ═══ EXAMEN MÉDICO PERIÓDICO (dentro de Responsivas) ═════════════════
+// La parte del colaborador entra por la liga pública (examen.html). Aquí vive lo
+// privado: campañas (la liga), pendientes de exploración, conclusión por el
+// médico laboral, concluidos, PDF y ZIP. SOLO para cuentas con la marca
+// «Expediente médico»: son datos personales sensibles.
+const esExpMed=(cat,session)=>((cat&&cat.expedienteMedico)||[]).map(e=>String(e).toLowerCase()).includes(String(session&&session.email||"").toLowerCase());
+const EXM_HEREDO=[["abueloPaterno","Abuelo paterno"],["abueloMaterno","Abuelo materno"],["abuelaPaterna","Abuela paterna"],["abuelaMaterna","Abuela materna"],["padre","Padre"],["madre","Madre"],["tiosPaternos","Tíos paternos"],["tiosMaternos","Tíos maternos"],["hermanos","Hermanos"],["otros","Otros"]];
+const EXM_NOPAT=[["tabaquismo","Tabaquismo"],["alcoholismo","Alcoholismo"],["toxicomanias","Toxicomanías"]];
+const EXM_PAT=[["cirugias","Cirugías"],["fracturas","Fracturas"],["diabetes","Diabetes"],["hipertension","Hipertensión"],["cardiacas","Enfermedades cardiacas"],["varices","Várices"],["rodillas","Dolor en rodillas"],["piePlano","Pie plano"],["espalda","Problemas en espalda"],["migrana","Migraña"],["hombro","Dolor de hombro"],["caminar","Problemas al caminar"]];
+const EXM_NEURO=[["q1","Enfermaba con fiebre en la infancia"],["q2","Crisis convulsiva en la infancia"],["q3","Confusión o periodos de ausencia"],["q4","Intolerancia a la luz"],["q5","Traumatismo craneoencefálico"]];
+const EXM_GINE=[["fum","FUM"],["ritmo","Ritmo"],["menarca","Menarca"],["ivsa","IVSA"],["embarazos","Embarazos"],["partos","Partos"],["cesareas","Cesáreas"],["abortos","Abortos"],["anticonceptivos","Anticonceptivos"],["exploracionMama","Exploración mama"],["papanicolau","Papanicolau"],["colposcopia","Colposcopia"]];
+const EXM_APARATOS=[["respiratorio","Respiratorio"],["digestivo","Digestivo"],["urinarias","Vías urinarias"],["cardiacas","Cardiacas"],["nervioso","Nervioso"],["muscular","Muscular"],["piel","Piel"],["varices","Várices"]];
+const EXM_EXPLORA=[["cabeza","Cabeza","Normocéfalo. Pupilas isocóricas normorrefléxicas. Sin malformaciones aparentes ni referencia de traumatismos."],["boca","Boca, nariz y garganta","Narinas permeables, oídos sin alteraciones, membranas timpánicas normales."],["cuello","Cuello","Tráquea central desplazable sin datos patológicos, no megalias."],["torax","Tórax","Adecuada amplexión y amplexación, adecuada entrada y salida de aire, no estertores ni sibilancias ni ruidos agregados; ruidos cardiacos de adecuado tono e intensidad."],["abdomen","Abdomen","Abdomen blando, depresible, con peristalsis presente, no visceromegalias, no doloroso a la palpación."],["columna","Columna cervical","Sin alteraciones."],["extremidades","Extremidades",""],["piel","Piel y anexos",""]];
+const EXM_DOPING=[["ANF","ANF"],["BAR","BAR"],["BZD","BZD"],["COC","COC"],["MET","MET"],["OPI","OPI 2000"],["MTD","MTD"],["TCA","TCA"],["THC","THC"],["XTC","XTC"]];
+const exmSiNo=v=>v===true?"Sí":v===false?"No":"—";
+const exmIMC=(peso,est)=>{const p=parseFloat(peso),e=parseFloat(est);if(!(p>0&&e>0))return null;const m=e>3?e/100:e;return Math.round(p/(m*m)*10)/10;};
+const exmIMCLbl=i=>i==null?"":i<25?"Normal":i<30?"Sobrepeso":i<35?"Obesidad G I":i<40?"Obesidad G II":"Obesidad G III";
+
+function ExamenMedico({cat,session,showToast}){
+  const[view,setView]=useState("pendientes");const[sel,setSel]=useState(null);
+  const[regs,setRegs]=useState(null);const[camps,setCamps]=useState(null);const[busy,setBusy]=useState(false);
+  const cargar=async()=>{try{const r=await api.examenListar();setRegs(r);}catch(e){showToast("⚠️ "+e.message);setRegs([]);}};
+  const cargarCamps=async()=>{try{setCamps(await api.examenCampanas());}catch(e){showToast("⚠️ "+e.message);setCamps([]);}};
+  useEffect(()=>{cargar();cargarCamps();},[]);
+  if(regs===null)return<div className="spin"/>;
+  const pend=regs.filter(r=>r.status==="Pendiente médico"),conc=regs.filter(r=>r.status==="Concluido");
+  const ligaDe=c=>location.origin+location.pathname.replace(/[^/]*$/,"")+"examen.html?c="+encodeURIComponent(c.clave)+"&t="+encodeURIComponent(c.token);
+  const copiar=async c=>{try{await navigator.clipboard.writeText(ligaDe(c));showToast("✓ Liga copiada");}catch(e){prompt("Copia la liga:",ligaDe(c));}};
+  const nuevaCamp=async()=>{const nombre=prompt("Nombre de la campaña (p. ej. Examen 2026):");if(!nombre)return;
+    const clave=nombre.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+    setBusy(true);try{await api.adminExamenCampana({clave,nombre,activa:true});await cargarCamps();showToast("✓ Campaña creada: copia la liga");}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  const toggleCamp=async c=>{setBusy(true);try{await api.adminExamenCampana({clave:c.clave,nombre:c.nombre,activa:!c.activa});await cargarCamps();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  if(view==="concluir"&&sel)return<ExamenConcluir reg={sel} session={session} showToast={showToast} onBack={()=>{setSel(null);setView("pendientes");}} onListo={async()=>{await cargar();setSel(null);setView("concluidos");}}/>;
+  if(view==="detalle"&&sel)return<ExamenDetalle reg={sel} onBack={()=>{setSel(null);setView(sel.status==="Concluido"?"concluidos":"pendientes");}}/>;
+  return(
+    <div>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:4}}>🩺 Examen médico periódico</div>
+      <div className="wb">Datos personales <b>sensibles</b>. Solo las cuentas con marca «Expediente médico» ven esta sección. No compartas capturas ni PDFs fuera del expediente.</div>
+      <div className="tr">{[["pendientes","Pendientes de médico ("+pend.length+")"],["concluidos","Concluidos ("+conc.length+")"],["campanas","Campañas y liga"]].map(([v,l])=>
+        <button key={v} className={"trb"+(view===v?" act":"")} onClick={()=>setView(v)}>{l}</button>)}</div>
+      {view==="pendientes"&&<ExamenLista items={pend} vacio="No hay exámenes pendientes de exploración." onSelect={r=>{setSel(r);setView("concluir");}} accion="Completar exploración"/>}
+      {view==="concluidos"&&<ExamenLista items={conc} vacio="Aún no hay exámenes concluidos." onSelect={r=>{setSel(r);setView("detalle");}} accion="Ver / PDF" zip/>}
+      {view==="campanas"&&<div>
+        <div className="card"><div className="ct">Campañas</div>
+          <div className="hint" style={{fontSize:11,color:"#777",marginBottom:8}}>Cada campaña tiene su propia liga. Compártela por WhatsApp o correo; el colaborador NO necesita cuenta. Desactívala cuando termine el periodo: la liga deja de aceptar envíos.</div>
+          {camps===null?<div className="spin"/>:camps.length===0?<div className="empty">Sin campañas. Crea la primera.</div>:camps.map(c=>(
+            <div key={c.clave} className="li" style={{cursor:"default"}}>
+              <div className="lit"><span className="lim">{c.nombre}</span><span className={"bdg "+(c.activa?"dok":"drj")}>{c.activa?"Activa":"Cerrada"}</span></div>
+              <div className="lis" style={{wordBreak:"break-all"}}>{ligaDe(c)}</div>
+              <div style={{display:"flex",gap:6,marginTop:6}}>
+                <button className="bs" onClick={()=>copiar(c)}>📋 Copiar liga</button>
+                <button className="bd" disabled={busy} onClick={()=>toggleCamp(c)}>{c.activa?"Cerrar":"Reabrir"}</button>
+              </div>
+            </div>))}
+          <button className="bp" disabled={busy} onClick={nuevaCamp}>+ Nueva campaña</button>
+        </div>
+      </div>}
+    </div>
+  );
+}
+
+function ExamenLista({items,vacio,onSelect,accion,zip}){
+  const[f,setF]=useState("");const[zp,setZp]=useState(null);
+  const list=items.filter(r=>!f||String(r.nombre||"").toLowerCase().includes(f.toLowerCase())||String(r.numEmpleado||"").includes(f)||String(r.sucursal||"").toLowerCase().includes(f.toLowerCase()));
+  const descargarZip=async()=>{if(zp||!list.length)return;setZp({i:0,total:list.length});
+    try{await zipPdfsExamenes(list,(i,total)=>setZp({i,total}));}catch(e){alert("No se pudo generar el ZIP: "+e.message);}setZp(null);};
+  const csv=()=>csvDownload("examenes_seguimiento",["Folio","Campaña","No. empleado","Nombre","Sucursal","Puesto","Edad","Sexo","Fecha de envío","Estado","Concluyó","Fecha de conclusión","Clasificación"],
+    list.map(r=>[folioDe(r),r.campanaNombre||r.campana||"",r.numEmpleado||"",r.nombre||"",r.sucursal||"",r.puesto||"",r.edad??"",r.sexo||"",fdt(r.fecha),r.status||"",r.concluidoPor||"",r.concluidoEn?fdt(r.concluidoEn):"",(r.medico&&r.medico.clasificacion)||""]));
+  return(
+    <div>
+      <div className="card" style={{padding:"10px 12px"}}>
+        <label>Buscar</label><input type="text" value={f} onChange={e=>setF(e.target.value)} placeholder="Nombre, número de empleado o sucursal"/>
+        <div style={{display:"flex",gap:8,marginTop:8}}>
+          <button className="bs" style={{flex:1}} disabled={!list.length} onClick={csv}>⬇ Lista de seguimiento (CSV, sin datos clínicos)</button>
+          {zip&&<button className="bs" style={{flex:1}} disabled={!list.length||!!zp} onClick={descargarZip}>{zp?`PDFs… ${zp.i}/${zp.total}`:"⬇ Todos en PDF (ZIP)"}</button>}
+        </div>
+      </div>
+      {list.length===0&&<div className="empty">{vacio}</div>}
+      <div className="card">{list.map(r=>(
+        <div key={r.id} className="li" onClick={()=>onSelect(r)}>
+          <div className="lit"><span className="lim">#{r.numEmpleado||"—"} · {r.nombre||"—"}</span><span className={"bdg "+(r.status==="Concluido"?"dok":"dpe")}>{r.status}</span></div>
+          <div className="lis">{r.sucursal} · {r.puesto||"—"} · {r.edad!=null?r.edad+" años":""} · {r.campanaNombre||r.campana}</div>
+          <div className="lis">Enviado {fdt(r.fecha)}{r.concluidoEn?" · Concluido "+fdt(r.concluidoEn):""} · <span style={{color:C.blue,fontWeight:600}}>{accion} ›</span></div>
+        </div>))}</div>
+    </div>
+  );
+}
+
+// Formato completo (parte del colaborador + parte del médico) — es el PDF.
+function ExamenFormato({reg}){
+  const p=reg.medico||{};const s=p.signos||{};const imc=p.imc!=null?p.imc:exmIMC(s.peso,s.estatura);
+  const fila=(a,b)=><div className="dr" key={a}><span>{a}</span><span>{b==null||b===""?"—":String(b)}</span></div>;
+  const bloqueSiNo=(defs,obj,sub)=>(defs||[]).map(([k,l])=>{const v=obj&&obj[k];const si=v&&typeof v==="object"?v.si:v;const det=v&&typeof v==="object"?(v[sub]||""):"";return fila(l,exmSiNo(si)+(det?" — "+det:""));});
+  return(
+    <div className="pdf-area" data-pdftitle="Examen médico periódico" data-pdfsucursal={reg.sucursal||""}>
+      <div className="card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div className="ct" style={{marginBottom:0}}>Examen médico · Periódico</div><span className={"bdg "+(reg.status==="Concluido"?"dok":"dpe")}>{reg.status}</span></div>
+        {fila("Folio",folioDe(reg))}{fila("Campaña",reg.campanaNombre||reg.campana)}{fila("Fecha de envío",fdt(reg.fecha))}{fila("Empresa","General de Productos para el Agua")}{fila("Sucursal",reg.sucursal)}{fila("Puesto",reg.puesto)}
+      </div>
+      <div className="card"><div className="ct">Ficha de identificación</div>
+        {fila("No. de empleado",reg.numEmpleado)}{fila("Nombre",reg.nombre)}{fila("Edad",reg.edad)}{fila("Fecha de nacimiento",reg.fechaNacimiento)}{fila("Lugar de nacimiento",reg.lugarNacimiento)}{fila("Sexo",reg.sexo==="F"?"Femenino":reg.sexo==="M"?"Masculino":reg.sexo)}{fila("Domicilio",reg.domicilio)}{fila("Teléfono",reg.telefono)}{fila("Escolaridad",reg.escolaridad)}{fila("Estado civil",reg.estadoCivil)}{fila("Tipo de sangre",reg.tipoSangre)}
+      </div>
+      <div className="card"><div className="ct">Antecedentes heredofamiliares</div>{EXM_HEREDO.map(([k,l])=>fila(l,reg.heredo&&reg.heredo[k]))}</div>
+      <div className="card"><div className="ct">Antecedentes personales no patológicos</div>{bloqueSiNo(EXM_NOPAT,reg.noPatologicos,"obs")}</div>
+      <div className="card"><div className="ct">Antecedentes personales patológicos</div>{bloqueSiNo(EXM_PAT,reg.patologicos,"cual")}{fila("Otras",reg.patologicosOtras)}{fila("Observaciones",reg.patologicosObs)}</div>
+      <div className="card"><div className="ct">Cuestionario de alteración neurológica</div>{EXM_NEURO.map(([k,l])=>fila(l,exmSiNo(reg.neurologico&&reg.neurologico[k])))}</div>
+      {reg.sexo==="F"&&<div className="card"><div className="ct">Antecedentes gineco-obstétricos</div>{EXM_GINE.map(([k,l])=>fila(l,reg.gineco&&reg.gineco[k]))}</div>}
+      <div className="card"><div className="ct">Antecedentes laborales</div>
+        {(reg.laborales||[]).map((r,i)=><div key={i} style={{fontSize:12,padding:"4px 0",borderTop:i?".5px solid #f0f0f0":"none"}}><b>{r.empresa||"—"}</b> · {r.antiguedad||"—"} · {r.puesto||"—"} · {r.horario||"—"} · Exposición: {r.exposicion||"—"} · Riesgos: {r.riesgos||"—"}</div>)}
+        {fila("Observaciones",reg.laboralesObs)}
+      </div>
+      <div className="card"><div className="ct">Interrogatorio por aparatos y sistemas</div>{EXM_APARATOS.map(([k,l])=>fila(l,reg.aparatos&&reg.aparatos[k]))}</div>
+      <div className="card"><div className="ct">Signos vitales / exploración física</div>
+        {fila("Peso",s.peso&&s.peso+" kg")}{fila("Estatura",s.estatura&&s.estatura+" m")}{fila("T/A",s.ta)}{fila("FC",s.fc)}{fila("FR",s.fr)}{fila("Temp",s.temp)}{fila("IMC",imc!=null?imc+" · "+exmIMCLbl(imc):"")}
+        {EXM_EXPLORA.map(([k,l])=>fila(l,p[k]))}
+        {fila("Ojos",p.ojos&&((p.ojos.usaLentes?"Usa lentes":"No usa lentes")+(p.ojos.padecimiento?" · "+p.ojos.padecimiento:"")))}
+        {fila("Oídos",p.oidos&&("OD "+(p.oidos.od||"—")+" · OI "+(p.oidos.oi||"—")+(p.oidos.obs?" · "+p.oidos.obs:"")))}
+        {fila("Observaciones",p.observacionesExploracion)}
+      </div>
+      <div className="card"><div className="ct">Antidoping</div>{EXM_DOPING.map(([k,l])=>fila(l,p.antidoping&&p.antidoping[k]))}{fila("Otros",p.antidoping&&p.antidoping.otros)}{fila("Observaciones",p.observacionesDoping)}</div>
+      <div className="card"><div className="ct">Diagnóstico y clasificación</div>{fila("Diagnóstico",p.diagnostico)}{fila("Clasificación",p.clasificacion)}</div>
+      <div className="card"><div className="ct">Firmas</div>
+        <div className="r2">
+          <div><div style={{fontSize:11,color:"#888"}}>Colaborador</div>{reg.firma&&<img src={reg.firma} style={{width:"100%",maxWidth:220,borderRadius:6}} alt="firma colaborador"/>}<div style={{fontSize:12,fontWeight:700}}>{reg.nombre}</div><div style={{fontSize:10,color:"#888"}}>Consentimiento {reg.consentimiento&&reg.consentimiento.en?fdt(reg.consentimiento.en):"—"}</div></div>
+          <div><div style={{fontSize:11,color:"#888"}}>Médico laboral</div>{reg.firmaMedico?<img src={reg.firmaMedico} style={{width:"100%",maxWidth:220,borderRadius:6}} alt="firma médico"/>:<div className="wb">Pendiente de exploración y firma del médico.</div>}<div style={{fontSize:12,fontWeight:700}}>{reg.nombreMedico||""}</div><div style={{fontSize:10,color:"#888"}}>{reg.concluidoEn?fdt(reg.concluidoEn):""}</div></div>
+        </div>
+        <div style={{fontSize:10,color:"#888",marginTop:8}}>*Este documento deberá realizarse anualmente, de manera obligatoria, e ingresar al expediente del colaborador.</div>
+      </div>
+    </div>
+  );
+}
+
+function ExamenDetalle({reg,onBack}){
+  return(<div>
+    <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button><BotonPDF tipo="examen" reg={reg}/></div>
+    <ExamenFormato reg={reg}/>
+  </div>);
+}
+
+async function zipPdfsExamenes(registros,onProg){
+  const JSZip=window.JSZip;if(!JSZip){alert("No cargó la librería de ZIP. Reintenta en unos segundos.");return;}
+  const zip=new JSZip();let ok=0;let hecho=0;
+  for(const reg of registros){hecho++;onProg&&onProg(hecho,registros.length);
+    try{const f=await urlsFrescas("examen",reg);const {area,cleanup}=await _areaDeDetalle(()=>React.createElement(ExamenFormato,{reg:f||reg}));
+      const doc=await pdfDeArea(area);cleanup();if(!doc)continue;
+      let base=("examen_"+(reg.campana||"")+"_"+(reg.numEmpleado||"")+"_"+(reg.nombre||"").replace(/[^a-zA-Z0-9]+/g,"_")).replace(/[^a-zA-Z0-9_\-]+/g,"_");
+      zip.file(base+".pdf",doc.output("arraybuffer"));ok++;
+    }catch(e){}
+  }
+  if(!ok){alert("No se pudo generar ningún PDF.");return;}
+  const blob=await zip.generateAsync({type:"blob"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");
+  a.href=url;a.download="Examenes_medicos.zip";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+
+// El médico laboral completa exploración, antidoping, diagnóstico y firma.
+function ExamenConcluir({reg,session,showToast,onBack,onListo}){
+  const[s,setS]=useState({peso:"",estatura:"",ta:"",fc:"",fr:"",temp:""});
+  const[ex,setEx]=useState(Object.fromEntries(EXM_EXPLORA.map(([k,,def])=>[k,def])));
+  const[ojos,setOjos]=useState({usaLentes:null,padecimiento:""});const[oidos,setOidos]=useState({od:"",oi:"",obs:""});
+  const[obsEx,setObsEx]=useState("");const[dop,setDop]=useState(Object.fromEntries(EXM_DOPING.map(([k])=>[k,"Negativo"])));const[dopOtros,setDopOtros]=useState("");const[obsDop,setObsDop]=useState("");
+  const[dx,setDx]=useState("");const[clas,setClas]=useState("");const[nombreMed,setNombreMed]=useState("Dr. Abraham Alvarado Figueroa");
+  const[sig,setSig]=useState(null);const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const imc=exmIMC(s.peso,s.estatura);
+  const listo=!!(dx.trim()&&clas.trim()&&sig&&nombreMed.trim());
+  const concluir=async()=>{
+    if(busy)return;if(!listo)return showToast("⚠️ Faltan diagnóstico, clasificación, nombre del médico o firma.");
+    setBusy(true);
+    try{
+      const medico={signos:s,imc,imcLabel:exmIMCLbl(imc),...ex,ojos,oidos,observacionesExploracion:obsEx,antidoping:{...dop,otros:dopOtros},observacionesDoping:obsDop,diagnostico:dx.trim(),clasificacion:clas.trim()};
+      const subido=await api.subirEvidencias("examen",{firmaMedico:sig});
+      await api.examenConcluir(reg.id,{medico,firmaMedico:subido.firmaMedico,nombreMedico:nombreMed.trim()});
+      showToast("✓ Examen concluido");await onListo();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(
+    <div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button></div>
+      <div className="wb">🩺 <b>#{reg.numEmpleado} · {reg.nombre}</b> · {reg.sucursal} · {reg.edad!=null?reg.edad+" años":""} · {reg.sexo==="F"?"Femenino":"Masculino"}. Lo que declaró el colaborador está abajo; completa la exploración y concluye.</div>
+      <details style={{marginBottom:12}}><summary style={{fontSize:13,fontWeight:700,color:C.blue,cursor:"pointer"}}>Ver lo que declaró el colaborador</summary><div style={{marginTop:8}}><ExamenFormato reg={reg}/></div></details>
+      <div className="card"><div className="ct">Signos vitales</div>
+        <div className="r3">
+          <div><label>Peso (kg)</label><input type="number" step="0.1" value={s.peso} onChange={e=>setS({...s,peso:e.target.value})}/></div>
+          <div><label>Estatura (m)</label><input type="number" step="0.01" value={s.estatura} onChange={e=>setS({...s,estatura:e.target.value})}/></div>
+          <div><label>IMC</label><input type="text" value={imc!=null?imc+" "+exmIMCLbl(imc):""} disabled style={{background:"#f5f5f5"}}/></div>
+        </div>
+        <div className="r2"><div><label>T/A</label><input type="text" value={s.ta} onChange={e=>setS({...s,ta:e.target.value})} placeholder="120/80"/></div><div><label>FC</label><input type="text" value={s.fc} onChange={e=>setS({...s,fc:e.target.value})}/></div></div>
+        <div className="r2"><div><label>FR</label><input type="text" value={s.fr} onChange={e=>setS({...s,fr:e.target.value})}/></div><div><label>Temp</label><input type="text" value={s.temp} onChange={e=>setS({...s,temp:e.target.value})}/></div></div>
+      </div>
+      <div className="card"><div className="ct">Exploración física</div>
+        <div style={{fontSize:11,color:"#777",marginBottom:6}}>Cada apartado trae el hallazgo normal precargado; edítalo si hay alteración.</div>
+        {EXM_EXPLORA.map(([k,l])=><div key={k}><label>{l}</label><textarea rows={2} value={ex[k]} onChange={e=>setEx({...ex,[k]:e.target.value})}/></div>)}
+        <label>Ojos</label>
+        <div className="rr"><button type="button" className={"rb"+(ojos.usaLentes===true?" O":"")} onClick={()=>setOjos({...ojos,usaLentes:true})}>Usa lentes</button><button type="button" className={"rb"+(ojos.usaLentes===false?" O":"")} onClick={()=>setOjos({...ojos,usaLentes:false})}>No usa lentes</button></div>
+        {ojos.usaLentes&&<select value={ojos.padecimiento} onChange={e=>setOjos({...ojos,padecimiento:e.target.value})} style={{marginTop:6}}><option value="">— Padecimiento —</option>{["Miopía","Hipermetropía","Astigmatismo","Otro"].map(o=><option key={o}>{o}</option>)}</select>}
+        <div className="r3" style={{marginTop:6}}><div><label>Oído derecho</label><input type="text" value={oidos.od} onChange={e=>setOidos({...oidos,od:e.target.value})}/></div><div><label>Oído izquierdo</label><input type="text" value={oidos.oi} onChange={e=>setOidos({...oidos,oi:e.target.value})}/></div><div><label>Obs. oídos</label><input type="text" value={oidos.obs} onChange={e=>setOidos({...oidos,obs:e.target.value})}/></div></div>
+        <label>Observaciones</label><textarea rows={2} value={obsEx} onChange={e=>setObsEx(e.target.value)}/>
+      </div>
+      <div className="card"><div className="ct">Antidoping</div>
+        <div className="r2">{EXM_DOPING.map(([k,l])=><div key={k}><label>{l}</label><select value={dop[k]} onChange={e=>setDop({...dop,[k]:e.target.value})}>{["Negativo","Positivo","No aplica"].map(o=><option key={o}>{o}</option>)}</select></div>)}</div>
+        <label>Otros</label><input type="text" value={dopOtros} onChange={e=>setDopOtros(e.target.value)}/>
+        <label>Observaciones</label><textarea rows={2} value={obsDop} onChange={e=>setObsDop(e.target.value)}/>
+      </div>
+      <div className="card"><div className="ct">Diagnóstico y clasificación</div>
+        <label>Diagnóstico <span style={{color:C.red}}>*</span></label><textarea rows={3} value={dx} onChange={e=>setDx(e.target.value)}/>
+        <label>Clasificación <span style={{color:C.red}}>*</span></label>
+        <select value={clas} onChange={e=>setClas(e.target.value)}><option value="">— Selecciona —</option>{["Apto","Apto con restricciones","No apto temporal","No apto"].map(o=><option key={o}>{o}</option>)}</select>
+      </div>
+      <div className="card"><div className="ct">Elaboró (médico laboral)</div>
+        <label>Nombre <span style={{color:C.red}}>*</span></label><input type="text" value={nombreMed} onChange={e=>setNombreMed(e.target.value)}/>
+        <label>Firma <span style={{color:C.red}}>*</span></label>
+        <canvas ref={sigRef} className="sig" width={340} height={120} onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}} onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+        <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+      </div>
+      <button className="bp" disabled={!listo||busy} onClick={concluir}>{busy?"Guardando…":"Concluir examen"}</button>
+    </div>
+  );
+}
+
 // ═══ MOTOR DE FORMULARIOS DINÁMICOS ══════════════════════════════════
 // Renderiza módulos/plantillas creados como DATO (sin desplegar). Reusa los
 // tipos de campo de CLForm/MCForm, FotoCampo, useSig, FiltroFechas y el PDF.
@@ -1848,6 +2068,10 @@ function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,
   const[selP,setSelP]=useState(null);const[view,setView]=useState("home");
   const[regs,setRegs]=useState([]);const[loading,setLoading]=useState(false);const[sel,setSel]=useState(null);const[busy,setBusy]=useState(false);
   const canCreate=rol!=="analista";const canAuth=rol==="admin"||rol==="analista"||rol==="supervisor";
+  // El examen médico periódico vive dentro de Responsivas, solo para quien
+  // tiene la marca «Expediente médico» (datos personales sensibles).
+  const conExamen=modulo==="responsivas"&&esExpMed(cat,session);
+  if(view==="examen"&&conExamen)return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("home")}>← {modLabel}</button><ExamenMedico cat={cat} session={session} showToast={showToast}/></div>;
   const cargar=async clave=>{setLoading(true);try{setRegs(await api.listarFormulario(clave));}catch(e){showToast("⚠️ "+e.message);}setLoading(false);};
   const abrirHist=p=>{setSelP(p);setView("history");cargar(p.clave);};
   if(view==="new"&&selP)return<div><button className="bs" style={{marginBottom:12}} onClick={()=>setView("plantilla")}>← Atrás</button><FormDinamico plantilla={selP} cat={cat} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast} onDone={()=>abrirHist(selP)}/></div>;
@@ -1867,6 +2091,10 @@ function ModDinamico({cat,modulo,modLabel,plantillas,rol,sucursalesUser,session,
   return(
     <div>
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:16}}>{modLabel}</div>
+      {conExamen&&<div className="card" style={{cursor:"pointer",borderLeft:"4px solid #A32D2D"}} onClick={()=>setView("examen")}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontWeight:700,fontSize:14}}>🩺 Examen médico periódico</div><div style={{fontSize:12,color:"#888",marginTop:3}}>Liga para colaboradores · pendientes de médico · PDF y resguardo</div></div>
+          <div style={{fontSize:22,color:"#888"}}>→</div></div></div>}
       {(plantillas&&plantillas.length>0)&&<div className="card"><div className="ct">⬇ Descargar historial del módulo</div>
         <div className="r2"><div><label>Desde</label><input type="date" value={mDesde} onChange={e=>setMDesde(e.target.value)}/></div><div><label>Hasta</label><input type="date" value={mHasta} onChange={e=>setMHasta(e.target.value)}/></div></div>
         {!mDesde&&!mHasta&&<div style={{fontSize:11,color:"#888",marginTop:6}}>📅 Sin fechas se descargan los últimos <b>{VENTANA_DIAS} días</b>. Indica un rango para traer el archivo histórico.</div>}
@@ -3238,7 +3466,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const toggleA=a=>wrap(async()=>{await api.adminCuenta({email:a.email,nombre:a.nombre,rol:a.rol,sucursales:a.sucursales,modulos:a.modulos,activo:!a.activo});await cargarCuentas();showToast("Estado actualizado");});
   const VForm=({v,onClose})=>{const[d,setD]=useState({...v});const isN=!!v._isNew;const RO=k=>!isN&&["id","placas","subMarca","sucursal","tanque"].includes(k);return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo vehículo":"Editar vehículo"}</div>{!isN&&<div className="wb">El ID interno NO se edita (consecutivo). Editable: número económico, área responsable, combustible, precio, producto, categoría, sucursal (para reasignaciones) y tanque (L).</div>}{[["id","ID interno (consecutivo, no se reutiliza)"],["economico","Número económico (GPA)"],["placas","Placas"],["subMarca","Sub-marca"],["responsable","Área responsable"],["producto","Producto"]].map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d[k]||""} disabled={RO(k)} style={RO(k)?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,[k]:e.target.value})}/></div>)}<div className="r2"><div><label>Tanque (L)</label><input type="number" value={d.tanque} onChange={e=>setD({...d,tanque:e.target.value})}/></div><div><label>Precio/L</label><input type="number" value={d.precio} onChange={e=>setD({...d,precio:e.target.value})}/></div></div><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}><option value="">— Selecciona —</option>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><label>Combustible</label><select value={d.combustible} onChange={e=>setD({...d,combustible:e.target.value})}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select><label>Categoría (módulo)</label><select value={d.categoria||catVeh(d)} onChange={e=>setD({...d,categoria:e.target.value})}>{[["reparto","Reparto"],["montacargas","Montacargas"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveV(d)}>Guardar</button></div></div></div>);};
   const UForm=({u,onClose})=>{const[d,setD]=useState({...u});const isN=!!u._isNew;return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo responsable":"Editar responsable"}</div>{!isN&&<div className="wb">Solo editable: nombre, correo y sucursal.</div>}<label>ID</label><input type="text" value={d.id||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,id:e.target.value})}/><label>Nombre</label><input type="text" value={d.nombre} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Correo</label><input type="text" value={d.mail} onChange={e=>setD({...d,mail:e.target.value})}/><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveU(d)}>Guardar</button></div></div></div>);};
-  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (consulta + autoriza, no captura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],["epp","EPP"],...(cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","epp","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div><label>Responsable de alertas de cumplimiento</label><select value={d.responsableAlerta||"ninguno"} onChange={e=>setD({...d,responsableAlerta:e.target.value})}>{[["ninguno","Ninguno (no recibe alertas)"],["sucursal","De sucursal (solo sus sucursales)"],["corporativo","Corporativo (todos los módulos y sucursales)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{fontSize:11,color:"#999",marginTop:4}}>Los responsables reciben aviso de los formularios pendientes o vencidos de su alcance (Tablero de Seguimiento).</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
+  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (consulta + autoriza, no captura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],["epp","EPP"],...(cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","epp","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div><label style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}><input type="checkbox" checked={!!d.expedienteMedico} onChange={e=>setD({...d,expedienteMedico:e.target.checked})} style={{width:"auto"}}/>Acceso al <b>expediente médico</b> (examen periódico: médico laboral y RH)</label><div style={{fontSize:11,color:"#999",marginTop:2}}>Datos personales sensibles. Sin esta marca ni un administrador ve los exámenes.</div><label>Responsable de alertas de cumplimiento</label><select value={d.responsableAlerta||"ninguno"} onChange={e=>setD({...d,responsableAlerta:e.target.value})}>{[["ninguno","Ninguno (no recibe alertas)"],["sucursal","De sucursal (solo sus sucursales)"],["corporativo","Corporativo (todos los módulos y sucursales)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{fontSize:11,color:"#999",marginTop:4}}>Los responsables reciben aviso de los formularios pendientes o vencidos de su alcance (Tablero de Seguimiento).</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
   return(
     <div>
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
@@ -3286,7 +3514,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
         </div>}
         {accounts===null&&<div className="spin"/>}
         {accounts!==null&&<><div className="tr" style={{overflowX:"auto"}}>{["Todos","operador","supervisor","analista","admin"].map(r=><button key={r} type="button" className={"trb"+(fRol===r?" act":"")} onClick={()=>setFRol(r)}>{r==="Todos"?"Todos":rolLabel(r)}</button>)}</div>
-        {(()=>{const lista=accounts.filter(a=>fRol==="Todos"||a.rol===fRol).sort((a,b)=>String(a.nombre||a.email).localeCompare(String(b.nombre||b.email),"es"));return<div className="card"><div className="lis" style={{marginBottom:6}}>{lista.length} cuenta(s){fRol!=="Todos"?" · "+rolLabel(fRol):""}</div>{lista.length===0&&<div className="empty">Sin cuentas</div>}{lista.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:"",responsableAlerta:respDe(a.email)})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>;})()}</>}
+        {(()=>{const lista=accounts.filter(a=>fRol==="Todos"||a.rol===fRol).sort((a,b)=>String(a.nombre||a.email).localeCompare(String(b.nombre||b.email),"es"));return<div className="card"><div className="lis" style={{marginBottom:6}}>{lista.length} cuenta(s){fRol!=="Todos"?" · "+rolLabel(fRol):""}</div>{lista.length===0&&<div className="empty">Sin cuentas</div>}{lista.map(a=><div key={a.email} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{a.nombre||a.email}</span><span className={"bdg "+rolBadge(a.rol)}>{rolLabel(a.rol)}</span></div><div className="lis">{a.email}</div><div className="lis">🏢 {a.sucursales&&a.sucursales.length?a.sucursales.join(", "):"Todas"} · 📦 {a.modulos&&a.modulos.length?a.modulos.join(", "):"Todos"}</div><div style={{display:"flex",gap:4,marginTop:4}}><span className={"bdg "+(a.activo?"dok":"drj")} style={{fontSize:10}}>{a.activo?"Activa":"Inactiva"}</span>{a.estado==="FORCE_CHANGE_PASSWORD"&&<span className="bdg dpe" style={{fontSize:10}}>Cambio pendiente</span>}</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bs" onClick={()=>setEditA({...a,password:"",responsableAlerta:respDe(a.email),expedienteMedico:esExpMed(cat,{email:a.email})})}>Editar</button><button className="bd" disabled={busy} onClick={()=>toggleA(a)}>{a.activo?"Desactivar":"Activar"}</button></div></div>)}</div>;})()}</>}
         <div style={{fontSize:11,color:"#999",textAlign:"center"}}>El usuario inicia sesión con su correo. Al crear la cuenta se le envía una contraseña temporal por correo; al editar puedes fijar una nueva.</div>
       </>}
       {sec==="modulos"&&<>
