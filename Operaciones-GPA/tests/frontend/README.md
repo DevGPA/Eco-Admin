@@ -86,6 +86,15 @@ dinámicos (FormDinamico):
 - Al capturar los checklists, el número baja y la insignia deja de estar roja.
 Monta la App COMPLETA, sembrando lo que devuelve la api con `mundo`.
 
+`test_epp.js` — módulo EPP (entradas por factura, entregas por vale):
+- La entrada exige número y foto de factura y no pregunta talla.
+- La entrega pide número de empleado ANTES del nombre, muestra la carta de
+  conformidad, pregunta talla solo en los artículos que la llevan, y no se
+  registra sin firma. El registro guarda número, nombre, talla, firma y carta.
+- Existencias: lista solo artículos activos y avisa los saldos en negativo.
+- Historial e identificación (factura / #empleado), filtro por tipo.
+- El detalle sale como «Vale de entrega de EPP» y le pasa la sucursal al PDF.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

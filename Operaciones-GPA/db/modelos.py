@@ -22,6 +22,12 @@ from typing import Any
 SOL = "SOL"   # solicitud de combustible
 CL  = "CL"    # checklist de reparto
 MC  = "MC"    # checklist de montacargas
+EPP = "EPP"   # movimiento de equipo de protección personal (entrada o salida)
+
+# Movimientos de EPP. Un solo tipo de registro con dos caras, como SOL guarda la
+# solicitud y el reporte: así el saldo se calcula de UNA sola lista.
+EPP_ENTRADA = "entrada"   # compra: la respalda una factura
+EPP_SALIDA  = "salida"    # entrega a un empleado: la respalda el vale firmado
 
 # ── Claves de catálogos ──────────────────────────────────────────
 PK_VEHICLE  = "CAT#VEHICLE"
@@ -30,6 +36,7 @@ PK_SUCURSAL = "CAT#SUCURSAL"
 PK_MODULO   = "CAT#MODULO"     # módulos dinámicos (motor de formularios)
 PK_PLANTILLA= "CAT#PLANTILLA"  # plantillas de formularios dinámicos
 PK_RESPONSABLE = "CAT#RESPONSABLE"  # responsables de alertas del Tablero de Seguimiento
+PK_EPP_ART  = "CAT#EPPART"     # catálogo de artículos de EPP y uniforme
 PK_CONFIG   = "CONFIG"
 SK_CONFIG   = "CONFIG"
 
@@ -40,6 +47,7 @@ def sk_sucursal(n)   -> str: return f"SUC#{n}"
 def sk_modulo(clave) -> str: return f"MOD#{clave}"
 def sk_plantilla(clave) -> str: return f"PLT#{clave}"
 def sk_responsable(email) -> str: return f"RESP#{email}"
+def sk_epp_art(aid)  -> str: return f"ART#{aid}"
 
 
 def tipo_formulario(clave) -> str:
@@ -112,6 +120,51 @@ def evaluar_km(km_nuevo, km_ultimo, combustible: str | None = None) -> str | Non
     if nuevo - ult > max_delta:
         return f"El kilometraje ({nuevo:g}) excede {max_delta:,} km del último de la unidad ({ult:g}). Verifica la lectura."
     return None
+
+
+# ── Saldo de EPP (puro, sin dependencias) ────────────────────────
+# El inventario se lleva POR ARTÍCULO (no por talla): la talla se registra en la
+# entrega para que quede en el vale, pero no parte el saldo.
+
+def saldo_epp(movimientos) -> dict:
+    """Existencia por sucursal y artículo a partir de los movimientos.
+
+        {sucursal: {articuloId: {"entradas": n, "salidas": n, "saldo": n}}}
+
+    Una salida sin existencia deja el saldo en NEGATIVO a propósito: la entrega
+    al trabajador no se frena, y el negativo señala la factura que falta capturar.
+    """
+    out: dict = {}
+    for mv in movimientos or []:
+        if str(mv.get("status") or "") in ("Anulado", "Rechazado", "Rechazada"):
+            continue
+        mov = str(mv.get("movimiento") or "")
+        if mov not in (EPP_ENTRADA, EPP_SALIDA):
+            continue
+        suc = str(mv.get("sucursal") or "SIN_SUCURSAL")
+        for r in mv.get("renglones") or []:
+            aid = str(r.get("articuloId") or "").strip()
+            if not aid:
+                continue
+            try:
+                cant = float(r.get("cantidad") or 0)
+            except (TypeError, ValueError):
+                continue
+            if cant <= 0:
+                continue
+            a = out.setdefault(suc, {}).setdefault(aid, {"entradas": 0, "salidas": 0, "saldo": 0})
+            if mov == EPP_ENTRADA:
+                a["entradas"] += cant
+            else:
+                a["salidas"] += cant
+            a["saldo"] = a["entradas"] - a["salidas"]
+    # Enteros cuando no hay fracción, para que la app no muestre «3.0»
+    for suc in out.values():
+        for a in suc.values():
+            for k in ("entradas", "salidas", "saldo"):
+                if float(a[k]).is_integer():
+                    a[k] = int(a[k])
+    return out
 
 
 # ── Cumplimiento del checklist de reparto (puro, sin dependencias) ──

@@ -211,6 +211,32 @@ def _limpiar(item: dict) -> dict:
 
 
 # ── Catálogos ────────────────────────────────────────────────────
+def articulos_epp() -> list:
+    """Catálogo de artículos de EPP y uniforme (ordenado por grupo y nombre)."""
+    items = [_limpiar(m.from_dynamo(x))
+             for x in _items(_t().query(KeyConditionExpression=Key("PK").eq(m.PK_EPP_ART)))]
+    return sorted(items, key=lambda a: (int(a.get("orden") or 100), str(a.get("nombre") or "")))
+
+
+def saldos_epp() -> dict:
+    """Existencia de EPP por sucursal y artículo, sobre el historial COMPLETO.
+
+    NO se ventana por fecha: un saldo es acumulado desde el primer movimiento;
+    recortarlo a los últimos 45 días daría una existencia falsa.
+    """
+    t = _t()
+    kwargs = dict(IndexName="tipo-fecha-idx",
+                  KeyConditionExpression=Key("GSI1PK").eq(m.EPP))
+    movs = []
+    while True:
+        resp = t.query(**kwargs)
+        movs.extend(m.from_dynamo(x) for x in resp.get("Items", []))
+        if "LastEvaluatedKey" not in resp:
+            break
+        kwargs["ExclusiveStartKey"] = resp["LastEvaluatedKey"]
+    return m.saldo_epp(movs)
+
+
 def cargar_config() -> dict:
     """Solo el item de configuración (fechaInicio, correos, etc.). Existe para no
     tener que cargar TODOS los catálogos cuando únicamente hace falta esto."""
@@ -331,6 +357,7 @@ def cargar_catalogos() -> dict:
         "modulos":      sorted(mod, key=lambda x: (x.get("orden", 100), str(x.get("nombre", "")))),
         "plantillas":   sorted(plt, key=lambda x: str(x.get("nombre", ""))),
         "responsables": [{"email": r.get("email"), "tipo": r.get("tipo")} for r in rsp if r.get("email")],
+        "eppArticulos": articulos_epp(),
         "config":       cfg,
     }
 

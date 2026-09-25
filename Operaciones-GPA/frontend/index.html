@@ -862,7 +862,7 @@ function VisorFoto(){
 function App(){
   const[session,setSession]=useState(api.isAuth?api.session:null);
   const[cat,setCat]=useState(null);
-  const[data,setData]=useState({combustible:[],checklist:[],montacargas:[]});
+  const[data,setData]=useState({combustible:[],checklist:[],montacargas:[],epp:[]});
   const[loading,setLoading]=useState(false);
   const[module,setModule]=useState("combustible");
   const[toast,setToast]=useState(null);
@@ -880,12 +880,13 @@ function App(){
       setCat(c);
       // Los historiales de cada módulo se cargan por separado: si la cuenta no
       // tiene acceso a alguno (403), NO debe tumbar toda la app (queda vacío).
-      const[sol,cl,mc]=await Promise.all([
+      const[sol,cl,mc,epp]=await Promise.all([
         api.listar("combustible").catch(()=>[]),
         api.listar("checklist").catch(()=>[]),
         api.listar("montacargas").catch(()=>[]),
+        api.listar("epp").catch(()=>[]),
       ]);
-      setData({combustible:sol,checklist:cl,montacargas:mc});
+      setData({combustible:sol,checklist:cl,montacargas:mc,epp});
     }catch(e){showToast("⚠️ "+e.message);}
     setLoading(false);
   };
@@ -944,7 +945,7 @@ function App(){
 
   // Plantillas activas por clave de módulo (motor de formularios dinámicos)
   const plantillasDe=clave=>(cat?.plantillas||[]).filter(p=>p.modulo===clave&&p.activo!==false);
-  const BUILTIN_IDS=["combustible","mtto","seguridad","admin","sucursales","seguimiento"];
+  const BUILTIN_IDS=["combustible","mtto","seguridad","epp","admin","sucursales","seguimiento"];
   // Módulos dinámicos creados como dato (Admin → Módulos); inertes si no hay ninguno
   const dynMods=(cat?.modulos||[]).filter(mo=>mo.activo!==false&&!BUILTIN_IDS.includes(mo.clave))
     .map(mo=>({id:mo.clave,label:mo.nombre||mo.clave,icon:ICON_DOC,dyn:true}));
@@ -952,6 +953,7 @@ function App(){
     {id:"combustible",label:"Combustible",icon:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"},
     {id:"mtto",label:"Mtto",icon:"M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437"},
     {id:"seguridad",label:"Seguridad",icon:"M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"},
+    {id:"epp",label:"EPP",icon:"M12 3 4.5 6.75v4.5c0 4.28 3.2 8.28 7.5 9.75 4.3-1.47 7.5-5.47 7.5-9.75v-4.5L12 3Zm0 6v6m-3-3h6"},
     ...dynMods,
   ].filter(mo=>!userMods||userMods.includes(mo.id)||(mo.id==="mtto"&&(userMods.includes("checklist")||userMods.includes("montacargas"))));
   const modules=[
@@ -990,6 +992,7 @@ function App(){
           {mod==="combustible"&&<ModCombustible cat={cat} items={data.combustible} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("combustible")} showToast={showToast}/>}
           {mod==="mtto"&&<ModMtto cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="seguridad"&&<ModDinamico cat={cat} modulo="seguridad" modLabel="Seguridad Industrial" plantillas={plantillasDe("seguridad")} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
+          {mod==="epp"&&<ModEPP cat={cat} items={data.epp} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("epp")} showToast={showToast}/>}
           {dynActivo&&<ModDinamico cat={cat} modulo={dynActivo.id} modLabel={dynActivo.label} plantillas={plantillasDe(dynActivo.id)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
           {mod==="seguimiento"&&["admin","analista","supervisor"].includes(rol)&&<ModSeguimiento cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} userMods={userMods} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="admin"&&rol==="admin"&&<ModAdmin cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
@@ -1028,6 +1031,281 @@ function ModMtto({cat,data,rol,sucursalesUser,session,refrescar,showToast}){
       {sub==="reparto"&&<ModChecklist cat={cat} items={data.checklist} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("checklist")} showToast={showToast}/>}
       {sub==="montacargas"&&<ModMontacargas cat={cat} items={data.montacargas} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("montacargas")} showToast={showToast}/>}
       {sub==="sucursales"&&<ModDinamico cat={cat} modulo="sucursales" modLabel="Formularios de Sucursales" plantillas={(cat?.plantillas||[]).filter(p=>p.modulo==="sucursales"&&p.activo!==false)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
+    </div>
+  );
+}
+
+
+// ═══ MÓDULO EPP (equipo de protección personal y uniforme) ═══════════
+// Control de existencias con dos caras, como en el almacén de papel:
+//   · ENTRADA → compra, la respalda una FACTURA (número + foto). Solo la
+//     registra un responsable (supervisor o administrador).
+//   · SALIDA  → entrega a un empleado, la respalda el VALE firmado por quien
+//     recibe (número de empleado y nombre, ambos capturados a mano).
+// El inventario se lleva POR ARTÍCULO, no por talla: la talla se imprime en el
+// vale pero no parte el saldo. Una salida sin existencia NO se bloquea: se
+// registra y el saldo queda en negativo, señalando la factura que falta.
+const EPP_LEGAL="Acepto y me comprometo a hacer buen uso y conservar en buen estado el equipo y herramientas de trabajo recibidos. Portarlos y utilizarlos de acuerdo a los lineamientos de la empresa y únicamente en mi horario de trabajo, para las funciones para las que fui contratado y durante el tiempo que permanezca en la Empresa, debiendo devolverlos al momento que deje de laborar en la misma por cualquier causa.";
+const eppActivos=cat=>((cat&&cat.eppArticulos)||[]).filter(a=>a.activo!==false);
+const eppArt=(cat,id)=>((cat&&cat.eppArticulos)||[]).find(x=>String(x.id)===String(id));
+const eppNombre=(cat,id)=>{const a=eppArt(cat,id);return a?a.nombre:id;};
+const eppEsEntrada=r=>String(r&&r.movimiento)==="entrada";
+const eppPiezas=r=>((r&&r.renglones)||[]).reduce((n,x)=>n+(parseFloat(x.cantidad)||0),0);
+
+function ModEPP({cat,items,rol,sucursalesUser,session,refrescar,showToast}){
+  const[view,setView]=useState("saldos");const[sel,setSel]=useState(null);
+  const puedeEntrada=["admin","supervisor"].includes(rol);
+  const puedeCapturar=rol!=="analista";
+  return(
+    <div>
+      <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:10}}>Equipo de Protección Personal</div>
+      <div className="tr">
+        {[["saldos","📦 Existencias"],
+          ...(puedeEntrada?[["entrada","⬆️ Entrada"]]:[]),
+          ...(puedeCapturar?[["salida","⬇️ Entrega"]]:[]),
+          ["historial","🗂 Historial"]].map(([v,l])=>
+          <button key={v} className={"trb"+(view===v?" act":"")} onClick={()=>{setView(v);setSel(null);}}>{l}</button>)}
+      </div>
+      {view==="saldos"&&<EppSaldos cat={cat} sucursalesUser={sucursalesUser} showToast={showToast}/>}
+      {view==="entrada"&&puedeEntrada&&<EppForm movimiento="entrada" cat={cat} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("historial")}/>}
+      {view==="salida"&&puedeCapturar&&<EppForm movimiento="salida" cat={cat} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("historial")}/>}
+      {view==="historial"&&!sel&&<EppHistory items={items} cat={cat} onSelect={r=>{setSel(r);setView("detalle");}}/>}
+      {view==="detalle"&&sel&&<EppDetail reg={sel} cat={cat} onBack={()=>{setView("historial");setSel(null);}}/>}
+    </div>
+  );
+}
+
+// ── Existencias por sucursal ────────────────────────────────────────
+// El saldo se pide al servidor (acumulado desde el primer movimiento); NO se
+// calcula sobre el historial de pantalla, que viene recortado a la ventana.
+function EppSaldos({cat,sucursalesUser,showToast}){
+  const[saldos,setSaldos]=useState(null);const[cargando,setCargando]=useState(true);
+  const sucs=(sucursalesUser&&sucursalesUser.length)?sucursalesUser:(cat.sucursales||[]);
+  const[suc,setSuc]=useState(sucs[0]||"");
+  useEffect(()=>{(async()=>{
+    try{setSaldos(await api.eppSaldos());}catch(e){showToast("⚠️ "+e.message);setSaldos({});}
+    setCargando(false);
+  })();},[]);
+  if(cargando)return<div className="spin"/>;
+  const delSuc=(saldos&&saldos[suc])||{};
+  const arts=eppActivos(cat);
+  const filas=arts.map(a=>({...a,...(delSuc[a.id]||{entradas:0,salidas:0,saldo:0})}));
+  const grupos=[...new Set(filas.map(f=>f.grupo||"Otros"))];
+  const negativos=filas.filter(f=>f.saldo<0).length;
+  return(
+    <div>
+      {sucs.length>1&&<div className="card" style={{padding:"10px 12px"}}>
+        <label>Sucursal</label>
+        <select value={suc} onChange={e=>setSuc(e.target.value)}>{sucs.map(s=><option key={s}>{s}</option>)}</select>
+      </div>}
+      {negativos>0&&<div className="wb">⚠️ {negativos} artículo(s) con existencia en negativo: se entregó sin haber capturado la factura de entrada.</div>}
+      {arts.length===0&&<div className="empty">Aún no hay artículos de EPP. Se dan de alta en Admin → EPP.</div>}
+      {grupos.map(g=>(
+        <div key={g} className="card">
+          <div className="ct">{g}</div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{color:"#888"}}>
+              <th style={{textAlign:"left",padding:"4px 0"}}>Artículo</th>
+              <th style={{padding:"4px 6px"}}>Entr.</th><th style={{padding:"4px 6px"}}>Sal.</th>
+              <th style={{padding:"4px 0",textAlign:"right"}}>Existencia</th></tr></thead>
+            <tbody>{filas.filter(f=>(f.grupo||"Otros")===g).map(f=>(
+              <tr key={f.id} style={{borderTop:".5px solid #f0f0f0"}}>
+                <td style={{padding:"5px 0"}}>{f.nombre}</td>
+                <td style={{textAlign:"center",color:"#888"}}>{f.entradas||0}</td>
+                <td style={{textAlign:"center",color:"#888"}}>{f.salidas||0}</td>
+                <td style={{textAlign:"right",fontWeight:700,color:f.saldo<0?C.red:(f.saldo?C.green:"#888")}}>{f.saldo||0}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>))}
+    </div>
+  );
+}
+
+// ── Captura de un movimiento (entrada o salida) ─────────────────────
+function EppForm({movimiento,cat,session,rol,sucursalesUser,refrescar,showToast,onDone}){
+  const esEnt=movimiento==="entrada";
+  const sucs=(sucursalesUser&&sucursalesUser.length&&!["admin","analista"].includes(rol))?sucursalesUser:(cat.sucursales||[]);
+  const DKEY="gpa_epp_draft_"+movimiento+"_"+session.email;
+  const draftRef=useRef(undefined);
+  if(draftRef.current===undefined)draftRef.current=leerBorrador(DKEY);
+  const D=draftRef.current;
+  const[suc,setSuc]=useState(D.suc||sucs[0]||"");
+  const[factura,setFactura]=useState(D.factura||"");const[proveedor,setProveedor]=useState(D.proveedor||"");
+  const[fotoFactura,setFotoFactura]=useState(D.fotoFactura||null);
+  const[numEmpleado,setNumEmpleado]=useState(D.numEmpleado||"");const[empleado,setEmpleado]=useState(D.empleado||"");
+  const[reng,setReng]=useState(D.reng||[{articuloId:"",cantidad:"",talla:""}]);
+  const[obs,setObs]=useState(D.obs||"");const[sig,setSig]=useState(D.sig||null);const[busy,setBusy]=useState(false);
+  const[teniaBorrador]=useState(!!(D.factura||D.numEmpleado||(D.reng&&D.reng.some(r=>r.articuloId))));
+  const[borEstado,setBorEstado]=useState("");
+  const cerradoRef=useRef(false);
+  useEffect(()=>{const t=setTimeout(()=>{if(cerradoRef.current)return;
+    setBorEstado(guardarBorrador(DKEY,{suc,factura,proveedor,fotoFactura,numEmpleado,empleado,reng,obs,sig}));},400);
+    return()=>clearTimeout(t);},[suc,factura,proveedor,fotoFactura,numEmpleado,empleado,reng,obs,sig]);
+  const descartarBorrador=()=>{cerradoRef.current=true;borrarBorrador(DKEY);setTimeout(()=>{cerradoRef.current=false;},500);
+    setFactura("");setProveedor("");setFotoFactura(null);setNumEmpleado("");setEmpleado("");
+    setReng([{articuloId:"",cantidad:"",talla:""}]);setObs("");setSig(null);showToast("Borrador descartado");};
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const arts=eppActivos(cat);
+  const setR=(i,k,v)=>setReng(rs=>rs.map((r,j)=>j===i?{...r,[k]:v}:r));
+  const quitarR=i=>setReng(rs=>rs.length>1?rs.filter((_,j)=>j!==i):rs);
+  const llenos=reng.filter(r=>r.articuloId&&parseFloat(r.cantidad)>0);
+  const listo=!!(suc&&llenos.length>0&&(esEnt?(factura.trim()&&fotoFactura):(numEmpleado.trim()&&empleado.trim()&&sig)));
+  const submit=async()=>{
+    if(busy)return;
+    if(!listo)return showToast("⚠️ "+(esEnt?"Faltan la factura, su foto o los artículos.":"Faltan el número de empleado, el nombre, la firma o los artículos."));
+    setBusy(true);
+    try{
+      const datos={movimiento,sucursal:suc,obs,
+        renglones:llenos.map(r=>({articuloId:r.articuloId,cantidad:parseFloat(r.cantidad),...(r.talla?{talla:String(r.talla).trim()}:{})})),
+        responsable:session.nombre||session.email,
+        ...(esEnt?{factura:factura.trim(),proveedor:proveedor.trim(),fotoFactura}
+                 :{numEmpleado:numEmpleado.trim(),empleado:empleado.trim(),firma:sig,aviso:EPP_LEGAL})};
+      const subido=await api.subirEvidencias("epp",datos);
+      await api.crear("epp",subido);
+      cerradoRef.current=true;borrarBorrador(DKEY);
+      showToast(esEnt?"✓ Entrada registrada":"✓ Entrega registrada");
+      await refrescar();onDone();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(
+    <div>
+      <AvisoBorrador retomado={teniaBorrador} texto={esEnt?"Retomaste una entrada sin registrar.":"Retomaste una entrega sin registrar."} estado={borEstado} onDescartar={descartarBorrador}/>
+      <div className="card"><div className="ct">{esEnt?"Entrada por factura":"Entrega a empleado"}</div>
+        <label>Sucursal</label>
+        <select value={suc} onChange={e=>setSuc(e.target.value)}><option value="">— Selecciona —</option>{sucs.map(s=><option key={s}>{s}</option>)}</select>
+        {esEnt?<React.Fragment>
+          <label>Número de factura <span style={{color:C.red}}>*</span></label>
+          <input type="text" value={factura} onChange={e=>setFactura(e.target.value)} placeholder="Ej. A-10245"/>
+          <label>Proveedor</label>
+          <input type="text" value={proveedor} onChange={e=>setProveedor(e.target.value)} placeholder="Opcional"/>
+          <FotoCampo val={fotoFactura} set={setFotoFactura} label="Foto de la factura *"/>
+        </React.Fragment>:<React.Fragment>
+          <label>Número de empleado <span style={{color:C.red}}>*</span></label>
+          <input type="text" value={numEmpleado} onChange={e=>setNumEmpleado(e.target.value)} placeholder="Ej. 1042" inputMode="numeric"/>
+          <label>Nombre del empleado <span style={{color:C.red}}>*</span></label>
+          <input type="text" value={empleado} onChange={e=>setEmpleado(e.target.value)} placeholder="Nombre completo"/>
+          <div style={{fontSize:11,color:"#888",marginTop:3}}>Entrega: {session.nombre||session.email}</div>
+        </React.Fragment>}
+      </div>
+
+      <div className="card"><div className="ct">Artículos</div>
+        {arts.length===0&&<div className="empty">No hay artículos dados de alta (Admin → EPP).</div>}
+        {reng.map((r,i)=>{const a=eppArt(cat,r.articuloId);return(
+          <div key={i} style={{borderTop:i?".5px solid #f0f0f0":"none",paddingTop:i?8:0,marginTop:i?8:0}}>
+            <label>Artículo {i+1}</label>
+            <select value={r.articuloId} onChange={e=>setR(i,"articuloId",e.target.value)}>
+              <option value="">— Selecciona —</option>
+              {arts.map(x=><option key={x.id} value={x.id}>{x.nombre}</option>)}
+            </select>
+            <div className="r2">
+              <div><label>Cantidad</label><input type="number" min="0" step="1" value={r.cantidad} onChange={e=>setR(i,"cantidad",e.target.value)} placeholder="0"/></div>
+              {(!esEnt&&a&&a.conTalla)
+                ?<div><label>Talla</label><input type="text" value={r.talla||""} onChange={e=>setR(i,"talla",e.target.value)} placeholder="Ej. G, 29"/></div>
+                :<div/>}
+            </div>
+            {reng.length>1&&<button className="bd" style={{marginTop:6}} onClick={()=>quitarR(i)}>Quitar</button>}
+          </div>);})}
+        <button className="bs" style={{width:"100%",marginTop:10}} onClick={()=>setReng(rs=>[...rs,{articuloId:"",cantidad:"",talla:""}])}>+ Agregar artículo</button>
+      </div>
+
+      <label>Observaciones</label>
+      <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Opcional"/>
+
+      {!esEnt&&<div className="card"><div className="ct">Firma de quien recibe</div>
+        <div style={{fontSize:11,color:"#555",lineHeight:1.5,marginBottom:8}}>{EPP_LEGAL}</div>
+        <canvas ref={sigRef} className="sig" width={340} height={120}
+          onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}
+          onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+        <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+        {(numEmpleado||empleado)&&<div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{numEmpleado?"#"+numEmpleado+" · ":""}{empleado}</b></div>}
+      </div>}
+
+      <button className="bp" disabled={!listo||busy} onClick={submit}>{busy?"Guardando…":(esEnt?"Registrar entrada":"Registrar entrega")}</button>
+    </div>
+  );
+}
+
+// ── Historial ───────────────────────────────────────────────────────
+function EppHistory({items,cat,onSelect}){
+  const[f,setF]=useState("Todos");
+  const[desde,setDesde]=useState("");const[hasta,setHasta]=useState("");
+  const sucs=sucursalesDe(items);
+  const[suc,setSuc]=useState("");
+  const list=(items||[]).filter(r=>
+    (f==="Todos"||((f==="Entradas")===eppEsEntrada(r)))&&
+    (!suc||r.sucursal===suc)&&
+    (!desde||ymd(r.fecha)>=desde)&&(!hasta||ymd(r.fecha)<=hasta));
+  return(
+    <div>
+      <div className="tr">{["Todos","Entradas","Salidas"].map(x=>
+        <button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
+      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
+        sucursales={sucs} sucursal={suc} setSucursal={setSuc}/>
+      {list.length===0&&<div className="empty">Sin movimientos</div>}
+      <div className="card">{list.map(r=>(
+        <div key={r.id} className="li" onClick={()=>onSelect(r)}>
+          <div className="lit">
+            <span className="lim">{eppEsEntrada(r)?"⬆️ Entrada":"⬇️ Entrega"}</span>
+            <span className={"bdg "+(eppEsEntrada(r)?"dok":"dpe")}>{eppPiezas(r)} pza(s)</span>
+          </div>
+          <div className="lis">{eppEsEntrada(r)?("Factura "+(r.factura||"—")+(r.proveedor?" · "+r.proveedor:"")):("#"+(r.numEmpleado||"—")+" · "+(r.empleado||"—"))}</div>
+          <div className="lis">{fdt(r.fecha)} · {r.sucursal} · {(r.renglones||[]).length} artículo(s)</div>
+        </div>))}</div>
+    </div>
+  );
+}
+
+// ── Detalle (y PDF del vale) ────────────────────────────────────────
+function EppDetail({reg,cat,onBack}){
+  const ent=eppEsEntrada(reg);
+  return(
+    <div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}>
+        <button className="bs" onClick={onBack}>← Volver</button>
+        <BotonPDF tipo="epp" reg={reg}/>
+      </div>
+      <div className="pdf-area" data-pdftitle={ent?"Entrada de EPP por factura":"Vale de entrega de EPP"} data-pdfsucursal={reg.sucursal||""}>
+        <div className="card">
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+            <div className="ct" style={{marginBottom:0}}>{ent?"Entrada por factura":"Entrega a empleado"}</div>
+            <span className={"bdg "+(ent?"dok":"dpe")}>{eppPiezas(reg)} pza(s)</span>
+          </div>
+          <div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(reg)}</span></div>
+          <div className="dr"><span>Fecha</span><span>{fdt(reg.fecha)}</span></div>
+          <div className="dr"><span>Sucursal</span><span>{reg.sucursal}</span></div>
+          {ent?<React.Fragment>
+            <div className="dr"><span>Factura</span><span style={{fontWeight:700}}>{reg.factura||"—"}</span></div>
+            <div className="dr"><span>Proveedor</span><span>{reg.proveedor||"—"}</span></div>
+            <div className="dr"><span>Registró</span><span>{reg.responsable||reg.accountId||"—"}</span></div>
+          </React.Fragment>:<React.Fragment>
+            <div className="dr"><span>No. de empleado</span><span style={{fontWeight:700}}>{reg.numEmpleado||"—"}</span></div>
+            <div className="dr"><span>Empleado</span><span>{reg.empleado||"—"}</span></div>
+            <div className="dr"><span>Entregó</span><span>{reg.responsable||reg.accountId||"—"}</span></div>
+          </React.Fragment>}
+        </div>
+        <div className="card"><div className="ct">Artículos</div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{color:"#888"}}>
+              <th style={{textAlign:"left",padding:"4px 0"}}>Artículo</th>
+              {!ent&&<th style={{padding:"4px 6px"}}>Talla</th>}
+              <th style={{padding:"4px 0",textAlign:"right"}}>Cantidad</th></tr></thead>
+            <tbody>{(reg.renglones||[]).map((r,i)=>(
+              <tr key={i} style={{borderTop:".5px solid #f0f0f0"}}>
+                <td style={{padding:"5px 0"}}>{eppNombre(cat,r.articuloId)}</td>
+                {!ent&&<td style={{textAlign:"center"}}>{r.talla||"—"}</td>}
+                <td style={{textAlign:"right",fontWeight:700}}>{r.cantidad}</td>
+              </tr>))}</tbody>
+          </table>
+        </div>
+        {reg.obs&&<div className="card"><div className="ct">Observaciones</div><div style={{fontSize:12,color:"#444"}}>{reg.obs}</div></div>}
+        {ent&&reg.fotoFactura&&<div className="card"><div className="ct">Factura</div><img src={reg.fotoFactura} style={{width:"100%",borderRadius:8}} alt="factura"/></div>}
+        {!ent&&<div className="card"><div className="ct">Conformidad de quien recibe</div>
+          <div style={{fontSize:11,color:"#555",lineHeight:1.5,marginBottom:8}}>{reg.aviso||EPP_LEGAL}</div>
+          {reg.firma&&<img src={reg.firma} style={{width:"100%",maxWidth:260,borderRadius:6}} alt="firma"/>}
+          <div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{reg.numEmpleado?"#"+reg.numEmpleado+" · ":""}{reg.empleado}</b></div>
+        </div>}
+      </div>
     </div>
   );
 }
@@ -2744,6 +3022,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
     a.href=url;a.download="reporte_por_unidad_"+repSufijo+".csv";
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
   };
+  const[eppNuevo,setEppNuevo]=useState({nombre:"",grupo:"Equipo de Protección",conTalla:false});
   const wrap=async fn=>{setBusy(true);try{await fn();await refrescarCat();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
   const saveV=v=>{const{_isNew,...veh}=v;veh.economico=veh.economico||veh.id;veh.tanque=parseFloat(veh.tanque)||0;veh.precio=parseFloat(veh.precio)||0;if(_isNew&&!veh.id)return showToast("⚠️ ID obligatorio");if(cat.vehicles.some(x=>String(x.economico)===String(veh.economico)&&String(x.id)!==String(veh.id)))return showToast("⚠️ Ya existe otra unidad con el económico "+veh.economico);wrap(async()=>{await api.adminVehiculo({...veh,id:String(veh.id)});setEditV(null);showToast("Vehículo guardado");});};
   const saveU=u=>{const{_isNew,...usr}=u;if(_isNew&&!usr.id)return showToast("⚠️ ID obligatorio");wrap(async()=>{await api.adminResponsable({...usr,id:isNaN(Number(usr.id))?usr.id:Number(usr.id)});setEditU(null);showToast("Responsable guardado");});};
@@ -2814,7 +3093,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
       {editU&&<UForm u={editU} onClose={()=>setEditU(null)}/>}
       {editA&&<AForm a={editA} onClose={()=>setEditA(null)}/>}
-      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["metas","Metas seguim."],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
+      <div className="tr" style={{overflowX:"auto"}}>{[["vehicles","Vehículos"],["sucursales","Sucursales"],["cuentas","Cuentas"],["modulos","Módulos"],["formularios","Formularios"],["metas","Metas seguim."],["epp","EPP"],["reportes","Reportes"]].map(([k,l])=><button key={k} className={"trb"+(sec===k?" act":"")} onClick={()=>setSec(k)}>{l}</button>)}</div>
       {sec==="metas"&&<MetasSeguimiento cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
       {sec==="vehicles"&&<>
         <div className="card"><div className="ct">Actualizar tabla desde Excel</div>
@@ -2895,6 +3174,49 @@ function ModAdmin({cat,refrescarCat,showToast}){
           {(cat?.plantillas||[]).map(p=><div key={p.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{p.nombre||p.clave}</span><span className={"bdg "+(p.activo!==false?"dok":"drj")}>{p.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">módulo: {p.modulo} · {(p.secciones||[]).length} sección(es){p.requiereAutorizacion?" · autoriza":""}{p.requiereFirma!==false?" · firma":""}</div><div style={{display:"flex",gap:8,marginTop:6,alignItems:"center",flexWrap:"wrap"}}><label style={{margin:0,fontSize:11,color:"#666"}}>Periodicidad (Seguimiento):</label><select value={p.periodicidad||"mensual"} disabled={busy} onChange={e=>wrap(()=>api.adminPlantilla({...p,periodicidad:e.target.value}))} style={{width:"auto",padding:"4px 8px",fontSize:12}}>{[["semanal","Semanal"],["mensual","Mensual"],["bimestral","Bimestral"],["trimestral","Trimestral"],["semestral","Semestral"],["anual","Anual"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><button className="bd" disabled={busy} onClick={()=>togglePlantilla(p)}>{p.activo!==false?"Desactivar":"Activar"}</button></div></div>)}
         </div>
       </>}
+        {sec==="epp"&&<>
+          <div className="wb">Artículos de EPP y uniforme. El inventario se lleva <b>por artículo</b>: «Pide talla» solo hace que el vale de entrega pregunte la talla (queda impresa en el vale), no parte la existencia.</div>
+          <div className="card"><div className="ct">Nuevo artículo</div>
+            <label>Nombre</label>
+            <input type="text" value={eppNuevo.nombre} onChange={e=>setEppNuevo({...eppNuevo,nombre:e.target.value})} placeholder="Ej. Botas dieléctricas"/>
+            <label>Grupo</label>
+            <select value={eppNuevo.grupo} onChange={e=>setEppNuevo({...eppNuevo,grupo:e.target.value})}>
+              {["Equipo de Protección","Uniforme","Otros"].map(g=><option key={g}>{g}</option>)}
+            </select>
+            <label style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}>
+              <input type="checkbox" checked={eppNuevo.conTalla} onChange={e=>setEppNuevo({...eppNuevo,conTalla:e.target.checked})} style={{width:"auto"}}/>
+              Pide talla al entregarlo
+            </label>
+            <button className="bp" disabled={busy||!eppNuevo.nombre.trim()} onClick={()=>wrap(async()=>{
+              const id=eppNuevo.nombre.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,40);
+              if(!id)return showToast("⚠️ El nombre no sirve como clave");
+              await api.adminEppArticulo({id,nombre:eppNuevo.nombre.trim(),grupo:eppNuevo.grupo,conTalla:eppNuevo.conTalla,orden:900,activo:true});
+              setEppNuevo({nombre:"",grupo:"Equipo de Protección",conTalla:false});
+              showToast("Artículo agregado");
+            })}>Agregar</button>
+          </div>
+          <div className="card">
+            <div className="lis" style={{marginBottom:6}}>{(cat?.eppArticulos||[]).length} artículo(s)</div>
+            {(cat?.eppArticulos||[]).length===0&&<div className="empty">Sin artículos. Se cargan de golpe con el script <b>seed/epp_articulos.py</b>, o uno por uno aquí.</div>}
+            {(cat?.eppArticulos||[]).map(a=>(
+              <div key={a.id} className="li" style={{cursor:"default"}}>
+                <div className="lit">
+                  <span className="lim">{a.nombre}</span>
+                  <span className={"bdg "+(a.activo!==false?"dok":"drj")}>{a.activo!==false?"Activo":"Inactivo"}</span>
+                </div>
+                <div className="lis">{a.grupo}{a.conTalla?" · pide talla":""} · clave: {a.id}</div>
+                <div style={{display:"flex",gap:6,marginTop:6}}>
+                  <button className="bd" disabled={busy} onClick={()=>wrap(async()=>{
+                    await api.adminEppArticulo({...a,activo:a.activo===false});showToast("Actualizado");})}>
+                    {a.activo!==false?"Desactivar":"Activar"}</button>
+                  <button className="bd" disabled={busy} onClick={()=>wrap(async()=>{
+                    await api.adminEppArticulo({...a,conTalla:!a.conTalla});showToast("Actualizado");})}>
+                    {a.conTalla?"No pedir talla":"Pedir talla"}</button>
+                </div>
+              </div>))}
+          </div>
+          <div className="wb">No se borran artículos que ya tengan movimientos: desactívalos para que dejen de aparecer al capturar, sin perder el histórico.</div>
+        </>}
       {sec==="reportes"&&<>
         <div className="card"><div className="ct">Reporte de cargas de combustible</div>
           <div className="tr"><button type="button" className={"trb"+(rModo==="dia"?" act":"")} onClick={()=>setRModo("dia")}>Un día</button><button type="button" className={"trb"+(rModo==="rango"?" act":"")} onClick={()=>setRModo("rango")}>Rango</button></div>

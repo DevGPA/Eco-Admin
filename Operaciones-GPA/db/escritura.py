@@ -204,6 +204,28 @@ def guardar_responsable(u: dict) -> None:
     _t().put_item(Item={"PK": m.PK_USER, "SK": m.sk_user(u["id"]), **m.to_dynamo(u)})
 
 
+def guardar_epp_articulo(art: dict) -> dict:
+    """Alta o edición de un artículo del catálogo de EPP. `id` es la llave."""
+    aid = str(art.get("id") or "").strip()
+    if not aid:
+        raise ValueError("El artículo necesita un id")
+    item = {
+        "PK": m.PK_EPP_ART, "SK": m.sk_epp_art(aid),
+        "id": aid,
+        "nombre": str(art.get("nombre") or aid).strip(),
+        "grupo": str(art.get("grupo") or "Equipo de Protección").strip(),
+        "conTalla": bool(art.get("conTalla")),
+        "orden": int(art.get("orden") or 100),
+        "activo": art.get("activo", True) is not False,
+    }
+    _t().put_item(Item=m.to_dynamo(item))
+    return item
+
+
+def eliminar_epp_articulo(aid: str) -> None:
+    _t().delete_item(Key={"PK": m.PK_EPP_ART, "SK": m.sk_epp_art(str(aid))})
+
+
 def guardar_sucursal(nombre: str) -> None:
     _t().put_item(Item={"PK": m.PK_SUCURSAL, "SK": m.sk_sucursal(nombre), "nombre": nombre})
 

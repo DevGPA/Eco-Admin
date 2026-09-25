@@ -29,11 +29,12 @@ from db.escritura import (crear_registro, cambiar_estado, corregir_registro, edi
                           guardar_sucursal, eliminar_sucursal, guardar_config,
                           actualizar_precio_por_combustible,
                           guardar_modulo, guardar_plantilla,
-                          guardar_responsable_alerta, reasignar_registro_unidad)
+                          guardar_responsable_alerta, reasignar_registro_unidad,
+                          guardar_epp_articulo, eliminar_epp_articulo)
 from db.queries import (listar_registros, get_registro, cargar_catalogos, cargar_config,
                         get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
                         ultima_solicitud_vehiculo, solicitud_asignable_vehiculo,
-                        estados_checklist_reparto)
+                        estados_checklist_reparto, saldos_epp)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -116,7 +117,8 @@ def _csv(x):
 # CL/MC aceptan "mtto" (nueva navegación unificada) o las claves antiguas.
 MODULO = {m.SOL: ("combustible",),
           m.CL:  ("mtto", "checklist"),
-          m.MC:  ("mtto", "montacargas")}
+          m.MC:  ("mtto", "montacargas"),
+          m.EPP: ("epp",)}
 
 
 def _claims(event) -> dict:
@@ -223,6 +225,25 @@ def lambda_handler(event, context):
         if route == "POST /combustible/{id}/corregir":
             return _corregir(event, cl)
 
+        # ── EPP (entradas por factura y salidas por vale de entrega) ──
+        if route == "POST /epp":
+            return _crear(m.EPP, _body(event), cl)
+        if route == "GET /epp":
+            return _listar(m.EPP, event, cl)
+        if route == "GET /epp/saldos":
+            # El saldo NO se ventana: es acumulado desde el primer movimiento.
+            if not _modulo_ok(cl, MODULO[m.EPP]):
+                return _err("Tu cuenta no tiene acceso a este módulo", 403)
+            return _resp(saldos_epp())
+        if route == "POST /admin/epp-articulo":
+            if cl["rol"] != "admin":
+                return _err("Solo un administrador", 403)
+            b = _body(event)
+            if b.get("eliminar"):
+                eliminar_epp_articulo(b.get("id"))
+                return _resp({"ok": True})
+            return _resp({"ok": True, "articulo": guardar_epp_articulo(b)})
+
         # ── Checklist de reparto ──
         if route == "POST /checklist":
             return _crear(m.CL, _body(event), cl,
@@ -311,6 +332,55 @@ def _validar_foto_km(tipo, datos) -> str | None:
     principal = datos.get("photo") or (fotos[0] if fotos else None)
     if not _foto_ok(principal):
         return "Falta la foto del kilometraje."
+    return None
+
+
+def _validar_epp(tipo, datos, cl) -> str | None:
+    """Candados del movimiento de EPP (entrada por factura, salida por vale).
+
+    El inventario se lleva por artículo, no por talla: la talla se guarda en el
+    renglón porque va impresa en el vale, pero no parte el saldo.
+    Una salida SIN existencia no se bloquea (decisión del área): se registra y el
+    saldo queda en negativo, señalando la factura que falta capturar.
+    """
+    if tipo != m.EPP:
+        return None
+    mov = str(datos.get("movimiento") or "")
+    if mov not in (m.EPP_ENTRADA, m.EPP_SALIDA):
+        return "El movimiento debe ser entrada o salida."
+    if not str(datos.get("sucursal") or "").strip():
+        return "Falta la sucursal."
+
+    renglones = datos.get("renglones") or []
+    if not isinstance(renglones, list) or not renglones:
+        return "Agrega al menos un artículo."
+    for i, r in enumerate(renglones, 1):
+        if not str((r or {}).get("articuloId") or "").strip():
+            return f"El renglón {i} no tiene artículo."
+        try:
+            cant = float(r.get("cantidad") or 0)
+        except (TypeError, ValueError):
+            return f"La cantidad del renglón {i} no es un número."
+        if cant <= 0:
+            return f"La cantidad del renglón {i} debe ser mayor a 0."
+
+    if mov == m.EPP_ENTRADA:
+        # La entrada la respalda una FACTURA: sin su número y su foto no hay
+        # forma de auditar de dónde salió la existencia.
+        if not str(datos.get("factura") or "").strip():
+            return "Falta el número de factura de la entrada."
+        if not _foto_ok(datos.get("fotoFactura")):
+            return "Falta la foto de la factura."
+        if cl["rol"] not in ("admin", "supervisor"):
+            return "Solo un supervisor o un administrador registra entradas de EPP."
+    else:
+        # La salida la respalda el VALE firmado por quien recibe.
+        if not str(datos.get("numEmpleado") or "").strip():
+            return "Falta el número de empleado."
+        if not str(datos.get("empleado") or "").strip():
+            return "Falta el nombre del empleado."
+        if not _foto_ok(datos.get("firma")):
+            return "Falta la firma de quien recibe."
     return None
 
 
@@ -441,6 +511,9 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
                         f"de la unidad ({cap:g} L).", 422)
         if precio_l <= 0 or precio_l > 100:
             return _err("El precio por litro debe ser mayor a $0 y no exceder $100.", 422)
+    err_epp = _validar_epp(tipo, datos, cl)
+    if err_epp:
+        return _err(err_epp, 422)
     err_chk = _validar_checklist_al_dia(tipo, datos)
     if err_chk:
         return _err(err_chk, 409)

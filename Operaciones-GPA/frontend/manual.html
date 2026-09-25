@@ -222,11 +222,12 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
     <a class="sub" href="#s6-3">6.3 Sucursales</a>
     <a href="#s7"><span class="n">7</span>Seguridad Industrial</a>
     <a href="#s8"><span class="n">8</span>Responsivas</a>
-    <a href="#s9"><span class="n">9</span>Historial y descargas</a>
-    <a href="#s10"><span class="n">10</span>Tablero de Seguimiento</a>
-    <a href="#s11"><span class="n">11</span>Administración</a>
-    <a href="#s12"><span class="n">12</span>Preguntas frecuentes</a>
-    <a href="#s13"><span class="n">13</span>Glosario</a>
+    <a href="#sepp"><span class="n">9</span>EPP (equipo de protección)</a>
+    <a href="#s9"><span class="n">10</span>Historial y descargas</a>
+    <a href="#s10"><span class="n">11</span>Tablero de Seguimiento</a>
+    <a href="#s11"><span class="n">12</span>Administración</a>
+    <a href="#s12"><span class="n">13</span>Preguntas frecuentes</a>
+    <a href="#s13"><span class="n">14</span>Glosario</a>
   </nav>
 
   <main>
@@ -580,8 +581,38 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
     </section>
 
     <!-- 9 -->
+    <section id="sepp">
+      <div class="sh"><span class="num">9</span><h2>EPP (equipo de protección personal y uniforme)</h2></div>
+      <p>Control de <b>existencias</b> de equipo de protección y uniforme por sucursal, con las dos
+      caras del almacén:</p>
+      <ul class="bul">
+        <li><b>Entrada</b> <span class="chip rol-sup">Supervisor</span> <span class="chip rol-adm">Administrador</span>
+          — lo que llega comprado. La respalda la <b>factura</b>: se captura su número y se le toma
+          <b>foto</b> (ambos obligatorios), el proveedor y los artículos con su cantidad.</li>
+        <li><b>Entrega</b> — lo que se le da a un trabajador. Es el vale de entrega de siempre, ahora
+          en el celular: <b>número de empleado</b> y <b>nombre</b> (se escriben a mano, primero el número),
+          los artículos con cantidad y, donde aplica, la <b>talla</b>; al final el trabajador lee la
+          carta de conformidad y <b>firma</b> en pantalla. Sin firma no se puede registrar.</li>
+        <li><b>Existencias</b> — tabla por sucursal: entradas, salidas y saldo de cada artículo.
+          El saldo es <b>acumulado desde el primer movimiento</b>, no de los últimos 45 días.</li>
+        <li><b>Historial</b> — todos los movimientos, con filtro por tipo, fecha y sucursal. Cada
+          entrega se descarga en <b>PDF</b> como vale, con la carta de conformidad, la firma y el
+          domicilio de la sucursal en el encabezado.</li>
+      </ul>
+      <div class="note"><span class="callout-t">Dos reglas del área:</span>
+      (1) el inventario se lleva <b>por artículo, no por talla</b> — la talla queda impresa en el
+      vale, pero «Calzado 29» y «Calzado 26» suman al mismo saldo; y (2) <b>una entrega sin
+      existencia no se bloquea</b>: se registra y el saldo queda en <span style="color:#A32D2D;font-weight:700">negativo</span>,
+      que es la señal de que falta capturar la factura de esa compra. La pantalla de Existencias
+      lo avisa arriba.</div>
+      <p>Los artículos (Playera, Pantalón, Calzado con casquillo, Casco, Lentes, Guantes…) se
+      administran en <b>Admin → EPP</b>: alta, activar/desactivar y si piden talla. Un artículo con
+      movimientos no se borra: se desactiva para que deje de aparecer al capturar sin perder el
+      histórico.</p>
+    </section>
+
     <section id="s9">
-      <div class="sh"><span class="num">9</span><h2>Historial y descargas</h2></div>
+      <div class="sh"><span class="num">10</span><h2>Historial y descargas</h2></div>
       <p>Cada módulo tiene su <b>Historial</b>. Puedes:</p>
       <ul class="bul">
         <li><b>Filtrar por fecha</b> (Desde / Hasta).</li>
@@ -620,7 +651,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 
     <!-- 10 -->
     <section id="s10">
-      <div class="sh"><span class="num">10</span><h2>Tablero de Seguimiento</h2></div>
+      <div class="sh"><span class="num">11</span><h2>Tablero de Seguimiento</h2></div>
       <p><span class="chip rol-adm">Administrador</span> <span class="chip rol-ana">Analista</span> <span class="chip rol-sup">Supervisor</span> — Tablero de solo lectura para ver <b>qué se llenó, qué falta y qué salió mal</b>, por módulo y según su periodicidad.</p>
 
       <h3>Estados</h3>
@@ -674,7 +705,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 
     <!-- 11 -->
     <section id="s11">
-      <div class="sh"><span class="num">11</span><h2>Administración</h2></div>
+      <div class="sh"><span class="num">12</span><h2>Administración</h2></div>
       <p><span class="chip rol-adm">Administrador</span> — Panel para gestionar los catálogos y las cuentas. Se organiza en pestañas.</p>
 
       <h3><span class="h3n">11.1</span>Vehículos</h3>
@@ -749,7 +780,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 
     <!-- 12 -->
     <section id="s12">
-      <div class="sh"><span class="num">12</span><h2>Preguntas frecuentes</h2></div>
+      <div class="sh"><span class="num">13</span><h2>Preguntas frecuentes</h2></div>
 
       <div class="card">
         <p><b>No me llega el correo para crear/recuperar contraseña.</b><br/>El envío automático de correos aún no está activo. Pide a tu administrador que te fije la contraseña desde <b>Admin → Cuentas → Editar</b>.</p>
@@ -770,7 +801,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 
     <!-- 13 -->
     <section id="s13">
-      <div class="sh"><span class="num">13</span><h2>Glosario</h2></div>
+      <div class="sh"><span class="num">14</span><h2>Glosario</h2></div>
       <div class="tbl-wrap">
         <table>
           <thead><tr><th>Término</th><th>Significado</th></tr></thead>
@@ -791,7 +822,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.3. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.4. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>

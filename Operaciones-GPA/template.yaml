@@ -135,6 +135,17 @@ Resources:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/combustible/{id}/corregir' }
 
+        # ── EPP (entradas por factura y salidas por vale de entrega) ──
+        EppCrear:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /epp }
+        EppListar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /epp }
+        EppSaldos:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /epp/saldos }
+
         # ── Checklist de reparto ──
         ChecklistCrear:
           Type: HttpApi
@@ -190,6 +201,10 @@ Resources:
         AdminEditarRegistro:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/editar-registro }
+
+        AdminEppArticulo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /admin/epp-articulo }
 
         # ── Motor de formularios dinámicos (catálogos + registros genéricos) ──
         AdminModulo:

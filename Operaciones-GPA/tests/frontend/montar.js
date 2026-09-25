@@ -49,7 +49,7 @@ const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
 // api simulada: registra lo que se envía y permite sembrar lo que devuelve.
 const llamadas=[];
 // `mundo` es lo que "hay en el servidor" para una prueba: se rellena antes de montar.
-const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[]},formularios:{}};
+const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{}};
 const metodos={
   subirEvidencias:async(tipo,obj)=>obj,          // identidad: aquí no hay S3
   crear:async(tipo,datos)=>{llamadas.push({metodo:"crear",tipo,datos});return{id:"nuevo",ok:true};},
@@ -57,6 +57,7 @@ const metodos={
   catalogos:async()=>mundo.catalogos||{vehicles:[],users:[],sucursales:[],modulos:[],plantillas:[],responsables:[],config:{}},
   listar:async t=>mundo.registros[t]||[],
   listarFormulario:async c=>mundo.formularios[c]||[],
+  eppSaldos:async()=>mundo.saldos||{},
 };
 // isAuth y session son VALORES, no funciones: App los lee directo.
 const valores={get isAuth(){return !!mundo.sesion;},get session(){return mundo.sesion;}};
@@ -64,7 +65,7 @@ class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
   (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   navegador,localStorage,noop,console);
 

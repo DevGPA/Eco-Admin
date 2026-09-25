@@ -11,8 +11,8 @@
 //   await api.crear('combustible', { ...datos, photo: key });
 // ─────────────────────────────────────────────────────────────────
 
-const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas" };
-const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM" };
+const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas", epp: "epp" };
+const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM", epp: "EPP" };
 const SES_KEY = "gpa_ops_session";
 const MAX_SUBIDAS = 4;   // evidencias subiendo a la vez (cola; evita ráfagas → throttle)
 
@@ -228,6 +228,9 @@ class GpaApi {
     return (await this._fetch("GET", `/${TIPO_PATH[tipo]}` + (qs.length ? "?" + qs.join("&") : ""))).items || [];
   }
   crear(tipo, datos)          { return this._fetch("POST", `/${TIPO_PATH[tipo]}`, datos); }
+  // Saldo de EPP: acumulado desde el primer movimiento, NO se ventana por fecha.
+  eppSaldos()                 { return this._fetch("GET", "/epp/saldos"); }
+  adminEppArticulo(a)         { return this._fetch("POST", "/admin/epp-articulo", a); }
   cambiarEstado(tipo, id, st, comentario, campos) { return this._fetch("POST", `/${TIPO_PATH[tipo]}/${id}/estado`, { status: st, comentario: comentario || "", campos: campos || [] }); }
   // Corrección de un registro de combustible marcado «Por corregir» (solo los campos autorizados)
   corregir(id, datos, forzar) { return this._fetch("POST", `/combustible/${id}/corregir`, { datos: datos || {}, forzar: !!forzar }); }
