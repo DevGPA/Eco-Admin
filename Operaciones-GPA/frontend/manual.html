@@ -598,6 +598,16 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
           en el celular: <b>número de empleado</b> y <b>nombre</b> (se escriben a mano, primero el número),
           los artículos con cantidad y, donde aplica, la <b>talla</b>; al final el trabajador lee la
           carta de conformidad y <b>firma</b> en pantalla. Sin firma no se puede registrar.</li>
+        <li><b>Entrega en dos manos (pre-registro)</b> — cuando quien sabe qué se va a entregar no es
+          quien la entrega: en la pantalla de Entrega marca <b>«Dejar en pre-registro»</b>, captura
+          número de empleado, nombre y artículos (con talla) y guarda <b>sin firma ni fotos</b>. La entrega
+          queda <span class="st st-warn">Por concluir</span> y <b>todavía no descuenta existencia</b>.
+          El <b>responsable de alertas</b> de esa sucursal (Admin → Cuentas → «Responsable de alertas»;
+          corporativo ve todas las sucursales) tiene la pestaña <kbd>✍️ Por concluir</kbd> dentro de EPP:
+          abre el pre-registro, revisa los artículos, toma al menos <b>una foto de evidencia</b>, el empleado
+          lee la carta y <b>firma</b>, y con <kbd>Concluir entrega</kbd> la salida queda registrada y
+          descuenta existencia. Quien no tiene esa marca no ve la pestaña ni puede concluir (tampoco un
+          administrador sin la marca: si lo necesita, se la pone en su propia cuenta).</li>
         <li><b>Existencias</b> — tabla por sucursal: entradas, salidas y saldo de cada artículo.
           El saldo es <b>acumulado desde el primer movimiento</b>, no de los últimos 45 días.</li>
         <li><b>Historial</b> — todos los movimientos, con filtro por tipo, fecha y sucursal. Igual
@@ -835,7 +845,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.7. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.8. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>

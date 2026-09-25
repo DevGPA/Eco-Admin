@@ -118,6 +118,15 @@ cuenta sin módulos marcados ve todos; una limitada a EPP ve solo EPP; una limit
 Combustible y Mtto no ve EPP ni Seguridad; las cuentas viejas con «montacargas» o
 «checklist» siguen abriendo Mtto; el admin ve Admin y Seguimiento. Monta la App real.
 
+`test_epp_prerregistro.js` — entrega en dos manos: la casilla «Dejar en pre-registro»
+quita la firma y manda status Prerregistro; la pestaña «Por concluir» solo la ve la
+cuenta con marca de responsable (sin importar mayúsculas del correo); la lista muestra
+al empleado y abre la pantalla de conclusión con los artículos ya capturados; no
+concluye sin evidencia + firma; el detalle distingue «Por concluir (sin firma)» de una
+concluida (evidencias, quién concluyó, observación). La llamada final a /concluir se
+prueba en el servidor (tests/test_epp_prerregistro.py): en Node no hay FileReader para
+meter la foto por el <input>.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

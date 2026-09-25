@@ -145,6 +145,12 @@ Resources:
         EppSaldos:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /epp/saldos }
+        EppPendientes:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /epp/pendientes }
+        EppConcluir:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/epp/{id}/concluir' }
 
         # ── Checklist de reparto ──
         ChecklistCrear:

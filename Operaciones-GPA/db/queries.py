@@ -254,6 +254,26 @@ def saldos_epp() -> dict:
     return m.saldo_epp(movs)
 
 
+def responsables_alerta() -> list:
+    """Cuentas marcadas como responsables de alertas: [{email, tipo}] con tipo
+    «sucursal» o «corporativo». Son quienes concluyen los pre-registros de EPP."""
+    items = _items(_t().query(KeyConditionExpression=Key("PK").eq(m.PK_RESPONSABLE)))
+    return [{"email": str(r.get("email") or ""), "tipo": str(r.get("tipo") or "")} for r in items if r.get("email")]
+
+
+def epp_prerregistros() -> list:
+    """Salidas de EPP en PRE-REGISTRO, sobre el historial completo (no se ventana:
+    un pre-registro olvidado hace 2 meses sigue pendiente y debe verse)."""
+    its = _query_todo(_t(), IndexName="tipo-fecha-idx",
+                      KeyConditionExpression=Key("GSI1PK").eq(m.EPP), ScanIndexForward=False)
+    out = []
+    for it in its:
+        d = m.from_dynamo(it)
+        if str(d.get("movimiento") or "") == m.EPP_SALIDA and str(d.get("status") or "") == m.EPP_PRERREGISTRO:
+            out.append(_limpiar(d))
+    return out
+
+
 def cargar_config() -> dict:
     """Solo el item de configuración (fechaInicio, correos, etc.). Existe para no
     tener que cargar TODOS los catálogos cuando únicamente hace falta esto."""

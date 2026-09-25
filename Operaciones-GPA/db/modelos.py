@@ -28,6 +28,11 @@ EPP = "EPP"   # movimiento de equipo de protección personal (entrada o salida)
 # solicitud y el reporte: así el saldo se calcula de UNA sola lista.
 EPP_ENTRADA = "entrada"   # compra: la respalda una factura
 EPP_SALIDA  = "salida"    # entrega a un empleado: la respalda el vale firmado
+# Una salida puede nacer como PRE-REGISTRO: alguien captura todo menos la firma
+# y las evidencias, y el responsable de alertas de esa sucursal la CONCLUYE.
+# Mientras está en pre-registro NO mueve existencias: la entrega aún no ocurrió.
+EPP_PRERREGISTRO = "Prerregistro"
+EPP_CONCLUIDA    = "Aprobado"
 
 # ── Claves de catálogos ──────────────────────────────────────────
 PK_VEHICLE  = "CAT#VEHICLE"
@@ -136,7 +141,9 @@ def saldo_epp(movimientos) -> dict:
     """
     out: dict = {}
     for mv in movimientos or []:
-        if str(mv.get("status") or "") in ("Anulado", "Rechazado", "Rechazada"):
+        # Anulados/rechazados no cuentan; un PRE-REGISTRO tampoco: es una entrega
+        # que todavía no ocurrió (falta la firma del que recibe).
+        if str(mv.get("status") or "") in ("Anulado", "Rechazado", "Rechazada", EPP_PRERREGISTRO):
             continue
         mov = str(mv.get("movimiento") or "")
         if mov not in (EPP_ENTRADA, EPP_SALIDA):

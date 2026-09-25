@@ -66,6 +66,10 @@ const metodos={
   listar:async(t,rango)=>{llamadas.push({metodo:"listar",tipo:t,rango});return (rango&&mundo.archivo&&mundo.archivo[t])||mundo.registros[t]||[];},
   listarFormulario:async(c,rango)=>{llamadas.push({metodo:"listarFormulario",clave:c,rango});return (rango&&mundo.archivoForm&&mundo.archivoForm[c])||mundo.formularios[c]||[];},
   eppSaldos:async()=>mundo.saldos||{},
+  eppPendientes:async()=>mundo.pendientes||{items:[],responsable:false},
+  eppConcluir:async(id,datos)=>{llamadas.push({metodo:"eppConcluir",id,datos});return{ok:true,id,status:"Aprobado"};},
+  _fetch:async(metodo,ruta,body)=>{llamadas.push({metodo:"_fetch",ruta,body});
+    if(ruta==="/epp/pendientes")return mundo.pendientes||{items:[],responsable:false};return {};},
 };
 // isAuth y session son VALORES, no funciones: App los lee directo.
 const valores={get isAuth(){return !!mundo.sesion;},get session(){return mundo.sesion;}};
@@ -73,7 +77,7 @@ class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
   (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio,EppPendientes,EppConcluir};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   navegador,localStorage,noop,console);
 

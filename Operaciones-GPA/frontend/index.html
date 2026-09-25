@@ -1069,9 +1069,12 @@ const eppEsEntrada=r=>String(r&&r.movimiento)==="entrada";
 const eppPiezas=r=>((r&&r.renglones)||[]).reduce((n,x)=>n+(parseFloat(x.cantidad)||0),0);
 
 function ModEPP({cat,items,rol,sucursalesUser,session,refrescar,showToast}){
-  const[view,setView]=useState("saldos");const[sel,setSel]=useState(null);
+  const[view,setView]=useState("saldos");const[sel,setSel]=useState(null);const[recarga,setRecarga]=useState(0);
   const puedeEntrada=["admin","supervisor"].includes(rol);
   const puedeCapturar=rol!=="analista";
+  // «Por concluir» se ofrece a quien tiene la marca de responsable de alertas; el
+  // servidor decide con la misma lista, así que aquí solo se decide si mostrar la pestaña.
+  const esResp=(cat.responsables||[]).some(r=>String(r.email||"").toLowerCase()===String(session.email||"").toLowerCase());
   return(
     <div>
       <div style={{fontSize:15,fontWeight:700,color:"#222",marginBottom:10}}>Equipo de Protección Personal</div>
@@ -1079,9 +1082,13 @@ function ModEPP({cat,items,rol,sucursalesUser,session,refrescar,showToast}){
         {[["saldos","📦 Existencias"],
           ...(puedeEntrada?[["entrada","⬆️ Entrada"]]:[]),
           ...(puedeCapturar?[["salida","⬇️ Entrega"]]:[]),
+          ...(esResp?[["pendientes","✍️ Por concluir"]]:[]),
           ["historial","🗂 Historial"]].map(([v,l])=>
           <button key={v} className={"trb"+(view===v?" act":"")} onClick={()=>{setView(v);setSel(null);}}>{l}</button>)}
       </div>
+      {view==="pendientes"&&!sel&&<EppPendientes cat={cat} recarga={recarga} onAbrir={r=>{setSel(r);setView("concluir");}}/>}
+      {view==="concluir"&&sel&&<EppConcluir reg={sel} cat={cat} showToast={showToast} onBack={()=>{setView("pendientes");setSel(null);}}
+        onListo={async()=>{await refrescar();setRecarga(x=>x+1);setSel(null);setView("pendientes");}}/>}
       {view==="saldos"&&<EppSaldos cat={cat} sucursalesUser={sucursalesUser} showToast={showToast}/>}
       {view==="entrada"&&puedeEntrada&&<EppForm movimiento="entrada" cat={cat} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("historial")}/>}
       {view==="salida"&&puedeCapturar&&<EppForm movimiento="salida" cat={cat} session={session} rol={rol} sucursalesUser={sucursalesUser} refrescar={refrescar} showToast={showToast} onDone={()=>setView("historial")}/>}
@@ -1165,21 +1172,25 @@ function EppForm({movimiento,cat,session,rol,sucursalesUser,refrescar,showToast,
   const setR=(i,k,v)=>setReng(rs=>rs.map((r,j)=>j===i?{...r,[k]:v}:r));
   const quitarR=i=>setReng(rs=>rs.length>1?rs.filter((_,j)=>j!==i):rs);
   const llenos=reng.filter(r=>r.articuloId&&parseFloat(r.cantidad)>0);
-  const listo=!!(suc&&llenos.length>0&&(esEnt?(factura.trim()&&fotoFactura):(numEmpleado.trim()&&empleado.trim()&&sig)));
+  // Pre-registro: la salida se guarda SIN firma ni evidencias para que el
+  // responsable de alertas de la sucursal la concluya después.
+  const[preReg,setPreReg]=useState(false);
+  const listo=!!(suc&&llenos.length>0&&(esEnt?(factura.trim()&&fotoFactura):(numEmpleado.trim()&&empleado.trim()&&(preReg||sig))));
   const submit=async()=>{
     if(busy)return;
-    if(!listo)return showToast("⚠️ "+(esEnt?"Faltan la factura, su foto o los artículos.":"Faltan el número de empleado, el nombre, la firma o los artículos."));
+    if(!listo)return showToast("⚠️ "+(esEnt?"Faltan la factura, su foto o los artículos.":(preReg?"Faltan el número de empleado, el nombre o los artículos.":"Faltan el número de empleado, el nombre, la firma o los artículos.")));
     setBusy(true);
     try{
       const datos={movimiento,sucursal:suc,obs,
         renglones:llenos.map(r=>({articuloId:r.articuloId,cantidad:parseFloat(r.cantidad),...(r.talla?{talla:String(r.talla).trim()}:{})})),
         responsable:session.nombre||session.email,
         ...(esEnt?{factura:factura.trim(),proveedor:proveedor.trim(),fotoFactura}
-                 :{numEmpleado:numEmpleado.trim(),empleado:empleado.trim(),firma:sig,aviso:EPP_LEGAL})};
+                 :(preReg?{numEmpleado:numEmpleado.trim(),empleado:empleado.trim(),aviso:EPP_LEGAL,status:"Prerregistro"}
+                          :{numEmpleado:numEmpleado.trim(),empleado:empleado.trim(),firma:sig,aviso:EPP_LEGAL}))};
       const subido=await api.subirEvidencias("epp",datos);
       await api.crear("epp",subido);
       cerradoRef.current=true;borrarBorrador(DKEY);
-      showToast(esEnt?"✓ Entrada registrada":"✓ Entrega registrada");
+      showToast(esEnt?"✓ Entrada registrada":(preReg?"✓ Pre-registro guardado: el responsable lo concluirá":"✓ Entrega registrada"));
       await refrescar();onDone();
     }catch(e){showToast("⚠️ "+e.message);}
     setBusy(false);
@@ -1228,7 +1239,13 @@ function EppForm({movimiento,cat,session,rol,sucursalesUser,refrescar,showToast,
       <label>Observaciones</label>
       <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Opcional"/>
 
-      {!esEnt&&<div className="card"><div className="ct">Firma de quien recibe</div>
+      {!esEnt&&<div className="card">
+        <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,margin:0}}>
+          <input type="checkbox" checked={preReg} onChange={e=>setPreReg(e.target.checked)} style={{width:"auto"}}/>
+          <span><b>Dejar en pre-registro</b> — sin firma ni evidencias; el responsable de la sucursal lo concluye con el empleado.</span>
+        </label>
+      </div>}
+      {!esEnt&&!preReg&&<div className="card"><div className="ct">Firma de quien recibe</div>
         <div style={{fontSize:11,color:"#555",lineHeight:1.5,marginBottom:8}}>{EPP_LEGAL}</div>
         <canvas ref={sigRef} className="sig" width={340} height={120}
           onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}
@@ -1237,7 +1254,89 @@ function EppForm({movimiento,cat,session,rol,sucursalesUser,refrescar,showToast,
         {(numEmpleado||empleado)&&<div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{numEmpleado?"#"+numEmpleado+" · ":""}{empleado}</b></div>}
       </div>}
 
-      <button className="bp" disabled={!listo||busy} onClick={submit}>{busy?"Guardando…":(esEnt?"Registrar entrada":"Registrar entrega")}</button>
+      <button className="bp" disabled={!listo||busy} onClick={submit}>{busy?"Guardando…":(esEnt?"Registrar entrada":(preReg?"Guardar pre-registro":"Registrar entrega"))}</button>
+    </div>
+  );
+}
+
+// ── Concluir un pre-registro de entrega ──────────────────────────────
+// Quien pre-registró capturó todo menos la firma y las evidencias. El
+// responsable de alertas de la sucursal abre el pre-registro, toma la(s)
+// foto(s) de la entrega, el empleado firma en pantalla, y con eso la salida
+// queda concluida y empieza a mover existencias.
+function EppConcluir({reg,cat,onBack,onListo,showToast}){
+  const[evidencias,setEvidencias]=useState([]);const[sig,setSig]=useState(null);
+  const[obs,setObs]=useState("");const[busy,setBusy]=useState(false);
+  const sigRef=useRef(null);const sigH=useSig(sigRef);
+  const listo=!!(sig&&evidencias.length>0);
+  const concluir=async()=>{
+    if(busy)return;
+    if(!listo)return showToast("⚠️ Faltan la firma y al menos una foto de la entrega.");
+    setBusy(true);
+    try{
+      const datos=await api.subirEvidencias("epp",{firma:sig,evidencias,obsConclusion:obs});
+      await api.eppConcluir(reg.id,datos);
+      showToast("✓ Entrega concluida");
+      onListo&&await onListo();
+    }catch(e){showToast("⚠️ "+e.message);}
+    setBusy(false);
+  };
+  return(
+    <div>
+      <div className="no-print" style={{display:"flex",gap:8,marginBottom:12}}><button className="bs" onClick={onBack}>← Volver</button></div>
+      <div className="wb">📝 <b>Pre-registro</b> capturado por {reg.responsable||reg.accountId||"—"} el {fdt(reg.fecha)}. Revisa los datos, toma la evidencia y pide la firma del empleado para concluir la entrega.</div>
+      <div className="card">
+        <div className="dr"><span>Folio</span><span style={{fontWeight:700}}>{folioDe(reg)}</span></div>
+        <div className="dr"><span>Sucursal</span><span>{reg.sucursal}</span></div>
+        <div className="dr"><span>No. de empleado</span><span style={{fontWeight:700}}>{reg.numEmpleado||"—"}</span></div>
+        <div className="dr"><span>Empleado</span><span>{reg.empleado||"—"}</span></div>
+        {reg.obs&&<div className="dr"><span>Observaciones</span><span>{reg.obs}</span></div>}
+      </div>
+      <div className="card"><div className="ct">Artículos a entregar</div>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr style={{color:"#888"}}><th style={{textAlign:"left",padding:"4px 0"}}>Artículo</th><th style={{padding:"4px 6px"}}>Talla</th><th style={{padding:"4px 0",textAlign:"right"}}>Cantidad</th></tr></thead>
+          <tbody>{(reg.renglones||[]).map((r,i)=>(
+            <tr key={i} style={{borderTop:".5px solid #f0f0f0"}}><td style={{padding:"5px 0"}}>{eppNombre(cat,r.articuloId)}</td><td style={{textAlign:"center"}}>{r.talla||"—"}</td><td style={{textAlign:"right",fontWeight:700}}>{r.cantidad}</td></tr>))}</tbody>
+        </table>
+      </div>
+      <div className="card"><div className="ct">Evidencia de la entrega <span style={{color:C.red}}>*</span></div>
+        <p style={{fontSize:12,color:"#888",marginBottom:8}}>Al menos una foto: el equipo entregado, o el empleado con su equipo.</p>
+        {evidencias.length>0&&<div className="fg" style={{marginBottom:8}}>{evidencias.map((src,i)=><div key={i} className="ft"><img src={src} alt={"evidencia "+(i+1)}/><button className="fx" onClick={()=>setEvidencias(f=>f.filter((_,j)=>j!==i))}>×</button></div>)}</div>}
+        <div className="pb"><div style={{fontSize:22}}>📷</div><div style={{marginTop:3}}>{evidencias.length?"Agregar otra foto":"Toca para capturar"}</div><input type="file" accept="image/*" capture="environment" onChange={e=>{readFile(e,d=>setEvidencias(f=>[...f,d]));e.target.value="";}}/></div>
+      </div>
+      <label>Observaciones al concluir</label>
+      <textarea rows={2} style={{marginBottom:10}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Opcional"/>
+      <div className="card"><div className="ct">Firma de quien recibe <span style={{color:C.red}}>*</span></div>
+        <div style={{fontSize:11,color:"#555",lineHeight:1.5,marginBottom:8}}>{reg.aviso||EPP_LEGAL}</div>
+        <canvas ref={sigRef} className="sig" width={340} height={120}
+          onMouseDown={sigH.start} onMouseMove={sigH.move} onMouseUp={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}
+          onTouchStart={sigH.start} onTouchMove={sigH.move} onTouchEnd={()=>{sigH.end();setSig(sigRef.current?.toDataURL());}}/>
+        <button className="bs" style={{marginTop:6,width:"100%"}} onClick={()=>sigH.clear(setSig)}>Limpiar</button>
+        <div style={{marginTop:8,fontSize:12,textAlign:"center"}}><b>{reg.numEmpleado?"#"+reg.numEmpleado+" · ":""}{reg.empleado}</b></div>
+      </div>
+      <button className="bp" disabled={!listo||busy} onClick={concluir}>{busy?"Guardando…":"Concluir entrega"}</button>
+    </div>
+  );
+}
+
+// ── Lista de pre-registros por concluir (solo responsables de alertas) ──
+function EppPendientes({cat,onAbrir,recarga}){
+  const[lista,setLista]=useState(null);const[esResp,setEsResp]=useState(false);
+  useEffect(()=>{let vivo=true;(async()=>{
+    try{const r=await api._fetch("GET","/epp/pendientes");if(vivo){setLista(r.items||[]);setEsResp(!!r.responsable);}}
+    catch(e){if(vivo)setLista([]);}
+  })();return()=>{vivo=false;};},[recarga]);
+  if(lista===null)return<div className="spin"/>;
+  return(
+    <div>
+      {!esResp&&<div className="wb">Esta pestaña es para los <b>responsables de alertas</b> de cada sucursal (Admin → Cuentas). Tu cuenta no tiene esa marca, así que aquí no verás pre-registros por concluir.</div>}
+      {esResp&&lista.length===0&&<div className="empty">No hay entregas pre-registradas por concluir en tus sucursales.</div>}
+      <div className="card">{lista.map(r=>(
+        <div key={r.id} className="li" onClick={()=>onAbrir(r)}>
+          <div className="lit"><span className="lim">#{r.numEmpleado||"—"} · {r.empleado||"—"}</span><span className="bdg dpe">Por concluir</span></div>
+          <div className="lis">{(r.renglones||[]).length} artículo(s) · {eppPiezas(r)} pza(s) · {r.sucursal}</div>
+          <div className="lis">Pre-registró {r.responsable||r.accountId||"—"} · {fdt(r.fecha)}</div>
+        </div>))}</div>
     </div>
   );
 }
@@ -1278,7 +1377,7 @@ function EppHistory({items,cat,onSelect}){
         <div key={r.id} className="li" onClick={()=>onSelect(r)}>
           <div className="lit">
             <span className="lim">{eppEsEntrada(r)?"⬆️ Entrada":"⬇️ Entrega"}</span>
-            <span className={"bdg "+(eppEsEntrada(r)?"dok":"dpe")}>{eppPiezas(r)} pza(s)</span>
+            <span style={{display:"flex",gap:4}}>{r.status==="Prerregistro"&&<span className="bdg dpe">Por concluir</span>}<span className={"bdg "+(eppEsEntrada(r)?"dok":"dpe")}>{eppPiezas(r)} pza(s)</span></span>
           </div>
           <div className="lis">{eppEsEntrada(r)?("Factura "+(r.factura||"—")+(r.proveedor?" · "+r.proveedor:"")):("#"+(r.numEmpleado||"—")+" · "+(r.empleado||"—"))}</div>
           <div className="lis">{fdt(r.fecha)} · {r.sucursal} · {(r.renglones||[]).length} artículo(s)</div>
@@ -1312,7 +1411,9 @@ function EppDetail({reg,cat,onBack}){
           </React.Fragment>:<React.Fragment>
             <div className="dr"><span>No. de empleado</span><span style={{fontWeight:700}}>{reg.numEmpleado||"—"}</span></div>
             <div className="dr"><span>Empleado</span><span>{reg.empleado||"—"}</span></div>
-            <div className="dr"><span>Entregó</span><span>{reg.responsable||reg.accountId||"—"}</span></div>
+            <div className="dr"><span>{(reg.status==="Prerregistro"||reg.concluidoPor)?"Pre-registró":"Entregó"}</span><span>{reg.responsable||reg.accountId||"—"}</span></div>
+            {reg.status==="Prerregistro"&&<div className="dr"><span>Estado</span><span className="bdg dpe">Por concluir (sin firma)</span></div>}
+            {reg.concluidoPor&&<div className="dr"><span>Concluyó</span><span>{reg.concluidoPor}{reg.concluidoEn?" · "+fdt(reg.concluidoEn):""}</span></div>}
           </React.Fragment>}
         </div>
         <div className="card"><div className="ct">Artículos</div>
@@ -1336,9 +1437,14 @@ function EppDetail({reg,cat,onBack}){
                <div style={{fontSize:11,color:"#777",textAlign:"center"}}>Factura adjunta como archivo PDF (se consulta en la app).</div></>
             :<img src={reg.fotoFactura} style={{width:"100%",borderRadius:8}} alt="factura"/>}
         </div>}
+        {!ent&&reg.evidencias&&reg.evidencias.length>0&&<div className="card"><div className="ct">Evidencia de la entrega</div>
+          {reg.evidencias.map((u,i)=><img key={i} src={u} style={{width:"100%",borderRadius:8,marginTop:i?6:0}} alt={"evidencia "+(i+1)}/>)}
+          {reg.obsConclusion&&<div style={{fontSize:12,color:"#444",marginTop:6}}>{reg.obsConclusion}</div>}
+        </div>}
         {!ent&&<div className="card"><div className="ct">Conformidad de quien recibe</div>
           <div style={{fontSize:11,color:"#555",lineHeight:1.5,marginBottom:8}}>{reg.aviso||EPP_LEGAL}</div>
-          {reg.firma&&<img src={reg.firma} style={{width:"100%",maxWidth:260,borderRadius:6}} alt="firma"/>}
+          {reg.firma?<img src={reg.firma} style={{width:"100%",maxWidth:260,borderRadius:6}} alt="firma"/>
+            :<div className="wb">Pendiente de firma: el responsable de la sucursal la concluirá con el empleado.</div>}
           <div style={{marginTop:6,fontSize:12,textAlign:"center"}}><b>{reg.numEmpleado?"#"+reg.numEmpleado+" · ":""}{reg.empleado}</b></div>
         </div>}
       </div>

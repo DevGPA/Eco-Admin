@@ -30,11 +30,12 @@ from db.escritura import (crear_registro, cambiar_estado, corregir_registro, edi
                           actualizar_precio_por_combustible,
                           guardar_modulo, guardar_plantilla,
                           guardar_responsable_alerta, reasignar_registro_unidad,
-                          guardar_epp_articulo, eliminar_epp_articulo)
+                          guardar_epp_articulo, eliminar_epp_articulo, merge_registro)
 from db.queries import (listar_registros, get_registro, cargar_catalogos, cargar_config,
                         get_plantilla, get_vehiculo, ultimo_medidor_por_vehiculo,
                         ultima_solicitud_vehiculo, solicitud_asignable_vehiculo,
-                        estados_checklist_reparto, saldos_epp)
+                        estados_checklist_reparto, saldos_epp, responsables_alerta,
+                        epp_prerregistros)
 from s3.evidencias import url_subida, url_lectura
 from auth_cognito import listar_cuentas, guardar_cuenta
 
@@ -230,6 +231,10 @@ def lambda_handler(event, context):
             return _crear(m.EPP, _body(event), cl)
         if route == "GET /epp":
             return _listar(m.EPP, event, cl)
+        if route == "GET /epp/pendientes":
+            return _epp_pendientes(event, cl)
+        if route == "POST /epp/{id}/concluir":
+            return _epp_concluir(event, cl)
         if route == "GET /epp/saldos":
             # El saldo NO se ventana: es acumulado desde el primer movimiento.
             if not _modulo_ok(cl, MODULO[m.EPP]):
@@ -379,9 +384,81 @@ def _validar_epp(tipo, datos, cl) -> str | None:
             return "Falta el número de empleado."
         if not str(datos.get("empleado") or "").strip():
             return "Falta el nombre del empleado."
+        # PRE-REGISTRO: alguien captura todo menos la firma y las evidencias; el
+        # responsable de alertas de esa sucursal lo concluye después. Solo puede
+        # nacer sin firma si viene marcado así; una salida «normal» sigue exigiéndola.
+        if str(datos.get("status") or "") == m.EPP_PRERREGISTRO:
+            datos.pop("firma", None)          # un pre-registro no lleva firma
+            return None
         if not _foto_ok(datos.get("firma")):
             return "Falta la firma de quien recibe."
     return None
+
+
+def _es_responsable_epp(cl, sucursal) -> bool:
+    """¿Esta cuenta concluye pre-registros de EPP de `sucursal`?
+    Decisión del área: SOLO las cuentas marcadas como «Responsable de alertas»
+    (Admin → Cuentas). Corporativo → todas las sucursales; de sucursal → las de su
+    acceso (lista vacía = todas). Un admin sin la marca NO puede: es a propósito."""
+    email = str(cl.get("email") or "").lower()
+    for r in responsables_alerta():
+        if str(r.get("email") or "").lower() != email:
+            continue
+        if r.get("tipo") == "corporativo":
+            return True
+        if r.get("tipo") == "sucursal":
+            sucs = cl.get("sucursales") or []
+            return (not sucs) or (str(sucursal) in sucs)
+    return False
+
+
+def _es_responsable_alguno(cl) -> bool:
+    """¿La cuenta tiene la marca de responsable de alertas (de cualquier tipo)?
+    Sirve para mostrarle la pestaña «Por concluir» aunque hoy no haya pendientes."""
+    email = str(cl.get("email") or "").lower()
+    return any(str(r.get("email") or "").lower() == email for r in responsables_alerta())
+
+
+def _epp_pendientes(event, cl):
+    """Pre-registros de entrega que ESTA cuenta puede concluir (alcance por sucursal)."""
+    if not _modulo_ok(cl, MODULO[m.EPP]):
+        return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    mios = [r for r in epp_prerregistros() if _es_responsable_epp(cl, r.get("sucursal"))]
+    return _resp_gz({"items": [_resolver_urls(r) for r in mios],
+                     "responsable": _es_responsable_alguno(cl)}, event)
+
+
+def _epp_concluir(event, cl):
+    """El responsable concluye un pre-registro de entrega: agrega la firma del
+    empleado y las evidencias, y la salida pasa a concluida (ya mueve existencias)."""
+    if not _modulo_ok(cl, MODULO[m.EPP]):
+        return _err("Tu cuenta no tiene acceso a este módulo", 403)
+    rid = (event.get("pathParameters") or {}).get("id")
+    if not rid:
+        return _err("Falta id")
+    reg = get_registro(m.EPP, rid)
+    if not reg:
+        return _err("Registro no encontrado", 404)
+    if str(reg.get("movimiento") or "") != m.EPP_SALIDA:
+        return _err("Solo se concluyen entregas (salidas).", 409)
+    if str(reg.get("status") or "") != m.EPP_PRERREGISTRO:
+        return _err("Esta entrega ya no está en pre-registro.", 409)
+    if not _es_responsable_epp(cl, reg.get("sucursal")):
+        return _err("Solo el responsable de alertas de esa sucursal puede concluir la entrega.", 403)
+    b = _body(event)
+    firma = b.get("firma")
+    evidencias = [e for e in (b.get("evidencias") or []) if _foto_ok(e)]
+    if not _foto_ok(firma):
+        return _err("Falta la firma de quien recibe.", 422)
+    if not evidencias:
+        return _err("Agrega al menos una foto de evidencia de la entrega.", 422)
+    parche = {"firma": firma, "evidencias": evidencias, "status": m.EPP_CONCLUIDA,
+              "concluidoPor": cl.get("nombre") or cl["email"], "concluidoEmail": cl["email"],
+              "concluidoEn": datetime.now(_MX).isoformat()}
+    if b.get("obsConclusion"):
+        parche["obsConclusion"] = str(b.get("obsConclusion"))[:500]
+    merge_registro(m.EPP, rid, parche)
+    return _resp({"ok": True, "id": rid, "status": m.EPP_CONCLUIDA})
 
 
 _CHK_LBL = {"semanal": "SEMANAL (límite: lunes)",
