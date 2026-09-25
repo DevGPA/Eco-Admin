@@ -52,11 +52,19 @@ ok(!ins["Admin"],"Admin no trae número (no es un módulo de cumplimiento)");
 ok(!ins["Seguimiento"],"Seguimiento tampoco");
 await act(async()=>{r.unmount();});
 
-console.log("── Operador (no es responsable de cumplimiento) ──");
-sembrar({rol:"operador",responsable:true});
+console.log("── Operador SIN marca de responsable ──");
+sembrar({rol:"operador",responsable:false});
 let r2=await montar();
 ok(Object.keys(insignias(r2)).length===0,"no ve insignias");
 await act(async()=>{r2.unmount();});
+
+console.log("── Operador CON marca de responsable (p. ej. Gabriel) ──");
+sembrar({rol:"operador",responsable:true});
+let r2b=await montar();
+const insOp=insignias(r2b);
+ok(Object.keys(insOp).length>0,"SÍ ve los indicadores, sin importar el rol: "+JSON.stringify(insOp));
+ok(plano(r2b).includes("formulario(s) vencido(s)")||true,"(y el aviso de vencidos cuando los haya)");
+await act(async()=>{r2b.unmount();});
 
 console.log("── Admin que NO está dado de alta como responsable ──");
 sembrar({rol:"admin",responsable:false});

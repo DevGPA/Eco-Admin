@@ -922,8 +922,11 @@ function App(){
   // sucursal/global: admin, analista, supervisor). Los operadores reciben el aviso
   // por correo en la Fase 2 (SES), pues su acceso a datos es solo el propio.
   useEffect(()=>{
-    if(!cat||!session||!["admin","analista","supervisor"].includes(session.rol)){setAlerta(null);setTareas({});return;}
-    const resp=(cat.responsables||[]).find(r=>r.email===session.email);
+    // Ven los indicadores TODOS los que tienen una alerta de cumplimiento asignada
+    // (marca «Responsable de alertas», de sucursal o corporativo), sin importar el rol.
+    if(!cat||!session){setAlerta(null);setTareas({});return;}
+    const yo=String(session.email||"").toLowerCase();
+    const resp=(cat.responsables||[]).find(r=>String(r.email||"").toLowerCase()===yo);
     if(!resp){setAlerta(null);setTareas({});return;}
     const hoy=new Date();
     const sucU=(session.sucursales&&session.sucursales.length)?session.sucursales:null;

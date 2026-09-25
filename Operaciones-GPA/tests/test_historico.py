@@ -116,10 +116,15 @@ class Base(unittest.TestCase):
         # El servidor firma las llaves de S3; aquí pasan tal cual.
         self._orig_urls = handler._resolver_urls
         handler._resolver_urls = lambda o: o
+        # _listar consulta la lista de responsables (para el alcance de un operador
+        # marcado); aquí no hay ninguno, y no debe tocar la base real.
+        self._orig_resp = handler.responsables_alerta
+        handler.responsables_alerta = lambda: []
 
     def tearDown(self):
         q._t = self._orig
         handler._resolver_urls = self._orig_urls
+        handler.responsables_alerta = self._orig_resp
 
     # Oráculo directo sobre los datos en memoria (sin índices ni paginación)
     def esperado(self, tipo, desde=None, hasta_excl=None, sucursales=None, cuenta=None):

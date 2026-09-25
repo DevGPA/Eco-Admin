@@ -619,11 +619,35 @@ def _crear(tipo, datos, cl, notif=None, req_meta=None):
     return _resp({**res, "ok": True})
 
 
+def _alcance_lectura(cl):
+    """(rol efectivo, sucursales) para LEER historiales.
+
+    Un OPERADOR marcado como «Responsable de alertas» necesita ver el historial
+    de su alcance —no solo sus capturas— para que sus contadores de pendientes y
+    el Tablero digan la verdad: sin esto, todo lo capturado por otros le saldría
+    como pendiente. Se le da la lectura de un supervisor (de sucursal → sus
+    sucursales; corporativo → todas). Esto NO le da autorización: esa sigue
+    siendo por rol."""
+    rol = cl.get("rol")
+    if rol != "operador":
+        return rol, cl.get("sucursales") or []
+    email = str(cl.get("email") or "").lower()
+    for r in responsables_alerta():
+        if str(r.get("email") or "").lower() != email:
+            continue
+        if r.get("tipo") == "corporativo":
+            return "supervisor", []                     # vacío = todas
+        if r.get("tipo") == "sucursal":
+            return "supervisor", cl.get("sucursales") or []
+    return rol, cl.get("sucursales") or []
+
+
 def _listar(tipo, event, cl):
     if not _modulo_ok(cl, MODULO[tipo]):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
     desde, hasta_excl = _rango_listado(event)
-    regs = listar_registros(tipo, cl["rol"], cl["sucursales"], cl["email"], desde, hasta_excl)
+    rol_lec, sucs_lec = _alcance_lectura(cl)
+    regs = listar_registros(tipo, rol_lec, sucs_lec, cl["email"], desde, hasta_excl)
     # El bloque _auditoria es solo para el back office (y Fleet Command vía el
     # puente, que lo lee del stream): el operador que capturó no lo recibe.
     oculta_aud = cl["rol"] == "operador"
@@ -798,8 +822,9 @@ def _listar_form(event, cl):
     if not _modulo_ok(cl, _acepta_modulo(plt.get("modulo"))):
         return _err("Tu cuenta no tiene acceso a este módulo", 403)
     desde, hasta_excl = _rango_listado(event)
+    rol_lec, sucs_lec = _alcance_lectura(cl)
     regs = listar_registros(m.tipo_formulario(plt["clave"]),
-                            cl["rol"], cl["sucursales"], cl["email"], desde, hasta_excl)
+                            rol_lec, sucs_lec, cl["email"], desde, hasta_excl)
     return _resp_gz({"items": [_resolver_urls(r) for r in regs]}, event)
 
 

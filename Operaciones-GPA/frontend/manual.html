@@ -334,7 +334,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
         <table>
           <thead><tr><th>Rol</th><th>Qué puede hacer</th></tr></thead>
           <tbody>
-            <tr><td><span class="chip rol-ope">Operador</span></td><td>Captura y envía registros (combustible, checklists, formularios) de sus módulos y sucursales. Ve su propio historial.</td></tr>
+            <tr><td><span class="chip rol-ope">Operador</span></td><td>Captura y envía registros (combustible, checklists, formularios) de sus módulos y sucursales. Ve su propio historial — salvo si está marcado como <b>responsable de alertas</b>: entonces ve el historial de su alcance (como un supervisor) para que sus contadores de pendientes sean reales, aunque sigue sin poder autorizar.</td></tr>
             <tr><td><span class="chip rol-sup">Supervisor</span></td><td>Todo lo del operador <b>+ autoriza</b> (aprueba o rechaza) registros de sus sucursales, y consulta el <b>Tablero de Seguimiento</b>.</td></tr>
             <tr><td><span class="chip rol-ana">Analista</span></td><td>Consulta historiales y el <b>Tablero de Seguimiento</b>, y <b>autoriza</b> (aprueba/rechaza) registros. No captura.</td></tr>
             <tr><td><span class="chip rol-adm">Administrador</span></td><td>Acceso total: todo lo anterior <b>+ panel de Administración</b> (vehículos, cuentas, sucursales, formularios, etc.).</td></tr>
@@ -367,8 +367,9 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
         </div>
         <div class="cap">Estructura de la pantalla: encabezado con tu nombre y rol, aviso de vencidos (solo responsables), contenido, y barra de módulos abajo.</div>
       </div>
-      <div class="note"><span class="callout-t">Contador de pendientes:</span> si eres
-      <b>responsable de cumplimiento</b>, sobre cada pestaña del menú aparece un número: las
+      <div class="note"><span class="callout-t">Contador de pendientes:</span> si tu cuenta tiene
+      la marca de <b>responsable de alertas</b> (de sucursal o corporativo, Admin → Cuentas), <b>sin
+      importar tu rol</b>, sobre cada pestaña del menú aparece un número: las
       <b>tareas que faltan por capturar</b> en ese módulo, dentro de tu alcance de sucursales.
       En <span style="color:#A32D2D;font-weight:700">rojo</span> cuando algo ya está
       <b>vencido</b>, en ámbar cuando todavía estás en plazo. Es el mismo cálculo del
@@ -845,7 +846,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.8. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.9. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>
