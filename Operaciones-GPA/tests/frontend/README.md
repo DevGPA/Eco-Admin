@@ -113,6 +113,11 @@ Hallazgos que destapó: encabezado CSV sin comillas (columnas desalineadas con
 títulos que llevan coma), encabezados repetidos en reparto, y el historial de
 EPP sin archivo histórico ni CSV.
 
+`test_permisos_modulos.js` — permisos por módulo: Admin → Cuentas ofrece EPP; una
+cuenta sin módulos marcados ve todos; una limitada a EPP ve solo EPP; una limitada a
+Combustible y Mtto no ve EPP ni Seguridad; las cuentas viejas con «montacargas» o
+«checklist» siguen abriendo Mtto; el admin ve Admin y Seguimiento. Monta la App real.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.
