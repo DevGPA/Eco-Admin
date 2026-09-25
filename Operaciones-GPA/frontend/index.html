@@ -662,7 +662,10 @@ function FotoCampo({val,set,label,capture="environment",archivo=false}){
 }
 function csvDownload(nombre,cols,filas){
   const esc=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
-  const csv=[cols.join(","),...filas.map(r=>r.map(esc).join(","))].join("\r\n");
+  // El ENCABEZADO también va entre comillas: títulos como «Alarmas (silbatos,
+  // timbre, sirenas)» o «A. Evacuación, señalización y estructura · Pasillos» llevan
+  // comas, y sin comillas Excel partía el encabezado y desalineaba las columnas.
+  const csv=[cols.map(esc).join(","),...filas.map(r=>r.map(esc).join(","))].join("\r\n");
   const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
   const url=URL.createObjectURL(blob);const a=document.createElement("a");
   a.href=url;a.download=nombre+".csv";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
@@ -1243,19 +1246,34 @@ function EppForm({movimiento,cat,session,rol,sucursalesUser,refrescar,showToast,
 function EppHistory({items,cat,onSelect}){
   const[f,setF]=useState("Todos");
   const[desde,setDesde]=useState("");const[hasta,setHasta]=useState("");
-  const sucs=sucursalesDe(items);
   const[suc,setSuc]=useState("");
-  const list=(items||[]).filter(r=>
+  // Archivo histórico bajo demanda, IGUAL que los demás historiales: `items` solo
+  // trae la ventana del servidor (45 días); si el filtro pide algo más viejo, se
+  // consulta ese rango al servidor.
+  const[ext,setExt]=useState(null);const[extBusy,setExtBusy]=useState(false);
+  useEffect(()=>{let vivo=true;if(fueraDeVentana(desde,hasta)){setExtBusy(true);api.listar("epp",rangoArchivo(desde,hasta)).then(r=>{if(vivo)setExt(r);}).catch(()=>{if(vivo)setExt(null);}).finally(()=>{if(vivo)setExtBusy(false);});}else{setExt(null);setExtBusy(false);}return()=>{vivo=false;};},[desde,hasta]);
+  const src=ext||items||[];
+  const sucs=sucursalesDe(src);
+  const list=src.filter(r=>
     (f==="Todos"||((f==="Entradas")===eppEsEntrada(r)))&&
     (!suc||r.sucursal===suc)&&
-    (!desde||ymd(r.fecha)>=desde)&&(!hasta||ymd(r.fecha)<=hasta));
+    (!desde||ymd(r.fecha)>=desde)&&(!hasta||ymd(r.fecha)<=hasta)).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  // CSV = kardex: UNA FILA POR ARTÍCULO de cada movimiento (así cuadra contra la
+  // existencia), con los datos del documento que lo respalda.
+  const csv=()=>csvDownload("epp_movimientos",
+    ["Folio","Fecha","Movimiento","Sucursal","Artículo","Clave","Cantidad","Talla","Factura","Proveedor","No. empleado","Empleado","Registró","Observaciones"],
+    list.flatMap(r=>(r.renglones||[]).map(x=>[folioDe(r),fdt(r.fecha),eppEsEntrada(r)?"Entrada":"Salida",r.sucursal||"",
+      eppNombre(cat,x.articuloId),x.articuloId,x.cantidad,x.talla||"",r.factura||"",r.proveedor||"",r.numEmpleado||"",r.empleado||"",
+      r.responsable||r.accountId||"",r.obs||""])));
   return(
     <div>
       <div className="tr">{["Todos","Entradas","Salidas"].map(x=>
         <button key={x} className={"trb"+(f===x?" act":"")} onClick={()=>setF(x)}>{x}</button>)}</div>
-      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta}
+      <FiltroFechas desde={desde} hasta={hasta} setDesde={setDesde} setHasta={setHasta} onCSV={csv} n={list.length}
         sucursales={sucs} sucursal={suc} setSucursal={setSuc}/>
-      {list.length===0&&<div className="empty">Sin movimientos</div>}
+      {extBusy&&<div className="empty">Consultando archivo histórico…</div>}
+      {ext&&!extBusy&&<div style={{fontSize:11,color:"#888",marginBottom:8}}>📚 Archivo histórico del servidor ({src.length} movimientos del rango)</div>}
+      {list.length===0&&!extBusy&&<div className="empty">Sin movimientos</div>}
       <div className="card">{list.map(r=>(
         <div key={r.id} className="li" onClick={()=>onSelect(r)}>
           <div className="lit">
@@ -2377,10 +2395,16 @@ const MENSUAL_SEC=[
 // de semanal y mensual (sin las fotos, que no son un resultado), en orden estable.
 // El CSV es la tabla de resultados del checklist, no solo si se elaboró.
 const CL_PUNTOS=(()=>{const out=[],vistos=new Set();
-  [...SEMANAL_SEC,...MENSUAL_SEC].forEach(sec=>(sec.items||[]).forEach(it=>{
+  [["Semanal",SEMANAL_SEC],["Mensual",MENSUAL_SEC]].forEach(([tipo,secs])=>secs.forEach(sec=>(sec.items||[]).forEach(it=>{
     if(it.type==="photo"||it.type==="fotos"||it.type==="aviso")return;
-    if(vistos.has(it.id))return;vistos.add(it.id);out.push({...it,sec:sec.title});}));
+    if(vistos.has(it.id))return;vistos.add(it.id);out.push({...it,sec:sec.title,tipoCL:tipo});})));
   return out;})();
+// Encabezados del CSV de reparto, ÚNICOS: «Cofre Abierto · Nivel aceite motor» existe
+// en el semanal y en el mensual (ids distintos, mismo texto). Dos columnas con el
+// mismo título confunden en Excel; cuando el texto se repite se agrega el tipo.
+const CL_ENCABEZADOS=(()=>{const base=CL_PUNTOS.map(p=>p.sec+" · "+p.label);
+  const veces={};base.forEach(b=>{veces[b]=(veces[b]||0)+1;});
+  return CL_PUNTOS.map((p,i)=>veces[base[i]]>1?base[i]+" ("+p.tipoCL+")":base[i]);})();
 
 function ModChecklist({cat,items,rol,sucursalesUser,session,refrescar,showToast}){
   const[view,setView]=useState("home");const[tipo,setTipo]=useState(null);const[sel,setSel]=useState(null);
@@ -2543,7 +2567,7 @@ function CLHistory({items,onSelect}){
   // CSV = TABLA DE RESULTADOS: una fila por checklist y una columna por punto revisado.
   const csv=()=>csvDownload("checklist_reparto",
     ["Folio","Fecha","Tipo","Unidad","Placas","Sucursal","Responsable","Km","Puntos en mal estado","Detalle mal estado","Editado",
-      ...CL_PUNTOS.map(p=>p.sec+" · "+p.label)],
+      ...CL_ENCABEZADOS],
     list.map(c=>{const secs=c.tipo==="semanal"?SEMANAL_SEC:MENSUAL_SEC;const h=hallazgosSecs(secs,c);
       return [folioDe(c),fdt(c.fecha),c.tipo,c.economico,c.placas,c.sucursal,c.responsable,c.km,h.length,malTxt(h),edTxt(c),
         ...CL_PUNTOS.map(p=>respuestaTexto(p,c))];}));

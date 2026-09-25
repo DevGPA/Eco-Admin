@@ -600,9 +600,13 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
           carta de conformidad y <b>firma</b> en pantalla. Sin firma no se puede registrar.</li>
         <li><b>Existencias</b> — tabla por sucursal: entradas, salidas y saldo de cada artículo.
           El saldo es <b>acumulado desde el primer movimiento</b>, no de los últimos 45 días.</li>
-        <li><b>Historial</b> — todos los movimientos, con filtro por tipo, fecha y sucursal. Cada
-          entrega se descarga en <b>PDF</b> como vale, con la carta de conformidad, la firma y el
-          domicilio de la sucursal en el encabezado.</li>
+        <li><b>Historial</b> — todos los movimientos, con filtro por tipo, fecha y sucursal. Igual
+          que los demás historiales: abre con los últimos 45 días y, si pones una fecha más vieja
+          en «Desde» (o en «Hasta»), trae el <b>archivo histórico</b> del servidor. El botón
+          <kbd>⬇ Descargar CSV</kbd> baja un <b>kardex</b> para Excel: una fila por artículo de cada
+          movimiento (entrada o salida, cantidad, talla, factura, empleado). Cada entrega se descarga
+          además en <b>PDF</b> como vale, con la carta de conformidad, la firma y el domicilio de la
+          sucursal en el encabezado.</li>
       </ul>
       <div class="note"><span class="callout-t">Dos reglas del área:</span>
       (1) el inventario se lleva <b>por artículo, no por talla</b> — la talla queda impresa en el
@@ -827,7 +831,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 </div>
 
 <footer>
-  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.5. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
+  Sistema de Gestión — General de Productos para el Agua · Manual de uso v2.6. Documento de referencia interno; las opciones visibles dependen del rol y los accesos de cada cuenta.
 </footer>
 
 </body>

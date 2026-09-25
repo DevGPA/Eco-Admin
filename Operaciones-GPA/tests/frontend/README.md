@@ -99,6 +99,20 @@ Monta la App COMPLETA, sembrando lo que devuelve la api con `mundo`.
   los del reporte de carga sigan con cámara directa. Un PDF se previsualiza como
   archivo y en el detalle se abre con un enlace, nunca como <img> roto.
 
+`test_historico_pantalla.js` — consulta histórica y descarga en los 5 historiales
+(combustible, reparto, montacargas, formularios, EPP) y en la descarga de todo un
+módulo. Para cada uno: avisa la ventana de 45 días; con «Desde» dentro de la
+ventana no llama al servidor; con «Desde» viejo pide el archivo con ese rango y
+lo muestra; con solo «Hasta» pide todo=1 hasta esa fecha y deja solo lo anterior;
+el CSV se lee con un lector RFC 4180 (comillas, comas dentro de celdas, BOM por
+bytes) y debe traer TODOS los registros del rango, todas las filas con las mismas
+columnas que el encabezado, sin encabezados repetidos ni vacíos; el filtro de
+sucursal recorta lista y CSV. Lo que este archivo NO ejecuta: la generación de
+PDF/ZIP (necesita navegador); solo comprueba que los botones existan.
+Hallazgos que destapó: encabezado CSV sin comillas (columnas desalineadas con
+títulos que llevan coma), encabezados repetidos en reparto, y el historial de
+EPP sin archivo histórico ni CSV.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

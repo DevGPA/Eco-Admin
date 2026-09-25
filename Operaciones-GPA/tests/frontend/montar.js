@@ -28,9 +28,15 @@ const localStorage={
   removeItem:k=>{_s.delete(k);},
 };
 const noop=()=>{};
-const elem=()=>({getContext:()=>({}),toDataURL:()=>"data:image/png;base64,FIRMA",style:{},
-  addEventListener:noop,removeEventListener:noop,appendChild:noop,removeChild:noop,
-  getBoundingClientRect:()=>({left:0,top:0,width:340,height:120}),classList:{add:noop,remove:noop}});
+// Descargas: csvDownload/zip crean un Blob, un <a download> y le dan click.
+// Aquí el click NO descarga nada: se guarda {nombre, blob} para leer el CSV real.
+const descargas=[];
+const elem=()=>{const a={getContext:()=>({}),toDataURL:()=>"data:image/png;base64,FIRMA",style:{},
+  addEventListener:noop,removeEventListener:noop,appendChild:noop,removeChild:noop,remove:noop,
+  getBoundingClientRect:()=>({left:0,top:0,width:340,height:120}),classList:{add:noop,remove:noop}};
+  a.click=()=>{descargas.push({nombre:a.download,blob:a.href&&a.href._blob});};return a;};
+globalThis.URL.createObjectURL=b=>({_blob:b,toString(){return "blob:falso";}});
+globalThis.URL.revokeObjectURL=noop;
 const documentStub={createElement:elem,getElementById:()=>elem(),body:{appendChild:noop,removeChild:noop,style:{}},
   addEventListener:noop,removeEventListener:noop,querySelector:()=>null};
 // window con bus de eventos de verdad: hace falta para probar el botón de
@@ -49,14 +55,16 @@ const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
 // api simulada: registra lo que se envía y permite sembrar lo que devuelve.
 const llamadas=[];
 // `mundo` es lo que "hay en el servidor" para una prueba: se rellena antes de montar.
-const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{}};
+const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{},archivo:{},archivoForm:{}};
 const metodos={
   subirEvidencias:async(tipo,obj)=>obj,          // identidad: aquí no hay S3
   crear:async(tipo,datos)=>{llamadas.push({metodo:"crear",tipo,datos});return{id:"nuevo",ok:true};},
   crearFormulario:async(clave,datos)=>{llamadas.push({metodo:"crearFormulario",clave,datos});return{id:"nuevo",ok:true};},
   catalogos:async()=>mundo.catalogos||{vehicles:[],users:[],sucursales:[],modulos:[],plantillas:[],responsables:[],config:{}},
-  listar:async t=>mundo.registros[t]||[],
-  listarFormulario:async c=>mundo.formularios[c]||[],
+  // Se registra CON QUÉ RANGO se pidió: es lo que prueba que la app consulta el
+  // archivo histórico del servidor y no solo lo que tenía en pantalla.
+  listar:async(t,rango)=>{llamadas.push({metodo:"listar",tipo:t,rango});return (rango&&mundo.archivo&&mundo.archivo[t])||mundo.registros[t]||[];},
+  listarFormulario:async(c,rango)=>{llamadas.push({metodo:"listarFormulario",clave:c,rango});return (rango&&mundo.archivoForm&&mundo.archivoForm[c])||mundo.formularios[c]||[];},
   eppSaldos:async()=>mundo.saldos||{},
 };
 // isAuth y session son VALORES, no funciones: App los lee directo.
@@ -65,8 +73,8 @@ class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
   (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   navegador,localStorage,noop,console);
 
-module.exports={M,React,TR,localStorage,llamadas,mundo,windowStub,navegador,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
+module.exports={M,React,TR,localStorage,llamadas,mundo,descargas,windowStub,navegador,setQuota:q=>{QUOTA=q;},bytes:()=>[..._s].reduce((n,[k,v])=>n+k.length+v.length,0)};
