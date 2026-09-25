@@ -25,6 +25,23 @@ def _items(resp) -> list:
     return [m.from_dynamo(i) for i in resp.get("Items", [])]
 
 
+def _query_todo(t, **kwargs) -> list:
+    """Query que recorre TODAS las páginas (LastEvaluatedKey).
+
+    DynamoDB devuelve como mucho ~1 MB por llamada. Leer una sola página, como
+    hacía el listado, truncaba EN SILENCIO cualquier consulta histórica larga
+    («todo el historial», rangos de meses): el usuario veía una lista corta sin
+    ningún aviso. Todos los listados pasan por aquí."""
+    out = []
+    while True:
+        resp = t.query(**kwargs)
+        out.extend(resp.get("Items", []))
+        lek = resp.get("LastEvaluatedKey")
+        if not lek:
+            return out
+        kwargs["ExclusiveStartKey"] = lek
+
+
 # ── Registros, filtrados por rol ─────────────────────────────────
 def listar_registros(tipo: str, rol: str, sucursales, account_id: str,
                      desde=None, hasta_excl=None) -> list:
@@ -55,25 +72,25 @@ def listar_registros(tipo: str, rol: str, sucursales, account_id: str,
     # admin / analista, y supervisor SIN sucursal asignada (convención "vacío =
     # todas") → GSI1 (todos por tipo).
     if rol in ("admin", "analista") or (rol == "supervisor" and not sucursales):
-        resp = t.query(IndexName="tipo-fecha-idx",
-                       KeyConditionExpression=_cf(Key("GSI1PK").eq(tipo), "GSI1SK"),
-                       ScanIndexForward=False)
-        return [_limpiar(i) for i in _items(resp)]
+        its = _query_todo(t, IndexName="tipo-fecha-idx",
+                          KeyConditionExpression=_cf(Key("GSI1PK").eq(tipo), "GSI1SK"),
+                          ScanIndexForward=False)
+        return [_limpiar(m.from_dynamo(i)) for i in its]
 
     if rol == "operador":
         # El operador solo ve su propio historial de cargas
-        resp = t.query(IndexName="cuenta-fecha-idx",
-                       KeyConditionExpression=_cf(Key("GSI3PK").eq(f"{tipo}#{account_id}"), "GSI3SK"),
-                       ScanIndexForward=False)
-        return [_limpiar(i) for i in _items(resp)]
+        its = _query_todo(t, IndexName="cuenta-fecha-idx",
+                          KeyConditionExpression=_cf(Key("GSI3PK").eq(f"{tipo}#{account_id}"), "GSI3SK"),
+                          ScanIndexForward=False)
+        return [_limpiar(m.from_dynamo(i)) for i in its]
 
     # supervisor: registros de las sucursales asignadas
     out = []
     for suc in (sucursales or []):
-        resp = t.query(IndexName="sucursal-fecha-idx",
-                       KeyConditionExpression=_cf(Key("GSI2PK").eq(f"{tipo}#{suc}"), "GSI2SK"),
-                       ScanIndexForward=False)
-        out.extend(_items(resp))
+        out.extend(_query_todo(t, IndexName="sucursal-fecha-idx",
+                               KeyConditionExpression=_cf(Key("GSI2PK").eq(f"{tipo}#{suc}"), "GSI2SK"),
+                               ScanIndexForward=False))
+    out = [m.from_dynamo(i) for i in out]
     out.sort(key=lambda r: r.get("fecha", ""), reverse=True)
     return [_limpiar(i) for i in out]
 
