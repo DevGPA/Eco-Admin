@@ -72,6 +72,13 @@ dinámicos (FormDinamico):
 - Está también en la pantalla de inicio de sesión, y se quita solo si la app se
   instala desde el menú del navegador.
 
+`test_recorridos.js` — formulario «Recorridos en instalaciones»:
+- 36 puntos en el orden del Excel, con su criterio de revisión visible.
+- No deja avanzar con puntos sin responder.
+- Se llena de principio a fin y SE ENVÍA (incluida la firma, sin la cual el
+  botón está deshabilitado — es lo que hacía parecer que «no guardaba»).
+- «No cumple» pide evidencia y deja la instalación fuera de servicio; «N/A» no.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

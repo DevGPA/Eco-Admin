@@ -116,6 +116,7 @@ select:focus,input:focus,textarea:focus{outline:2px solid ${C.blueMd};border-col
 /* Campo «escala» (semáforo OK/Atención/Fuera de servicio) — réplica del checklist HTML */
 .es-item{border:1px solid #d5e0ea;border-radius:6px;margin-bottom:8px;overflow:hidden}
 .es-h{background:#eaf0f6;padding:8px 10px;font-size:13px;font-weight:700;color:#1a1a1a}
+.es-ayuda{font-size:11px;color:#777;line-height:1.45;margin:-2px 0 7px;white-space:pre-line}
 .es-opt{display:flex;align-items:center;gap:10px;padding:11px 12px;border-top:1px solid #e8e8e8;background:#fff;cursor:pointer;min-height:46px;user-select:none}
 .es-rad{width:20px;height:20px;border-radius:50%;border:2px solid #bbb;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#fff}
 .es-dot{width:10px;height:10px;border-radius:50%;background:transparent}
@@ -1028,6 +1029,7 @@ function CampoForm({item,getA,setA,availVeh}){
     const sel=(v!=null&&v!=="")?opts[v]:null;const esBad=!!(sel&&sel.sev==="bad");
     return(<div className="es-item">
       <div className="es-h">{item.label}{item.req&&<span style={{color:C.red}}> *</span>}</div>
+      {item.ayuda&&<div className="es-ayuda">{item.ayuda}</div>}
       {opts.map((o,i)=>{const sev=o.sev||"ok";const selo=String(v)===String(i);return(
         <div key={i} className={"es-opt"+(selo?" sel-"+sev:"")} onClick={()=>setA(item.id,i)}>
           <div className="es-rad"><div className="es-dot"/></div>
