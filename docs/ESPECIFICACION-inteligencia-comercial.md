@@ -1,7 +1,8 @@
 # Inteligencia comercial del prospecto — Especificación
 
-> **Estado:** propuesta, sin construir. Esperando dos decisiones (ver §7).
-> **Versión:** 0.1 · 29-sep-2026
+> **Estado:** propuesta. Decidido el proveedor (dos etapas, §7) y quién redacta el
+> resumen (§7-BIS). Lista para construir la etapa 1.
+> **Versión:** 0.2 · 29-sep-2026
 > **Proyecto:** GPA Alta de Clientes, rama `alta-clientes` de `DevGPA/Eco-Admin`.
 
 ## 1. Qué se pidió
@@ -174,19 +175,67 @@ servicio). **Al volumen de altas de GPA, esto cae dentro del tope gratis**, es d
 costo cero en la práctica. Aun así hay que poner límite de gasto en la cuenta para que
 un error en el código no se convierta en una factura.
 
-## 7. Decisiones que faltan
+## 7. Alternativas a Google, y por qué se construye en dos etapas
 
-**1. La cuenta de Google Cloud.** Esto necesita un proyecto de Google Cloud con
-facturación activa y una llave de API. ¿Ya existe una cuenta de Google Cloud de GPA, o
-hay que pedírsela a IT? Sin eso no arranca nada.
+Google exige **cuenta de facturación activa** para dar una llave de API: *"you must set
+up a billing account to set up a Cloud project"*. Da $300 USD de crédito por 90 días y
+topes gratis mensuales, así que el problema **no es el dinero** — es que alguien tiene que
+abrir una cuenta de Google Cloud de GPA y ponerle una tarjeta. GPA es casa Microsoft
+(M365), así que sería un proveedor nuevo.
 
-**2. Quién redacta el resumen.** Dos caminos:
+Se compararon los cuatro caminos posibles:
 
-- **Solo datos y reglas.** El sistema presenta los cinco criterios medidos, y el analista
-  escribe la conclusión. Sin costo extra, sin riesgo de que el sistema invente.
-- **Datos + redacción automática.** Un modelo (Bedrock, que Eco-Admin ya usa para OCR)
-  redacta el párrafo de viabilidad a partir de los datos medidos. Más cómodo de leer;
-  hay que dejar muy claro que es un borrador y que la decisión es del comité.
+| | **Google Maps** | **Amazon Location** | **OpenStreetMap** | **Mapillary** |
+|---|---|---|---|---|
+| Cuenta nueva | **Sí**, con tarjeta | **No**, ya la tienen | No | Solo registro |
+| Encontrar el negocio | Excelente | Bueno | Regular en México | — |
+| **Fotos del local** | **Único que las da** | No | No | No |
+| Fachada con fecha | Street View | No | No | Sí, cobertura irregular |
+| Competencia alrededor | Excelente | Bueno | Pobre en México | — |
+| Mapa con marcadores | Sí | Sí | Sí | — |
+| Costo por prospecto | ~$0.20 USD | ~$0.003 USD | $0 | $0 |
+
+**Amazon Location Service está dentro de la cuenta de AWS que ya usa este proyecto.**
+Verificado en el propio `boto3` instalado: el cliente `geo-places` expone `search_text`,
+`search_nearby`, `geocode` y `autocomplete`; el cliente `geo-maps` expone
+`get_static_map`. Misma cuenta, mismo rol de IAM que ya tiene la Lambda, sin proveedor
+nuevo y sin tarjeta nueva. Geocodificación a $0.50 USD y mapas a $0.70 USD **por cada mil**
+peticiones: literalmente centavos al volumen de GPA.
+
+Lo que Amazon Location **no** tiene es lo que hace único a Google: **las fotos del
+negocio** y la imagen de la fachada. Y esas son justamente el punto 2 y dos de los cinco
+criterios de viabilidad («exhibe producto» y «letrero afuera»).
+
+### La decisión: dos etapas, con el proveedor intercambiable
+
+El código se escribe contra **una sola interfaz** con dos implementaciones detrás. No hay
+retrabajo: encender Google después es cambiar una variable de entorno.
+
+**Etapa 1 — Amazon Location. Arranca de inmediato, sin pedirle nada a nadie.**
+Cubre el punto 1 (campo de Maps), el punto 4 (mapa de competencia a 150–500 m) y el
+criterio de competencia del punto 5. Los dos criterios que dependen de fotos aparecen
+como **«pendiente: requiere Google»**, no como un cero ni como un hueco callado.
+
+**Etapa 2 — Se añade Google cuando exista la cuenta.**
+Se encienden las fotos del local, la fachada fechada de Street View y los dos criterios
+que faltaban. Sin redesplegar nada más que la configuración.
+
+Si la cuenta de Google nunca llega, la etapa 1 **sigue siendo útil por sí sola**: el mapa
+de competencia y la afinidad del giro ya responden buena parte de «¿es cliente para
+nosotros?».
+
+## 7-BIS. Decisiones ya tomadas
+
+**El resumen lo redacta un modelo** (29-sep-2026). Bedrock —el mismo que Eco-Admin ya usa
+para OCR— redacta el párrafo de viabilidad a partir de los criterios medidos. Con tres
+condiciones que no se negocian:
+
+1. El modelo **solo redacta lo que se midió**. No opina sobre datos que no existen: si un
+   criterio quedó pendiente, el párrafo lo dice, no lo rellena.
+2. Va **marcado como borrador** en pantalla, con los cinco criterios y sus fuentes
+   visibles al lado. Quien firma lee la evidencia, no solo el párrafo.
+3. **No decide ni recomienda autorizar o rechazar.** Describe qué tan afín es el negocio;
+   la decisión de crédito es del comité y queda en su firma, como hoy.
 
 ## 8. Lo que hay que vigilar al construir
 
@@ -209,3 +258,4 @@ hay que pedírsela a IT? Sin eso no arranca nada.
 | Versión | Fecha | Qué cambió |
 |---|---|---|
 | 0.1 | 29-sep-2026 | Primera versión. Verificados contra la documentación de Google los tres puntos dudosos: fotos no almacenables, fotos sin fecha, redes no leíbles. Pendientes las dos decisiones de §7. |
+| 0.2 | 29-sep-2026 | Comparados los cuatro proveedores. Amazon Location está en la cuenta de AWS que ya se usa (verificado en boto3: `geo-places.search_nearby`, `geo-maps.get_static_map`) y cuesta centavos, pero no tiene fotos. Se decide construir en dos etapas con el proveedor intercambiable, arrancando sin Google. El resumen lo redacta Bedrock, marcado como borrador y sin recomendar autorizar. |
