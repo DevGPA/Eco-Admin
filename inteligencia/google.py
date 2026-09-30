@@ -112,10 +112,16 @@ class Google:
         return salida
 
     def fotos(self, lugar: dict) -> list:
-        """Solo la liga a la foto que sirve Google, jamás la imagen bajada.
+        """La REFERENCIA de cada foto, nunca una liga con la llave dentro.
 
-        Guardar el archivo nos sacaría de los términos (ver el encabezado). La
-        atribución del autor es obligatoria, así que viaja con cada foto.
+        La llave no puede viajar al navegador: cualquiera que abra el código de
+        la página se la lleva y nos gasta la cuota. Por eso aquí solo se guarda
+        el identificador que da Google, y la liga se resuelve al momento de
+        verla (ver url_foto), del lado del servidor.
+
+        Tampoco se descarga la imagen: guardarla nos sacaría de los términos
+        (ver el encabezado). La atribución del autor es obligatoria, así que
+        viaja con cada foto.
         """
         salida = []
         for f in ((lugar or {}).get("fotosCrudas") or [])[:10]:
@@ -123,32 +129,56 @@ class Google:
             if not nombre:
                 continue
             salida.append({
-                "url": (f"{BASE_PLACES}/{nombre}/media"
-                        f"?maxWidthPx=800&key={urllib.parse.quote(_llave())}"),
+                "ref": nombre,
                 "atribucion": ", ".join(a.get("displayName", "")
                                         for a in (f.get("authorAttributions") or [])),
                 "enGoogle": f.get("googleMapsUri", ""),
             })
         return salida
 
+    def url_foto(self, ref: str, ancho: int = 800) -> str:
+        """Convierte una referencia en una liga que el navegador SÍ puede abrir.
+
+        Con skipHttpRedirect, Google devuelve un «photoUri» temporal que no
+        lleva nuestra llave: es justo lo que se le puede entregar a la pantalla.
+        La llave viaja en cabecera, no en la dirección.
+        """
+        if not ref:
+            return ""
+        pet = urllib.request.Request(
+            f"{BASE_PLACES}/{ref}/media?maxWidthPx={int(ancho)}&skipHttpRedirect=true",
+            headers={"X-Goog-Api-Key": _llave()})
+        with urllib.request.urlopen(pet, timeout=TIEMPO_LIMITE) as r:
+            return json.loads(r.read().decode("utf-8")).get("photoUri", "")
+
     def fachada(self, lat, lon) -> dict | None:
-        """La fachada, CON su fecha de captura. Consultar la fecha es gratis."""
+        """La fachada, CON su fecha de captura. Consultar la fecha es gratis.
+
+        Se devuelven las coordenadas, no la liga: la imagen de Street View
+        SIEMPRE necesita la llave en la dirección, así que esa no se le puede
+        dar al navegador. La trae el servidor (ver imagen_fachada).
+        """
         consulta = urllib.parse.urlencode({"location": f"{lat},{lon}", "key": _llave()})
         with urllib.request.urlopen(f"{BASE_SV}/metadata?{consulta}",
                                     timeout=TIEMPO_LIMITE) as r:
             meta = json.loads(r.read().decode("utf-8"))
         if meta.get("status") != "OK":
             return None
-        imagen = urllib.parse.urlencode({
-            "size": "640x400", "location": f"{lat},{lon}", "fov": "80",
-            "key": _llave()})
         return {
             # La fecha es la del paso del auto de Google, no la de la foto del
             # negocio: dice «a esta fecha el local se veía así».
             "fecha": meta.get("date", ""),
-            "url": f"{BASE_SV}?{imagen}",
+            "lat": lat, "lon": lon,
             "nota": "Fecha en que Google capturó la calle, no la de apertura del negocio.",
         }
+
+    def imagen_fachada(self, lat, lon, ancho=640, alto=400) -> bytes:
+        """Los bytes de la fachada. La llave se queda de este lado."""
+        consulta = urllib.parse.urlencode({
+            "size": f"{int(ancho)}x{int(alto)}", "location": f"{lat},{lon}",
+            "fov": "80", "key": _llave()})
+        with urllib.request.urlopen(f"{BASE_SV}?{consulta}", timeout=TIEMPO_LIMITE) as r:
+            return r.read()
 
     def mapa(self, lat, lon, competidores: list, ancho=760, alto=440) -> bytes | None:
         marcas = [f"markers=color:red%7C{lat},{lon}"]

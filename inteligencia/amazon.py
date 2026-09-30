@@ -167,7 +167,13 @@ class Amazon:
     def fotos(self, lugar: dict) -> list:
         return []
 
+    def url_foto(self, ref: str, ancho: int = 800) -> str:
+        return ""
+
     def fachada(self, lat, lon) -> dict | None:
+        return None
+
+    def imagen_fachada(self, lat, lon, ancho=640, alto=400) -> bytes | None:
         return None
 
 

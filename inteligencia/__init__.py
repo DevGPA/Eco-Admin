@@ -183,6 +183,40 @@ def arma_ficha(caso: dict) -> dict:
     return ficha
 
 
+def url_foto_de(ficha: dict, indice: int) -> str:
+    """La liga de una foto del local, resuelta al momento de verla.
+
+    El índice se busca DENTRO de la ficha guardada: nunca se acepta una
+    referencia que venga de la pantalla. Si se aceptara, cualquiera con sesión
+    podría hacer que gastáramos nuestra cuota trayendo fotos de donde quisiera.
+    """
+    fotos = (ficha or {}).get("fotos") or []
+    if not (0 <= int(indice) < len(fotos)):
+        return ""
+    ref = fotos[int(indice)].get("ref", "")
+    for prov in proveedores():
+        try:
+            if prov.disponible():
+                return prov.url_foto(ref)
+        except Exception:
+            continue
+    return ""
+
+
+def imagen_fachada_de(ficha: dict) -> bytes | None:
+    """Los bytes de la fachada. La llave de Google nunca sale del servidor."""
+    fachada = (ficha or {}).get("fachada") or {}
+    if fachada.get("lat") is None:
+        return None
+    for prov in proveedores():
+        try:
+            if prov.disponible():
+                return prov.imagen_fachada(fachada["lat"], fachada["lon"])
+        except Exception:
+            continue
+    return None
+
+
 def mapa_de(ficha: dict) -> bytes | None:
     """El PNG del mapa. Se genera al verlo, no se guarda: cuesta centavos y así
     nunca se muestra un mapa viejo de una zona que ya cambió."""

@@ -241,6 +241,86 @@ ok(geo.count('"competencia"') == 3,
    "y sus 3 competidores, sin repetir al que cae en los dos radios")
 ok("mapa" not in str(f), "la ficha guardada NO trae la imagen dentro")
 ok(I.mapa_de({"lugar": {}}) is None, "sin coordenadas no intenta dibujar nada")
+# ═══════════════════════════════════════════════════════════════
+print("\n8. La llave de Google NUNCA llega al navegador")
+# ═══════════════════════════════════════════════════════════════
+# Google no se ejecuta aquí (no hay cuenta todavía), pero sí se revisa su
+# CONTRATO: nada de lo que este proveedor entrega a la pantalla puede llevar la
+# llave dentro. Una llave en el código de una página es cuota ajena gastándose
+# sola, y el que paga es GPA.
+import inteligencia.google as G                              # noqa: E402
+
+LLAVE = "LLAVE-SECRETA-DE-PRUEBA"
+os.environ["GOOGLE_MAPS_KEY"] = LLAVE
+
+CRUDO = {"fotosCrudas": [
+    {"name": "places/ABC/photos/XYZ",
+     "authorAttributions": [{"displayName": "Juan Pérez"}],
+     "googleMapsUri": "https://maps.google.com/?cid=1"},
+]}
+g = G.Google()
+fotos = g.fotos(CRUDO)
+ok(len(fotos) == 1, "devuelve la foto del local")
+ok(LLAVE not in str(fotos), "y NO trae la llave dentro")
+ok("url" not in fotos[0], "no entrega una liga armada, sino una referencia")
+ok(fotos[0]["ref"] == "places/ABC/photos/XYZ", "la referencia es la que dio Google")
+ok(fotos[0]["atribucion"] == "Juan Pérez",
+   "con la atribución del autor, que los términos exigen mostrar")
+
+pedidos = []
+
+
+class RespuestaFalsa:
+    def __init__(self, cuerpo):
+        self.cuerpo = cuerpo
+
+    def read(self):
+        return self.cuerpo
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def urlopen_falso(pet, timeout=None):
+    url = pet.full_url if hasattr(pet, "full_url") else pet
+    pedidos.append({"url": url, "cabeceras": dict(getattr(pet, "headers", {}) or {})})
+    if "skipHttpRedirect" in url:
+        return RespuestaFalsa(b'{"photoUri":"https://lh3.googleusercontent.com/temporal"}')
+    if "metadata" in url:
+        return RespuestaFalsa(b'{"status":"OK","date":"2025-03"}')
+    return RespuestaFalsa(b"PNG-de-la-fachada")
+
+
+G.urllib.request.urlopen = urlopen_falso
+liga = g.url_foto("places/ABC/photos/XYZ")
+ok(liga == "https://lh3.googleusercontent.com/temporal",
+   "lo que sí puede abrir el navegador es un photoUri temporal de Google")
+ok(LLAVE not in liga, "y esa liga no lleva la llave")
+ok(LLAVE not in pedidos[-1]["url"], "la llave tampoco va en la dirección que pide el servidor")
+ok(pedidos[-1]["cabeceras"].get("X-goog-api-key") == LLAVE,
+   "va en la cabecera, que se queda de este lado")
+
+print("\n   La fachada tampoco entrega ligas con llave:")
+fach = g.fachada(20.67, -103.35)
+ok(fach["fecha"] == "2025-03", "trae la fecha de captura, que es lo que fecha el local")
+ok(LLAVE not in str(fach), "y NO trae la llave")
+ok("url" not in fach, "no entrega liga: da coordenadas, y la imagen la trae el servidor")
+ok(g.imagen_fachada(20.67, -103.35) == b"PNG-de-la-fachada",
+   "la imagen llega como bytes, traída desde el servidor")
+
+print("\n   Y nadie puede pedir una foto que no esté en el expediente:")
+ficha_falsa = {"fotos": [{"ref": "places/ABC/photos/XYZ"}]}
+ok(I.url_foto_de(ficha_falsa, 0) != "", "el índice 0 sí existe y se resuelve")
+ok(I.url_foto_de(ficha_falsa, 5) == "", "un índice fuera de la lista no devuelve nada")
+ok(I.url_foto_de(ficha_falsa, -1) == "", "uno negativo tampoco")
+ok(I.url_foto_de({}, 0) == "", "y una ficha sin fotos, menos")
+
+os.environ.pop("GOOGLE_MAPS_KEY", None)
+
+
 
 # ═══════════════════════════════════════════════════════════════
 print("\n" + "=" * 62)
