@@ -65,8 +65,15 @@ ok(t.includes("Ver lo que declaró el colaborador")&&t.includes("Tipo 2, 3 años
 ok(bt(c,"Concluir examen").props.disabled===true,"no concluye sin diagnóstico, clasificación y firma");
 const nums=c.root.findAllByType("input").filter(i=>i.props.type==="number");
 await act(async()=>{nums[0].props.onChange({target:{value:"80"}});});
+// Estatura en centímetros por error de dedo: se bloquea, no se convierte
+await act(async()=>{nums[1].props.onChange({target:{value:"175"}});});
+ok(plano(c).includes("máximo 2.3")&&!plano(c).includes("26.1"),"estatura 175 → aviso «máximo 2.3 m» y sin IMC (no se convierte de cm)");
+ok(String(nums[1].props.max)==="2.3","el campo de estatura lleva el tope 2.3");
+await act(async()=>{nums[1].props.onChange({target:{value:"2.31"}});});
+ok(plano(c).includes("máximo 2.3"),"2.31 también se bloquea");
 await act(async()=>{nums[1].props.onChange({target:{value:"1.75"}});});
-ok(plano(c).includes("26.1")&&plano(c).includes("Sobrepeso"),"calcula el IMC (26.1 · Sobrepeso)");
+ok(!plano(c).includes("máximo 2.3"),"con 1.75 desaparece el aviso");
+ok(plano(c).includes("26.1")&&plano(c).includes("Sobrepeso"),"calcula el IMC (26.1 · Sobrepeso) y lo pone en su campo");
 const areas=c.root.findAllByType("textarea");
 await act(async()=>{areas[areas.length-1].props.onChange({target:{value:"Sobrepeso leve, sin otras alteraciones"}});});
 const selClas=c.root.findAllByType("select").find(s=>s.findAllByType("option").some(o=>String(o.props.children)==="Apto"));
@@ -74,6 +81,10 @@ await act(async()=>{selClas.props.onChange({target:{value:"Apto con restriccione
 ok(bt(c,"Concluir examen").props.disabled===true,"con diagnóstico y clasificación pero sin firma sigue bloqueado");
 await firmar(c);
 ok(bt(c,"Concluir examen").props.disabled!==true,"con firma se habilita");
+await act(async()=>{nums[1].props.onChange({target:{value:"175"}});});
+ok(bt(c,"Concluir examen").props.disabled===true,"con todo lo demás listo, una estatura de 175 vuelve a bloquear Concluir");
+await act(async()=>{nums[1].props.onChange({target:{value:"1.75"}});});
+ok(bt(c,"Concluir examen").props.disabled!==true,"y con 1.75 se habilita otra vez");
 await act(async()=>{bt(c,"Concluir examen").props.onClick();});await espera(60);
 const env=llamadas.find(l=>l.metodo==="examenConcluir");
 ok(!!env&&env.id==="e1","llama a concluir con el id del examen");

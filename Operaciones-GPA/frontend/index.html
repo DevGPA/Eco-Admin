@@ -1470,7 +1470,12 @@ const EXM_APARATOS=[["respiratorio","Respiratorio"],["digestivo","Digestivo"],["
 const EXM_EXPLORA=[["cabeza","Cabeza","Normocéfalo. Pupilas isocóricas normorrefléxicas. Sin malformaciones aparentes ni referencia de traumatismos."],["boca","Boca, nariz y garganta","Narinas permeables, oídos sin alteraciones, membranas timpánicas normales."],["cuello","Cuello","Tráquea central desplazable sin datos patológicos, no megalias."],["torax","Tórax","Adecuada amplexión y amplexación, adecuada entrada y salida de aire, no estertores ni sibilancias ni ruidos agregados; ruidos cardiacos de adecuado tono e intensidad."],["abdomen","Abdomen","Abdomen blando, depresible, con peristalsis presente, no visceromegalias, no doloroso a la palpación."],["columna","Columna cervical","Sin alteraciones."],["extremidades","Extremidades",""],["piel","Piel y anexos",""]];
 const EXM_DOPING=[["ANF","ANF"],["BAR","BAR"],["BZD","BZD"],["COC","COC"],["MET","MET"],["OPI","OPI 2000"],["MTD","MTD"],["TCA","TCA"],["THC","THC"],["XTC","XTC"]];
 const exmSiNo=v=>v===true?"Sí":v===false?"No":"—";
-const exmIMC=(peso,est)=>{const p=parseFloat(peso),e=parseFloat(est);if(!(p>0&&e>0))return null;const m=e>3?e/100:e;return Math.round(p/(m*m)*10)/10;};
+// La estatura va SIEMPRE en metros. Arriba de 2.3 m es un error de dedo (175 en vez de
+// 1.75): se bloquea en pantalla y también en el servidor (validar_signos_medico); NO se
+// convierte de centímetros. El IMC se calcula solo y se pone en su campo.
+const EXM_ESTATURA_MAX=2.3;
+const exmEstaturaErr=est=>{if(est===""||est==null)return"";const e=parseFloat(est);if(!(e>0))return"Captura la estatura en metros (ej. 1.75).";if(e>EXM_ESTATURA_MAX)return"La estatura va en metros (ej. 1.75): máximo "+EXM_ESTATURA_MAX+" m. Revisa el dato.";return"";};
+const exmIMC=(peso,est)=>{const p=parseFloat(peso),e=parseFloat(est);if(!(p>0&&e>0&&e<=EXM_ESTATURA_MAX))return null;return Math.round(p/(e*e)*10)/10;};
 const exmIMCLbl=i=>i==null?"":i<25?"Normal":i<30?"Sobrepeso":i<35?"Obesidad G I":i<40?"Obesidad G II":"Obesidad G III";
 
 function ExamenMedico({cat,session,showToast}){
@@ -1618,10 +1623,10 @@ function ExamenConcluir({reg,session,showToast,onBack,onListo}){
   const[dx,setDx]=useState("");const[clas,setClas]=useState("");const[nombreMed,setNombreMed]=useState("Dr. Abraham Alvarado Figueroa");
   const[sig,setSig]=useState(null);const[busy,setBusy]=useState(false);
   const sigRef=useRef(null);const sigH=useSig(sigRef);
-  const imc=exmIMC(s.peso,s.estatura);
-  const listo=!!(dx.trim()&&clas.trim()&&sig&&nombreMed.trim());
+  const imc=exmIMC(s.peso,s.estatura);const estErr=exmEstaturaErr(s.estatura);
+  const listo=!!(dx.trim()&&clas.trim()&&sig&&nombreMed.trim())&&!estErr;
   const concluir=async()=>{
-    if(busy)return;if(!listo)return showToast("⚠️ Faltan diagnóstico, clasificación, nombre del médico o firma.");
+    if(busy)return;if(estErr)return showToast("⚠️ "+estErr);if(!listo)return showToast("⚠️ Faltan diagnóstico, clasificación, nombre del médico o firma.");
     setBusy(true);
     try{
       const medico={signos:s,imc,imcLabel:exmIMCLbl(imc),...ex,ojos,oidos,observacionesExploracion:obsEx,antidoping:{...dop,otros:dopOtros},observacionesDoping:obsDop,diagnostico:dx.trim(),clasificacion:clas.trim()};
@@ -1639,9 +1644,10 @@ function ExamenConcluir({reg,session,showToast,onBack,onListo}){
       <div className="card"><div className="ct">Signos vitales</div>
         <div className="r3">
           <div><label>Peso (kg)</label><input type="number" step="0.1" value={s.peso} onChange={e=>setS({...s,peso:e.target.value})}/></div>
-          <div><label>Estatura (m)</label><input type="number" step="0.01" value={s.estatura} onChange={e=>setS({...s,estatura:e.target.value})}/></div>
+          <div><label>Estatura (m)</label><input type="number" step="0.01" min="0.5" max={EXM_ESTATURA_MAX} inputMode="decimal" placeholder="1.75" value={s.estatura} onChange={e=>setS({...s,estatura:e.target.value})} style={estErr?{borderColor:C.red,background:C.redLt}:{}}/></div>
           <div><label>IMC</label><input type="text" value={imc!=null?imc+" "+exmIMCLbl(imc):""} disabled style={{background:"#f5f5f5"}}/></div>
         </div>
+        {estErr&&<div style={{fontSize:11.5,color:C.red,marginTop:2}}>⚠️ {estErr}</div>}
         <div className="r2"><div><label>T/A</label><input type="text" value={s.ta} onChange={e=>setS({...s,ta:e.target.value})} placeholder="120/80"/></div><div><label>FC</label><input type="text" value={s.fc} onChange={e=>setS({...s,fc:e.target.value})}/></div></div>
         <div className="r2"><div><label>FR</label><input type="text" value={s.fr} onChange={e=>setS({...s,fr:e.target.value})}/></div><div><label>Temp</label><input type="text" value={s.temp} onChange={e=>setS({...s,temp:e.target.value})}/></div></div>
       </div>

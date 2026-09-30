@@ -290,6 +290,14 @@ def _examen_concluir(event, cl):
         return _err("Falta la clasificación.", 422)
     if not _foto_ok(b.get("firmaMedico")):
         return _err("Falta la firma del médico.", 422)
+    err_signos = m.validar_signos_medico(medico)
+    if err_signos:
+        return _err(err_signos, 422)
+    # El IMC lo recalcula el servidor a partir de peso y estatura (en metros): lo que
+    # mande el cliente no se toma como verdad.
+    signos = medico.get("signos") or {}
+    imc = m.imc_de(signos.get("peso"), signos.get("estatura"))
+    medico = {**medico, "imc": imc, "imcLabel": m.imc_label(imc)}
     parche = {"medico": medico, "firmaMedico": b.get("firmaMedico"),
               "nombreMedico": str(b.get("nombreMedico") or cl.get("nombre") or cl["email"])[:120],
               "status": m.EXM_CONCLUIDO,

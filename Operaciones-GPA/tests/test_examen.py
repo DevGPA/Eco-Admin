@@ -209,6 +209,62 @@ class TestParteMedica(BaseFalsa):
     def test_inexistente_404(self):
         self.assertEqual(self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), rid="nada")["statusCode"], 404)
 
+    # ── Estatura en metros, tope 2.3 (decisión del usuario 2026-09-30) ──
+    def _con_signos(self, peso, estatura):
+        return {"medico": {"signos": {"peso": peso, "estatura": estatura}, "diagnostico": "Sano", "clasificacion": "Apto"},
+                "firmaMedico": "EXM/fm.png", "nombreMedico": "Dra. X"}
+
+    def test_estatura_en_centimetros_se_rechaza(self):
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=self._con_signos(80, 175))
+        self.assertEqual(r["statusCode"], 422)
+        self.assertIn("metros", r["body"])
+        self.assertEqual(self.parches, [], "no se guarda nada")
+
+    def test_estatura_apenas_arriba_del_tope_se_rechaza(self):
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=self._con_signos(80, 2.31))
+        self.assertEqual(r["statusCode"], 422)
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=self._con_signos(80, "abc"))
+        self.assertEqual(r["statusCode"], 422)
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=self._con_signos(80, 0))
+        self.assertEqual(r["statusCode"], 422)
+
+    def test_el_servidor_recalcula_el_imc(self):
+        body = self._con_signos("80", "1.75")
+        body["medico"]["imc"] = 99          # lo que mande el cliente no manda
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=body)
+        self.assertEqual(r["statusCode"], 200, r["body"])
+        p = self.parches[0][1]
+        self.assertEqual(p["medico"]["imc"], 26.1)
+        self.assertEqual(p["medico"]["imcLabel"], "Sobrepeso")
+        self.assertEqual(p["medico"]["signos"]["estatura"], "1.75")
+
+    def test_tope_exacto_pasa_y_sin_estatura_no_hay_imc(self):
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=self._con_signos(90, 2.3))
+        self.assertEqual(r["statusCode"], 200)
+        self.assertEqual(self.parches[-1][1]["medico"]["imc"], 17.0)
+        r = self._concluir(self.cl("supervisor", "medico@gpa.com.mx"), body=self._con_signos("", ""))
+        self.assertEqual(r["statusCode"], 200)
+        self.assertIsNone(self.parches[-1][1]["medico"]["imc"])
+
+
+class TestIMC(unittest.TestCase):
+    def test_formula_y_etiquetas(self):
+        self.assertEqual(m.imc_de(80, 1.75), 26.1)
+        self.assertEqual(m.imc_label(26.1), "Sobrepeso")
+        self.assertEqual(m.imc_label(24.9), "Normal")
+        self.assertEqual(m.imc_label(35), "Obesidad G II")
+        self.assertIsNone(m.imc_de(80, 175), "centímetros no se convierten: se rechazan")
+        self.assertIsNone(m.imc_de(None, 1.75))
+        self.assertIsNone(m.imc_de(80, 0))
+
+    def test_validacion(self):
+        self.assertIsNone(m.validar_signos_medico({"signos": {"estatura": 1.75}}))
+        self.assertIsNone(m.validar_signos_medico({"signos": {"estatura": ""}}))
+        self.assertIsNone(m.validar_signos_medico({}))
+        self.assertIn("máximo es 2.3", m.validar_signos_medico({"signos": {"estatura": 175}}))
+        self.assertIn("mayor a cero", m.validar_signos_medico({"signos": {"estatura": -1}}))
+        self.assertIn("número", m.validar_signos_medico({"signos": {"estatura": "uno setenta"}}))
+
 
 class TestAcceso(BaseFalsa):
     def setUp(self):

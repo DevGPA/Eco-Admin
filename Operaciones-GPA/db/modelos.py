@@ -41,6 +41,45 @@ EXM = "EXM"
 EXM_PENDIENTE = "Pendiente médico"   # el colaborador ya llenó su parte
 EXM_CONCLUIDO = "Concluido"          # el médico completó exploración y firmó
 EXM_AVISO_VERSION = "2026-09"        # versión del aviso de privacidad aceptado
+# Estatura del examen médico: SIEMPRE en metros. Decisión del usuario (2026-09-30):
+# arriba de 2.3 m se bloquea, es un error de dedo (175 en vez de 1.75). No se convierte.
+EXM_ESTATURA_MAX = 2.3
+
+
+def imc_de(peso, estatura):
+    """Índice de masa corporal con un decimal, o None si falta o no es válido."""
+    try:
+        p, e = float(peso), float(estatura)
+    except (TypeError, ValueError):
+        return None
+    if not (p > 0 and 0 < e <= EXM_ESTATURA_MAX):
+        return None
+    return round(p / (e * e), 1)
+
+
+def imc_label(i) -> str:
+    if i is None:
+        return ""
+    return ("Normal" if i < 25 else "Sobrepeso" if i < 30 else "Obesidad G I" if i < 35
+            else "Obesidad G II" if i < 40 else "Obesidad G III")
+
+
+def validar_signos_medico(medico: dict) -> str | None:
+    """Candado AUTORITATIVO de los signos vitales que captura el médico. Hoy: la
+    estatura va en metros y no puede pasar de EXM_ESTATURA_MAX. Devuelve el error o None."""
+    signos = (medico or {}).get("signos") or {}
+    est = signos.get("estatura")
+    if est in (None, ""):
+        return None
+    try:
+        e = float(est)
+    except (TypeError, ValueError):
+        return "La estatura debe ser un número en metros (ej. 1.75)."
+    if e <= 0:
+        return "La estatura debe ser mayor a cero, en metros (ej. 1.75)."
+    if e > EXM_ESTATURA_MAX:
+        return f"La estatura va en metros (ej. 1.75): el máximo es {EXM_ESTATURA_MAX} m."
+    return None
 
 # ── Claves de catálogos ──────────────────────────────────────────
 PK_VEHICLE  = "CAT#VEHICLE"
