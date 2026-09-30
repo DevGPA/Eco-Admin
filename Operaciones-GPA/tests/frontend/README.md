@@ -141,6 +141,19 @@ clasificación y firma, el IMC se calcula, y el envío lleva signos, exploració
 antidoping, diagnóstico, clasificación, firma y nombre; el formato completo trae todas
 las secciones y ambas firmas; la lista de seguimiento CSV NO lleva datos clínicos.
 
+`test_plan_mtto.js` — la pestaña **Plan Mtto** (plan anual de mantenimiento) con la agenda
+que devolvería el servidor: semanas con la fórmula del Excel y el reinicio del reloj
+(espejo de `mantenimiento/logica.py`); el técnico ve su sucursal con «solo mías y sin
+asignar», las atrasadas salen como Vencida, abre una actividad, marca un faltante, inicia,
+toma foto antes/después, describe y completa (y el borrador se borra); lo asignado a otro
+no se captura; en lo EXTERNO el botón dice «Registrar supervisión»; el técnico PIDE
+reprogramar (no reprograma); el correctivo muestra la vista previa del reinicio (retira la
+46, conserva la 8) y guarda «con preventivo»; el administrador ve tablero (20 % = 1 de 5
+exigibles, calendario, barras por sucursal/área/técnico, CSV con una fila por vencimiento,
+correctivos, acta, evidencias), asigna un área completa y una excepción de semana, da de
+alta un activo sin código, edita un tipo, simula/crea/publica el año siguiente; el analista
+solo consulta; el editor de administradores normaliza correos; la pestaña depende del módulo.
+
 `montar.js` es el andamio: extrae el `<script type="text/babel">` de
 `index.html`, lo compila y lo ejecuta con un `localStorage` simulado que tiene
 cuota real, para poder probar también qué pasa cuando las fotos no caben.

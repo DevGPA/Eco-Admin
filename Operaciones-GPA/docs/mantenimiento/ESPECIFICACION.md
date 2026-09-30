@@ -1,7 +1,7 @@
 # Plan y Control de Mantenimiento — GPA
 
-**Estado:** especificación para revisión · **v1.3**
-**Fecha:** 25 de septiembre de 2026
+**Estado:** Fase 1 construida en la rama `mantenimiento` (sin desplegar) · **v1.4**
+**Fecha:** 29 de septiembre de 2026
 **Fuente del plan:** `CALENDARIO MANTENIMIENTO 2025 SCS.xlsx`, hoja `CALENDARIO 2026`
 (OneDrive de `mantenimiento@gpa.com.mx`). El original **no se modificó**; todo se leyó de una copia.
 
@@ -585,6 +585,39 @@ Requieren que alguien la abra en su teléfono.
 ---
 
 ## Cambios
+
+**v1.4 — 29 de septiembre de 2026 — Fase 1 construida (rama `mantenimiento` de DevGPA/Eco-Admin, sin desplegar)**
+- **Decisiones del usuario** a las preguntas de §14 (registradas en `Operaciones-GPA/docs/mantenimiento/DECISIONES.md`):
+  #1 el correctivo queda firme al guardar; #7 solo hay un supervisor nacional (el Jefe de
+  Mantenimiento, administrador del módulo), el técnico ejecuta lo asignado y lo sin asignar y
+  **pide** reprogramar; `EXT` es la **revisión** del extintor por GPA (no la recarga; el plan no
+  se mezcla con los checklists de Seguridad); traspaletas, carritos y diablos: **una pieza = un
+  activo**, con la cantidad por sucursal tomada del **Tablero de Seguimiento** de la app; los
+  textos de las celdas **no** se traducen a estatus; los 13 procedimientos se cargan como
+  propuesta editable. La pestaña se llama **«Plan Mtto»** (clave `mantenimiento`) porque `mtto`
+  ya es la pestaña de checklists en la app — corrige lo que decía §13 («la clave `mtto` ya
+  creada»: existe, pero significa otra cosa).
+- **Construido:** `mantenimiento/logica.py` (semanas con la fórmula del Excel, estatus derivado,
+  asignación titular/excepción, nivel derivado, reinicio del reloj, año siguiente), `datos.py`
+  (prefijos `CAT#ACTIVO`, `CAT#TIPOACTIVO`, `CAT#PERIODICIDAD`, `CAT#AREA`, `MP`, `MPC`,
+  `MTTO#ACTA`), `rutas.py` (las 11 rutas de §5 del traspaso salvo `admin/importar`), los 11
+  eventos en `template.yaml`, la pestaña Plan Mtto completa en `frontend/index.html` (agenda,
+  detalle con kit y faltantes, correctivo con vista previa, tablero con calendario y barras por
+  sucursal/área/técnico, evidencias, acta, asignación, catálogos, año siguiente), el editor de
+  administradores en Admin → Módulos, el manual v3.1, `seed/mtto_tipos.py` (23 tipos) y
+  `seed/importar_plan_mtto.py` (dry-run por omisión; reproduce 233 / 546 / 3 / 57 y expande a
+  291 activos / 720 vencimientos con las metas de respaldo).
+- **No construido:** la ruta `POST /mantenimiento/admin/importar` (leer los colores del Excel
+  exige `openpyxl`, que no está en la Lambda; el importador es el script de CloudShell); el
+  repartidor automático de carga (§9.5) solo **señala** las semanas pico y sus alternativas, no
+  mueve nada; la sucursal `Tisa` no existe en la app (el acta lo avisa).
+- **Hallazgo de auditoría previa:** el código pendiente de desplegar rechazaba las evidencias de
+  EPP y del examen médico (error #35 del protocolo); se corrigió en la rama `operaciones-gpa`
+  (`5f43a3b`) antes de construir sobre ella.
+- **Verificación:** 237 pruebas de servidor (33 de lógica + 30 de rutas de punta a punta con
+  DynamoDB simulada, incluidas las de §11) y la prueba de pantalla `tests/frontend/test_plan_mtto.js`
+  sobre los componentes reales. **Sin verificar:** contra el servicio real (no hay despliegue),
+  en celular, y las metas reales del Tablero (el dry-run local usó el respaldo).
 
 **v1.3 — 25 de septiembre de 2026**
 - Se rescatan los scripts del importador a `herramientas/` (antes vivían en una carpeta

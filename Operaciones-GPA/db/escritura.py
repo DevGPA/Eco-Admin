@@ -269,6 +269,23 @@ def guardar_modulo(mod: dict) -> dict:
         "orden": mod.get("orden", 100),
         "activo": mod.get("activo", True),
     }
+    # Campos que solo usa el módulo de mantenimiento (`administradores` = correos de
+    # quien administra el plan; `sucursales` = código del plan → sucursal de la app).
+    # Si el panel no los manda (p. ej. al activar/desactivar), se CONSERVAN los que
+    # ya había: un put_item los borraría en silencio.
+    extras = ("administradores", "sucursales")
+    if any(k not in mod for k in extras):
+        prev = _t().get_item(Key={"PK": m.PK_MODULO, "SK": m.sk_modulo(clave)}).get("Item") or {}
+    else:
+        prev = {}
+    for k in extras:
+        if k in mod:
+            v = mod.get(k)
+            if k == "administradores":
+                v = sorted({str(x or "").strip().lower() for x in (v or []) if str(x or "").strip()})
+            item[k] = v
+        elif k in prev:
+            item[k] = m.from_dynamo(prev[k])
     _t().put_item(Item={"PK": m.PK_MODULO, "SK": m.sk_modulo(clave), **m.to_dynamo(item)})
     return {"ok": True, "clave": clave}
 

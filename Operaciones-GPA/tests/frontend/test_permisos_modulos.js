@@ -25,8 +25,8 @@ const montar=async(rol,modulos)=>{
 console.log("══ PERMISOS POR MÓDULO ══\n");
 console.log("── Lo que Admin → Cuentas puede otorgar ──");
 const m=/Módulos con acceso[\s\S]{0,400}?\[\[(.*?)\]\]\.map/.exec(src.replace(/\n/g," "));
-const chips=src.match(/\[\["combustible","Combustible"\],\["mtto","Mtto"\],\["seguridad","Seguridad Industrial"\],\["epp","EPP"\]/);
-ok(!!chips,"la pantalla de Cuentas ofrece EPP como módulo con acceso");
+const chips=src.match(/\[\["combustible","Combustible"\],\["mtto","Mtto[^"]*"\],\["seguridad","Seguridad Industrial"\],\["epp","EPP"\],\["mantenimiento","Plan Mtto"\]/);
+ok(!!chips,"la pantalla de Cuentas ofrece EPP y Plan Mtto como módulos con acceso");
 
 console.log("\n── Cuenta SIN módulos marcados = ve todos ──");
 let r=await montar("operador",null);

@@ -55,7 +55,7 @@ const windowStub={GPA_CONFIG:{dominio:"gpa.com.mx"},
 // api simulada: registra lo que se envía y permite sembrar lo que devuelve.
 const llamadas=[];
 // `mundo` es lo que "hay en el servidor" para una prueba: se rellena antes de montar.
-const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{},archivo:{},archivoForm:{},examenes:[],campanas:[]};
+const mundo={sesion:null,catalogos:null,registros:{combustible:[],checklist:[],montacargas:[],epp:[]},formularios:{},saldos:{},archivo:{},archivoForm:{},examenes:[],campanas:[],mtto:null,asignables:[]};
 const metodos={
   subirEvidencias:async(tipo,obj)=>obj,          // identidad: aquí no hay S3
   crear:async(tipo,datos)=>{llamadas.push({metodo:"crear",tipo,datos});return{id:"nuevo",ok:true};},
@@ -72,6 +72,18 @@ const metodos={
   examenConcluir:async(id,datos)=>{llamadas.push({metodo:"examenConcluir",id,datos});return{ok:true,id,status:"Concluido"};},
   adminExamenCampana:async(c)=>{llamadas.push({metodo:"adminExamenCampana",c});(mundo.campanas=mundo.campanas||[]).push({...c,token:"tokNuevo"});return{ok:true};},
   eppConcluir:async(id,datos)=>{llamadas.push({metodo:"eppConcluir",id,datos});return{ok:true,id,status:"Aprobado"};},
+  // Plan de Mantenimiento: la agenda «del servidor» se siembra en mundo.mtto; las escrituras se registran.
+  mttoAgenda:async(anio)=>{llamadas.push({metodo:"mttoAgenda",anio});return mundo.mtto||{nivel:"ejecuta",items:[],activos:[],tipos:[],correctivos:[],semanaActual:39,anioActual:2026,anio:2026,hoy:"2026-09-25",rangoSemana:["2026-09-21","2026-09-26"],sucursales:{},resumen:{},periodicidades:{}};},
+  mttoAsignables:async()=>mundo.asignables||[],
+  mttoEstado:async(rid,datos)=>{llamadas.push({metodo:"mttoEstado",rid,datos});return{ok:true,id:rid};},
+  mttoAsignar:async(rid,cuenta)=>{llamadas.push({metodo:"mttoAsignar",rid,cuenta});return{ok:true};},
+  mttoCorrectivo:async(datos)=>{llamadas.push({metodo:"mttoCorrectivo",datos});return{ok:true,id:"MPC1",semanasRetiradas:[46],semanasNuevas:[]};},
+  mttoAdminActivo:async(a)=>{llamadas.push({metodo:"mttoAdminActivo",a});return{ok:true,activo:{...a,codigo:a.codigo||"AIR-GDL-99"}};},
+  mttoAdminTipo:async(t)=>{llamadas.push({metodo:"mttoAdminTipo",t});return{ok:true,tipo:t};},
+  mttoAdminTitular:async(d)=>{llamadas.push({metodo:"mttoAdminTitular",d});return{ok:true,activos:["AIR-GDL-01","AIR-GDL-02"],titular:d.titular,reindexados:4};},
+  mttoAdminGenerar:async(anio,aplicar)=>{llamadas.push({metodo:"mttoAdminGenerar",anio,aplicar});return{ok:true,simulacion:!aplicar,total:7,creados:aplicar?7:undefined,variables:["MON-MEX-01"],sinProgramar:[],picos:[],propuestas:[]};},
+  mttoAdminPublicar:async(anio)=>{llamadas.push({metodo:"mttoAdminPublicar",anio});return{ok:true,publicados:7};},
+  adminModulo:async(mo)=>{llamadas.push({metodo:"adminModulo",mo});return{ok:true};},
   _fetch:async(metodo,ruta,body)=>{llamadas.push({metodo:"_fetch",ruta,body});
     if(ruta==="/epp/pendientes")return mundo.pendientes||{items:[],responsable:false};return {};},
 };
@@ -81,7 +93,7 @@ class GpaApiStub{constructor(){return new Proxy(this,{get:(_,k)=>
   (k in valores)?valores[k]:(metodos[k]||(async()=>[])) });}}
 
 const fabrica=new Function("React","ReactDOM","GpaApi","window","document","navigator","localStorage","alert","console","location",
-  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio,EppPendientes,EppConcluir,ExamenMedico,ExamenLista,ExamenFormato,ExamenConcluir,ExamenDetalle,esExpMed};");
+  js+"\n;return {CLForm,MCForm,FormDinamico,SolForm,RepForm,respuestaTexto,hallazgosSecs,BotonInstalar,Login,App,segModulos,ModEPP,EppForm,EppSaldos,EppHistory,EppDetail,FotoCampo,esPDF,SolHistory,CLHistory,MCHistory,FormHistory,ModDinamico,FiltroFechas,fueraDeVentana,rangoArchivo,ventanaInicio,EppPendientes,EppConcluir,ExamenMedico,ExamenLista,ExamenFormato,ExamenConcluir,ExamenDetalle,esExpMed,ModPlanMtto,MttoAgenda,MttoTarjeta,MttoDetalle,MttoCorrectivo,MttoTablero,MttoAsignacion,MttoCatalogos,MttoAdminsEditor,mtReinicio,mtInicioSemana,mtVence,ModAdmin};");
 const M=fabrica(React,{createRoot:()=>({render:noop,unmount:noop})},GpaApiStub,windowStub,documentStub,
   navegador,localStorage,noop,console,windowStub.location);
 

@@ -220,6 +220,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
     <a class="sub" href="#s6-1">6.1 Reparto</a>
     <a class="sub" href="#s6-2">6.2 Montacargas</a>
     <a class="sub" href="#s6-3">6.3 Sucursales</a>
+    <a href="#s6b"><span class="n">6+</span>Plan Mtto (plan anual)</a>
     <a href="#s7"><span class="n">7</span>Seguridad Industrial</a>
     <a href="#s8"><span class="n">8</span>Responsivas</a>
     <a href="#sepp"><span class="n">9</span>EPP (equipo de protección)</a>
@@ -352,7 +353,7 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
         <li><b>Abajo (barra de navegación):</b> los <b>módulos</b> a los que tienes acceso. Si hay muchos, la barra se desliza de lado. Toca un ícono para cambiar de módulo.</li>
         <li><b>Centro:</b> el contenido del módulo activo (formularios, historial, tablero…).</li>
       </ul>
-      <p>Los módulos posibles son: <span class="tag">Combustible</span> <span class="tag">Mtto</span> <span class="tag">Seguridad</span> <span class="tag">Responsivas</span> <span class="tag">📊 Seguimiento</span> <span class="tag">Admin</span>, además de cualquier módulo nuevo que cree el administrador.</p>
+      <p>Los módulos posibles son: <span class="tag">Combustible</span> <span class="tag">Mtto</span> <span class="tag">Plan Mtto</span> <span class="tag">Seguridad</span> <span class="tag">Responsivas</span> <span class="tag">📊 Seguimiento</span> <span class="tag">Admin</span>, además de cualquier módulo nuevo que cree el administrador.</p>
       <div class="fig">
         <div class="frame">
           <div class="s-hdr">
@@ -536,6 +537,43 @@ footer{max-width:1140px;margin:0 auto;padding:22px 24px 40px;color:var(--muted);
 
       <h3 id="s6-3"><span class="h3n">6.3</span>Sucursales</h3>
       <p>Formularios de mantenimiento de las instalaciones (patines hidráulicos, carritos, cisternas, iluminación, mini split, fontanería, etc.). Cada uno se llena por <b>pasos</b> con su semáforo de resultado (ver <a href="#s4">Reglas de captura</a>). El administrador puede agregar más formularios cuando se necesiten.</p>
+    </section>
+
+    <!-- 6+ Plan Mtto -->
+    <section id="s6b">
+      <div class="sh"><span class="num">6+</span><h2>Plan Mtto (plan anual de mantenimiento)</h2></div>
+      <p>Es la agenda del <b>plan anual de mantenimiento</b> de instalaciones y equipos (minisplits, tableros, fontanería, montacargas, traspaletas, extintores, fumigación…): qué equipo, en qué <b>semana</b> vence, quién lo hace y con qué evidencia quedó. Sustituye la matriz de Excel donde la programación vivía en el color de la celda. <b>No es la pestaña «Mtto»</b>: esa lleva los checklists diarios/semanales de reparto y montacargas; esta lleva las <b>actividades de mantenimiento</b> del plan.</p>
+      <div class="note"><span class="callout-t">La unidad es la semana, y es un plazo, no una cita.</span> El trabajo puede hacerse cualquier día de esa semana o antes; vence el <b>sábado</b>. La semana 1 de 2026 empezó el 29 de diciembre de 2025 (misma fórmula que el Excel).</div>
+
+      <h3>Quién ve qué</h3>
+      <ul class="bul">
+        <li><b>Técnico</b> (operador con el módulo): ve las actividades de <b>su sucursal</b>. Por omisión la agenda muestra <b>solo las suyas y las que están sin asignar</b>; con la casilla «Solo mías» apagada ve toda la sucursal. Ejecuta lo asignado a él y lo sin asignar.</li>
+        <li><b>Administrador del módulo</b> (el Jefe de Mantenimiento; su correo va en Admin → Módulos → Plan Mtto → Administradores): ve <b>todas las sucursales</b>, asigna, reprograma, edita catálogos y arma el año siguiente. No necesita ser administrador de la app.</li>
+        <li><b>Analista</b>: consulta la agenda y el tablero, no captura.</li>
+      </ul>
+      <div class="note"><span class="callout-t">Si no ves la pestaña:</span> tu cuenta no tiene el módulo <b>Plan Mtto</b> (Admin → Cuentas → Módulos con acceso) o el módulo no está activo.</div>
+
+      <h3>La agenda del técnico</h3>
+      <ol class="steps">
+        <li>Abre <b>Plan Mtto</b>. Arriba dice la semana en curso. Tres listas: <b>Esta semana</b>, <b>Atrasadas</b> y <b>Próximas</b> (y <b>Cerradas</b>).</li>
+        <li>Toca una actividad. Verás el equipo, cuándo vence, su frecuencia, a quién está asignada y el <b>procedimiento</b> del tipo de equipo (si dice «Propuesta: por validar», aún no lo confirmó Mantenimiento).</li>
+        <li><b>Antes de empezar</b>: revisa el material y la herramienta. <b>Toca lo que NO tengas</b>: el faltante queda registrado para la jefatura y la actividad no se pierde.</li>
+        <li>Pulsa <b>▶ Iniciar</b> (queda «En proceso»), marca los <b>puntos revisados</b>, toma <b>foto antes y después</b>, describe <b>qué se hizo</b> (obligatorio) y marca si hubo incidencia.</li>
+        <li>Cierra con <b>Completar</b>. En los equipos <span class="tag">EXTERNO</span> (los atiende un proveedor) el botón dice <b>Registrar supervisión</b>: describes qué ejecutó el proveedor y qué verificaste; sin esa validación el equipo cuenta como no atendido aunque el proveedor haya cobrado.</li>
+      </ol>
+      <p>Otras salidas: <b>Dejar pendiente</b> y <b>No se realizó</b> exigen motivo. <b>Pedir reprogramar</b> envía la solicitud (semana y motivo) al administrador: el plazo <b>no se mueve</b> hasta que él la aplique. Si marcas la incidencia <b>«Requiere correctivo»</b>, al cerrar se abre el reporte de falla con el equipo ya puesto.</p>
+      <div class="note"><span class="callout-t">Vencida:</span> una actividad que sigue «Programada» después del sábado de su semana aparece en rojo como <b>Vencida</b>. Nadie la teclea y no se puede esconder; se resuelve capturándola (queda como completada fuera de tiempo) o con un motivo.</div>
+
+      <h3>Reportar una falla (correctivo)</h3>
+      <p>El botón <b>⚠ Falla</b> está siempre a la mano. Elige el equipo, di <b>qué falló</b>, <b>qué se hizo</b>, refacciones, quién lo hizo (GPA o proveedor) y una foto. Si además <b>se le hizo el preventivo</b>, marca la casilla: la app te muestra qué semanas del calendario <b>se retiran</b>, cuáles se conservan como historia y cuáles nuevas nacen (desde esta semana más su periodicidad). Si solo cambiaste una pieza, no marques la casilla: el equipo sigue debiendo su servicio.</p>
+
+      <h3>Jefatura</h3>
+      <ul class="bul">
+        <li><b>Tablero</b>: cumplimiento sobre lo exigible (lo que ya venció o vence esta semana), las 52 semanas con su carga por estatus, cumplimiento por sucursal, por área y <b>por técnico</b>, <b>Evidencias</b> (todo lo capturado con foto, quién y cuándo), <b>Correctivos</b> y el <b>Acta</b> de la última importación. Botón <b>⬇ Descargar plan en CSV</b>.</li>
+        <li><b>Asignación</b>: por sucursal. Primero <b>un área completa → una persona</b> (vale para todas sus semanas); después afinas el <b>titular por activo</b>; y para vacaciones o ausencias, la <b>excepción de una semana</b>, que no toca al titular. Las personas asignables son las cuentas con el módulo y la sucursal; se dan de alta en Admin → Cuentas, no aquí.</li>
+        <li><b>Catálogos</b>: <b>Activos</b> (alta con código propuesto TIPO-SUC-##, edición y baja lógica), <b>Tipos</b> (el procedimiento, los puntos de revisión, material y herramienta de cada tipo de equipo: lo heredan todos sus equipos), <b>Año siguiente</b> (simular → crear como propuesta → publicar; los técnicos no ven el año nuevo hasta publicarlo) y la lista de administradores.</li>
+      </ul>
+      <div class="note"><span class="callout-t">Carga inicial:</span> el plan se importa desde la copia del Excel con el script <span class="mono">seed/importar_plan_mtto.py</span> (documentado en <span class="mono">docs/mantenimiento/</span>). Es re-ejecutable: no borra capturas ni activos dados de alta en la app, y deja un acta con lo que no pudo resolver solo.</div>
     </section>
 
     <!-- 7 -->

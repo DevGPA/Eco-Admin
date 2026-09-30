@@ -152,6 +152,43 @@ Resources:
           Type: HttpApi
           Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/epp/{id}/concluir' }
 
+        # ── Plan de Mantenimiento (módulo `mantenimiento`, pestaña «Plan Mtto») ──
+        # Rutas ADITIVAS: las atiende mantenimiento/rutas.py vía handler.py. Sin estos
+        # eventos API Gateway responde 404 aunque el código exista.
+        MttoAgenda:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /mantenimiento }
+        MttoActivos:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /mantenimiento/activos }
+        MttoAsignables:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: GET, Path: /mantenimiento/asignables }
+        MttoEstado:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/mantenimiento/{rid}/estado' }
+        MttoAsignar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: '/mantenimiento/{rid}/asignar' }
+        MttoCorrectivo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /mantenimiento/correctivo }
+        MttoAdminActivo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /mantenimiento/admin/activo }
+        MttoAdminTipo:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /mantenimiento/admin/tipo }
+        MttoAdminTitular:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /mantenimiento/admin/titular }
+        MttoAdminGenerar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /mantenimiento/admin/generar }
+        MttoAdminPublicar:
+          Type: HttpApi
+          Properties: { ApiId: !Ref OpsHttpApi, Method: POST, Path: /mantenimiento/admin/publicar }
+
         # ── Checklist de reparto ──
         ChecklistCrear:
           Type: HttpApi

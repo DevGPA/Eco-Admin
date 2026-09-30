@@ -81,6 +81,12 @@ def validar_signos_medico(medico: dict) -> str | None:
         return f"La estatura va en metros (ej. 1.75): el máximo es {EXM_ESTATURA_MAX} m."
     return None
 
+# ── Plan de Mantenimiento (módulo `mantenimiento`, pestaña «Plan Mtto») ──
+# Registros de operación: un vencimiento programado y un correctivo. Las
+# reglas viven en mantenimiento/logica.py; aquí solo los prefijos de llave.
+MP  = "MP"    # mantenimiento programado: PK = MP#{codigo}#{anio}#{semana}
+MPC = "MPC"   # correctivo:               PK = MPC#{codigo}#{timestamp}
+
 # ── Claves de catálogos ──────────────────────────────────────────
 PK_VEHICLE  = "CAT#VEHICLE"
 PK_USER     = "CAT#USER"
@@ -91,6 +97,11 @@ PK_RESPONSABLE = "CAT#RESPONSABLE"  # responsables de alertas del Tablero de Seg
 PK_EPP_ART  = "CAT#EPPART"     # catálogo de artículos de EPP y uniforme
 PK_EXM_CAMP = "CAT#EXMCAMP"    # campañas del examen médico (la liga pública lleva su token)
 PK_EXPMED   = "CAT#EXPMED"     # cuentas con acceso al expediente médico
+PK_ACTIVO   = "CAT#ACTIVO"     # activos del plan de mantenimiento (SK ACT#{codigo})
+PK_TIPOACTIVO = "CAT#TIPOACTIVO"  # tipos de activo con procedimiento y kit (SK TIPO#{pref})
+PK_PERIODICIDAD = "CAT#PERIODICIDAD"  # texto → semanas (SK PER#{texto})
+PK_AREA     = "CAT#AREA"       # áreas del plan (SK AREA#{nombre})
+PK_MTTO_ACTA = "MTTO#ACTA"     # actas de importación del plan (SK {fecha})
 PK_CONFIG   = "CONFIG"
 SK_CONFIG   = "CONFIG"
 
@@ -104,6 +115,10 @@ def sk_responsable(email) -> str: return f"RESP#{email}"
 def sk_epp_art(aid)  -> str: return f"ART#{aid}"
 def sk_exm_camp(clave) -> str: return f"CAMP#{clave}"
 def sk_expmed(email) -> str: return f"EXP#{email}"
+def sk_activo(codigo) -> str: return f"ACT#{codigo}"
+def sk_tipo_activo(pref) -> str: return f"TIPO#{pref}"
+def sk_periodicidad(texto) -> str: return f"PER#{texto}"
+def sk_area(nombre) -> str: return f"AREA#{nombre}"
 
 
 def tipo_formulario(clave) -> str:

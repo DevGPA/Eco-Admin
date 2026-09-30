@@ -964,7 +964,10 @@ function App(){
 
   // Plantillas activas por clave de módulo (motor de formularios dinámicos)
   const plantillasDe=clave=>(cat?.plantillas||[]).filter(p=>p.modulo===clave&&p.activo!==false);
-  const BUILTIN_IDS=["combustible","mtto","seguridad","epp","admin","sucursales","seguimiento"];
+  const BUILTIN_IDS=["combustible","mtto","seguridad","epp","mantenimiento","admin","sucursales","seguimiento"];
+  // «Plan Mtto» (plan anual de mantenimiento) aparece cuando el módulo existe y está activo
+  // (lo crea el importador o Admin → Módulos). No confundir con «Mtto», que son los checklists.
+  const mttoOn=(cat?.modulos||[]).some(mo=>mo.clave==="mantenimiento"&&mo.activo!==false);
   // Módulos dinámicos creados como dato (Admin → Módulos); inertes si no hay ninguno
   const dynMods=(cat?.modulos||[]).filter(mo=>mo.activo!==false&&!BUILTIN_IDS.includes(mo.clave))
     .map(mo=>({id:mo.clave,label:mo.nombre||mo.clave,icon:ICON_DOC,dyn:true}));
@@ -973,6 +976,7 @@ function App(){
     {id:"mtto",label:"Mtto",icon:"M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437"},
     {id:"seguridad",label:"Seguridad",icon:"M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"},
     {id:"epp",label:"EPP",icon:"M12 3 4.5 6.75v4.5c0 4.28 3.2 8.28 7.5 9.75 4.3-1.47 7.5-5.47 7.5-9.75v-4.5L12 3Zm0 6v6m-3-3h6"},
+    ...(mttoOn?[{id:"mantenimiento",label:"Plan Mtto",icon:"M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-11.25-3 1.5 1.5 3-3.75"}]:[]),
     ...dynMods,
   ].filter(mo=>!userMods||userMods.includes(mo.id)||(mo.id==="mtto"&&(userMods.includes("checklist")||userMods.includes("montacargas"))));
   const modules=[
@@ -1012,6 +1016,7 @@ function App(){
           {mod==="mtto"&&<ModMtto cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="seguridad"&&<ModDinamico cat={cat} modulo="seguridad" modLabel="Seguridad Industrial" plantillas={plantillasDe("seguridad")} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
           {mod==="epp"&&<ModEPP cat={cat} items={data.epp} rol={rol} sucursalesUser={sucursalesUser} session={session} refrescar={()=>refrescar("epp")} showToast={showToast}/>}
+          {mod==="mantenimiento"&&mttoOn&&<ModPlanMtto cat={cat} rol={rol} session={session} showToast={showToast}/>}
           {dynActivo&&<ModDinamico cat={cat} modulo={dynActivo.id} modLabel={dynActivo.label} plantillas={plantillasDe(dynActivo.id)} rol={rol} sucursalesUser={sucursalesUser} session={session} showToast={showToast}/>}
           {mod==="seguimiento"&&["admin","analista","supervisor"].includes(rol)&&<ModSeguimiento cat={cat} data={data} rol={rol} sucursalesUser={sucursalesUser} userMods={userMods} session={session} refrescar={refrescar} showToast={showToast}/>}
           {mod==="admin"&&rol==="admin"&&<ModAdmin cat={cat} refrescarCat={refrescarCat} showToast={showToast}/>}
@@ -1679,6 +1684,454 @@ function ExamenConcluir({reg,session,showToast,onBack,onListo}){
       <button className="bp" disabled={!listo||busy} onClick={concluir}>{busy?"Guardando…":"Concluir examen"}</button>
     </div>
   );
+}
+
+// ═══ PLAN DE MANTENIMIENTO (pestaña «Plan Mtto», módulo `mantenimiento`) ═══════════
+// Agenda del técnico + supervisión de la jefatura sobre el plan anual (una fila del
+// Excel = un activo; una celda pintada = un vencimiento MP). Todo el cálculo de
+// permisos y estatus lo hace el SERVIDOR (GET /mantenimiento devuelve `nivel`,
+// `estatusEfectivo`, `lista`, `asignado`, `puedeEjecutar`); la pantalla pinta.
+// Diseño: docs/mantenimiento/ESPECIFICACION.md. OJO: la pestaña «Mtto» de checklists
+// es otra cosa; este módulo usa la clave `mantenimiento`.
+const MT_EST={programada:"Programada",proceso:"En proceso",completada:"Completada",pendiente:"Pendiente",reprogramada:"Reprogramada",norealizada:"No realizada",vencida:"Vencida"};
+const MT_COLOR={completada:C.green,vencida:C.red,proceso:C.amber,pendiente:C.amber,norealizada:"#6b6b6b",reprogramada:"#6a3fb5",programada:C.blue};
+const MT_INCIDENCIAS=["Falta refacción","Requiere correctivo","Equipo en uso","Sin acceso","Riesgo de seguridad"];
+const MT_MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+// Semanas con la fórmula del Excel (espejo de mantenimiento/logica.py): la semana 1 de
+// 2026 empieza el 29-dic-2025 y cada semana vence el sábado.
+const mtWk12=d=>{const g=d.getDay();return g===0?6:(g===1?7:g-1);};
+const mtInicioSemana=(anio,sem)=>{const e1=new Date(anio,0,1);const s=new Date(anio,0,1-mtWk12(e1));s.setDate(s.getDate()+7*(sem-1));return s;};
+const mtVence=(anio,sem)=>{const b=mtInicioSemana(anio,sem);b.setDate(b.getDate()+5);return b.getDate()+" "+MT_MESES[b.getMonth()];};
+const mtRango=(anio,sem)=>{const a=mtInicioSemana(anio,sem),b=new Date(a.getTime());b.setDate(b.getDate()+5);return a.getDate()+" "+MT_MESES[a.getMonth()]+" – "+b.getDate()+" "+MT_MESES[b.getMonth()];};
+// Reinicio del reloj por correctivo con preventivo (espejo de logica.reinicio_reloj): solo
+// para la VISTA PREVIA; el servidor vuelve a calcular y es el que manda.
+const mtReinicio=(semanas,p,base)=>{const ws=[...new Set((semanas||[]).map(Number))].sort((a,b)=>a-b);if(!p)return{quitar:[],nuevas:[],conservar:ws};const nuevas=[];for(let w=base+p;w<=52;w+=p)nuevas.push(w);return{quitar:ws.filter(w=>w>=base&&!nuevas.includes(w)),nuevas:nuevas.filter(w=>!ws.includes(w)),conservar:ws.filter(w=>w<base)};};
+const mtNombre=(email,asignables)=>{if(!email)return null;const a=(asignables||[]).find(x=>String(x.id).toLowerCase()===String(email).toLowerCase());return a?a.nombre:String(email).split("@")[0];};
+const MtPill=({e,children})=><span className="bdg" style={{background:(MT_COLOR[e]||"#888")+"22",color:MT_COLOR[e]||"#666"}}>{children||MT_EST[e]||e}</span>;
+const MtGhost=({children})=><span className="bdg" style={{background:"#f1f1f1",color:"#666",fontWeight:500}}>{children}</span>;
+const mtFmt=iso=>{if(!iso)return"";const d=new Date(iso);return isNaN(d)?String(iso):d.toLocaleString("es-MX",{dateStyle:"short",timeStyle:"short"});};
+
+function ModPlanMtto({cat,rol,session,showToast}){
+  const[datos,setDatos]=useState(null);const[cargando,setCargando]=useState(true);const[err,setErr]=useState(null);
+  const[tab,setTab]=useState("agenda");const[sel,setSel]=useState(null);const[fallaDe,setFallaDe]=useState(null);
+  const[asignables,setAsignables]=useState(null);
+  const cargar=async()=>{setCargando(true);try{const d=await api.mttoAgenda();setDatos(d);setErr(null);}catch(e){setErr(e.message);}setCargando(false);};
+  useEffect(()=>{cargar();},[]);
+  useEffect(()=>{if(datos&&["administra","consulta"].includes(datos.nivel)&&asignables===null){(async()=>{try{setAsignables(await api.mttoAsignables());}catch(e){setAsignables([]);}})();}},[datos]);
+  if(cargando&&!datos)return<div className="spin"/>;
+  if(err&&!datos)return<div className="wb">⚠️ {err} <button className="bs" style={{marginLeft:8}} onClick={cargar}>Reintentar</button></div>;
+  const niv=datos.nivel;const admin=niv==="administra";const consulta=niv==="consulta";
+  const actPor=Object.fromEntries((datos.activos||[]).map(a=>[a.codigo,a]));
+  const tipoPor=Object.fromEntries((datos.tipos||[]).map(t=>[t.pref,t]));
+  const listo=async()=>{setSel(null);setFallaDe(null);await cargar();};
+  const ctx={datos,actPor,tipoPor,asignables:asignables||[],session,showToast,niv};
+  if(sel)return<MttoDetalle {...ctx} mp={sel} onBack={()=>setSel(null)} onListo={listo} onFalla={cod=>{setSel(null);setFallaDe(cod);setTab("falla");}}/>;
+  const tabs=[["agenda","📅 Agenda"],...(!consulta?[["falla","⚠️ Falla"]]:[]),...((admin||consulta)?[["tablero","📊 Tablero"]]:[]),...(admin?[["asignacion","👥 Asignación"],["catalogos","🗂 Catálogos"]]:[])];
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+        <div style={{fontSize:15,fontWeight:700,color:"#222"}}>Plan de Mantenimiento</div>
+        <div style={{fontSize:11,color:"#888"}}>Semana <b>{datos.semanaActual}</b> · {mtRango(datos.anioActual,datos.semanaActual)} · {admin?"Administra":consulta?"Consulta":"Técnico"}</div>
+      </div>
+      <div className="tr" style={{overflowX:"auto"}}>{tabs.map(([v,l])=><button key={v} className={"trb"+(tab===v?" act":"")} onClick={()=>{setTab(v);setFallaDe(null);}}>{l}</button>)}</div>
+      {(datos.items||[]).length===0&&(datos.activos||[]).length===0&&<div className="wb">Aún no se ha importado el plan de mantenimiento. {admin?"Se carga con seed/importar_plan_mtto.py (ver docs/mantenimiento)":"Avisa al Jefe de Mantenimiento."}</div>}
+      {tab==="agenda"&&<MttoAgenda {...ctx} onAbrir={setSel} onFalla={()=>setTab("falla")}/>}
+      {tab==="falla"&&!consulta&&<MttoCorrectivo {...ctx} codigoPre={fallaDe} onBack={()=>setTab("agenda")} onListo={async()=>{await listo();setTab("agenda");}}/>}
+      {tab==="tablero"&&(admin||consulta)&&<MttoTablero {...ctx} onAbrir={setSel}/>}
+      {tab==="asignacion"&&admin&&<MttoAsignacion {...ctx} onListo={cargar} recargarAsignables={async()=>{try{setAsignables(await api.mttoAsignables());}catch(e){}}}/>}
+      {tab==="catalogos"&&admin&&<MttoCatalogos {...ctx} onListo={cargar}/>}
+    </div>
+  );
+}
+
+// ── Agenda: esta semana · atrasadas · próximas; mías / toda la sucursal ─────────
+function MttoAgenda({datos,actPor,tipoPor,asignables,session,niv,onAbrir,onFalla}){
+  const items=datos.items||[];
+  const sucs=[...new Set(items.map(i=>i.sucursal).filter(Boolean))].sort();
+  const[suc,setSuc]=useState("");const[lista,setLista]=useState("semana");
+  const[soloMias,setSoloMias]=useState(niv==="ejecuta");
+  const yo=String(session.email||"").toLowerCase();
+  const base=items.filter(i=>!suc||i.sucursal===suc).filter(i=>!soloMias||i.mia||!i.asignado);
+  const n=k=>base.filter(i=>i.lista===k).length;
+  const visibles=base.filter(i=>i.lista===lista).sort((a,b)=>(a.semana-b.semana)||String(a.codigo).localeCompare(b.codigo));
+  const sinAsignar=base.filter(i=>!i.asignado&&i.lista!=="cerradas").length;
+  return(
+    <div>
+      {sucs.length>1&&<div className="card" style={{padding:"10px 12px"}}><label>Sucursal</label><select value={suc} onChange={e=>setSuc(e.target.value)}><option value="">Todas ({sucs.length})</option>{sucs.map(s=><option key={s} value={s}>{s}</option>)}</select></div>}
+      <div className="tr">
+        {[["semana","Esta semana"],["atrasadas","Atrasadas"],["proximas","Próximas"],["cerradas","Cerradas"]].map(([v,l])=><button key={v} className={"trb"+(lista===v?" act":"")} onClick={()=>setLista(v)}>{l} ({n(v)})</button>)}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,fontSize:12}}>
+        <label style={{display:"flex",alignItems:"center",gap:6,margin:0}}><input type="checkbox" checked={soloMias} onChange={e=>setSoloMias(e.target.checked)} style={{width:"auto"}}/>Solo mías (y sin asignar)</label>
+        {sinAsignar>0&&<span style={{color:C.amber,fontWeight:600}}>{sinAsignar} sin asignar</span>}
+      </div>
+      {visibles.length===0&&<div className="empty">{lista==="semana"?"Nada programado para esta semana.":lista==="atrasadas"?"Sin atrasos. 👌":"Nada por aquí."}</div>}
+      {visibles.map(mp=><MttoTarjeta key={mp.id} mp={mp} act={actPor[mp.codigo]} tipo={tipoPor[String(mp.codigo).split("-")[0]]} yo={yo} asignables={asignables} onClick={()=>onAbrir(mp)}/>)}
+      {niv!=="consulta"&&<button className="bs" style={{width:"100%",marginTop:6,border:"1px dashed "+C.red,color:C.red}} onClick={onFalla}>⚠ Reportar una falla (correctivo)</button>}
+    </div>
+  );
+}
+
+function MttoTarjeta({mp,act,tipo,yo,asignables,onClick}){
+  const e=mp.estatusEfectivo||mp.estatus||"programada";
+  const ext=(act&&act.responsabilidad)==="EXTERNO";
+  return(
+    <div className="card" style={{cursor:"pointer",padding:"10px 12px",borderLeft:"4px solid "+(MT_COLOR[e]||"#ccc")}} onClick={onClick}>
+      <div className="lit"><span className="lim">{(act&&act.descripcion)||mp.codigo}</span><span style={{fontSize:11,color:"#888",fontFamily:"monospace"}}>{mp.codigo}</span></div>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center",marginTop:5}}>
+        <MtPill e={e}/>
+        {ext&&<MtGhost>EXTERNO</MtGhost>}
+        {tipo&&!tipo.procedimiento&&<MtGhost>SIN PROCEDIMIENTO</MtGhost>}
+        {!mp.asignado?<MtGhost>SIN ASIGNAR</MtGhost>:(String(mp.asignado).toLowerCase()!==yo&&<MtGhost>{mtNombre(mp.asignado,asignables)}</MtGhost>)}
+        {mp.solicitud&&<MtGhost>Pide reprogramar</MtGhost>}
+      </div>
+      <div className="lis">{mp.fin&&["completada","norealizada"].includes(e)?`${MT_EST[e]} por ${mp.tecnico||"—"} · ${mtFmt(mp.fin)}`:`Sem ${mp.semana} · vence ${mtVence(mp.anio,mp.semana)} · ${(act&&act.periodicidad||"").toLowerCase()}${act&&act.area?" · "+act.area:""}`}</div>
+    </div>
+  );
+}
+
+// ── Detalle y ejecución ───────────────────────────────────────────────────────
+function MttoDetalle({mp,datos,actPor,tipoPor,asignables,session,showToast,niv,onBack,onListo,onFalla}){
+  const act=actPor[mp.codigo]||{};const tipo=tipoPor[String(mp.codigo).split("-")[0]]||{};
+  const e=mp.estatusEfectivo||mp.estatus||"programada";const cerrada=["completada","norealizada","reprogramada"].includes(mp.estatus);
+  const puede=!!mp.puedeEjecutar&&!cerrada;const admin=niv==="administra";const ext=act.responsabilidad==="EXTERNO";
+  const DKEY="mtto_"+mp.id;const D=useMemo(()=>leerBorrador(DKEY),[]);const teniaBorrador=Object.keys(D).length>0;
+  const[desc,setDesc]=useState(D.desc||mp.desc||"");const[checks,setChecks]=useState(D.checks||mp.checks||[]);
+  const[inc,setInc]=useState(D.incidencias||mp.incidencias||[]);const[falt,setFalt]=useState(D.faltantes||mp.faltantes||[]);
+  const[fotoA,setFotoA]=useState((mp.fotos||[])[0]||null);const[fotoD,setFotoD]=useState((mp.fotos||[])[1]||null);
+  const[motivo,setMotivo]=useState("");const[accion,setAccion]=useState(null);const[semRep,setSemRep]=useState(Math.min(52,mp.semana+1));
+  const[busy,setBusy]=useState(false);const[borEstado,setBorEstado]=useState("ok");const cerradoRef=useRef(false);
+  useEffect(()=>{if(cerradoRef.current||cerrada)return;const t=setTimeout(()=>{setBorEstado(guardarBorrador(DKEY,{desc,checks,incidencias:inc,faltantes:falt}));},400);return()=>clearTimeout(t);},[desc,checks,inc,falt]);
+  const tog=(arr,set,v)=>set(arr.includes(v)?arr.filter(x=>x!==v):[...arr,v]);
+  const kit=[...(tipo.materiales||[]).map(x=>["Material",x]),...(tipo.herramienta||[]).map(x=>["Herramienta",x])];
+  const cors=(datos.correctivos||[]).filter(c=>c.codigo===mp.codigo);
+  const enviar=async(estatus,extra)=>{
+    if(busy)return;setBusy(true);
+    try{
+      const fotos=await api.subirEvidencias("mantenimiento",[fotoA,fotoD].filter(Boolean));
+      await api.mttoEstado(mp.id,{estatus,desc:desc.trim(),checks,incidencias:inc,faltantes:falt,fotos,motivo:motivo.trim(),...(extra||{})});
+      cerradoRef.current=true;borrarBorrador(DKEY);
+      showToast("✓ "+(MT_EST[estatus]||estatus)+" · "+mp.codigo);
+      if(inc.includes("Requiere correctivo")&&estatus!=="programada"){onFalla(mp.codigo);}else{await onListo();}
+    }catch(err){showToast("⚠️ "+err.message);}
+    setBusy(false);
+  };
+  const pedirReprogramar=async()=>{if(!motivo.trim())return showToast("⚠️ Escribe el motivo");setBusy(true);try{await api.mttoEstado(mp.id,{solicitar:"reprogramar",motivo:motivo.trim(),semana:Number(semRep)});showToast("✓ Solicitud enviada al administrador");await onListo();}catch(err){showToast("⚠️ "+err.message);}setBusy(false);};
+  const conMotivo=accion&&["pendiente","norealizada","reprogramar","reprogramada"].includes(accion);
+  return(
+    <div>
+      <button className="bs" style={{marginBottom:10}} onClick={onBack}>← Agenda</button>
+      <div className="card">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+          <div><div style={{fontSize:15,fontWeight:700}}>{act.descripcion||mp.codigo}</div><div style={{fontSize:11,color:"#888",fontFamily:"monospace"}}>{mp.codigo}{act.piezas?` · pieza ${act.pieza} de ${act.piezas}`:""}</div></div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}><MtPill e={e}/><MtGhost>{act.responsabilidad||"INTERNO"}</MtGhost></div>
+        </div>
+        <div className="dr" style={{marginTop:8}}><span>Vence</span><span>Semana {mp.semana} · {mtVence(mp.anio,mp.semana)} ({mp.anio})</span></div>
+        <div className="dr"><span>Frecuencia</span><span>{act.periodicidad||"—"}</span></div>
+        <div className="dr"><span>Área · Sucursal</span><span>{act.area||"—"} · {mp.sucursal}</span></div>
+        <div className="dr"><span>Asignada a</span><span>{mp.asignado?mtNombre(mp.asignado,asignables):"Sin asignar"}</span></div>
+        {(act.modelo||act.serie)&&<div className="dr"><span>Modelo · Serie</span><span>{act.modelo||"—"} · {act.serie||"—"}</span></div>}
+        {mp.textoExcel?null:null}
+      </div>
+      {!puede&&!cerrada&&niv!=="consulta"&&<div className="wb">Esta actividad está asignada a otra persona. Puedes verla, no capturarla.</div>}
+      {mp.solicitud&&<div className="wb">📩 {mp.solicitud.por===session.email?"Pediste":"El técnico pidió"} reprogramar a la semana <b>{mp.solicitud.semana||"—"}</b>: {mp.solicitud.motivo}{admin&&<button className="bs" style={{marginLeft:8}} onClick={()=>{setAccion("reprogramada");setSemRep(mp.solicitud.semana||semRep);setMotivo(mp.solicitud.motivo||"");}}>Aplicar</button>}</div>}
+      {(cors.length>0||act.reprog)&&<div className="card"><div className="ct">Correctivos de este equipo</div>
+        {act.reprog&&<div style={{fontSize:12,color:"#6a3fb5",fontWeight:600,marginBottom:6}}>Su calendario se reinició en la semana {act.reprog.base} porque el correctivo incluyó el preventivo.</div>}
+        {cors.map(c=><div key={c.id} className="dr"><span>Sem {c.semana}</span><span>{c.falla} → {c.desc}{c.conPreventivo?" · con preventivo":""} · {c.tecnico}</span></div>)}
+      </div>}
+      <div className="card" style={!tipo.procedimiento?{background:C.amberLt}:{}}>
+        <div className="ct">{tipo.procedimiento?"Procedimiento":"Sin procedimiento redactado"} {tipo.esPropuesta&&<span className="bdg dpe" style={{marginLeft:6}}>Propuesta: por validar con Mantenimiento</span>}</div>
+        <div style={{fontSize:12.5,color:"#333",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{tipo.procedimiento||"Este tipo de activo no está descrito en ningún archivo de GPA. El administrador lo escribe una vez en Catálogos → Tipos y lo heredan todos los equipos del mismo tipo. Mientras tanto, describe abajo lo que hiciste."}</div>
+        {ext&&(tipo.supervision||datos.protocoloSupervision)&&<div style={{fontSize:12,color:"#555",marginTop:8,padding:8,background:"#f7f7f7",borderRadius:6}}><b>Qué supervisar:</b> {tipo.supervision||""}</div>}
+      </div>
+      <div className="card"><div className="ct">Antes de empezar</div>
+        {kit.length===0&&<div style={{fontSize:12,color:"#888"}}>{ext?"Lo ejecuta el proveedor; GPA supervisa.":"Sin material ni herramienta registrados."}</div>}
+        {kit.length>0&&<><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{kit.map(([k,x])=><button key={k+x} type="button" disabled={!puede} className={"trb"+(falt.includes(x)?" act":"")} style={falt.includes(x)?{background:C.red}:{}} onClick={()=>tog(falt,setFalt,x)} title={k}>{falt.includes(x)?"✗ ":""}{x}</button>)}</div>
+        <div style={{fontSize:11,color:"#888",marginTop:6}}>Toca lo que NO tengas. Si falta algo, la actividad no se pierde: sigue programada y el faltante queda registrado para la jefatura.</div></>}
+      </div>
+      <div className="card"><div className="ct">Ejecución</div>
+        <AvisoBorrador retomado={teniaBorrador&&!cerrada} texto="Retomaste una captura sin enviar." estado={borEstado} onDescartar={()=>{borrarBorrador(DKEY);setDesc(mp.desc||"");setChecks(mp.checks||[]);setInc(mp.incidencias||[]);setFalt(mp.faltantes||[]);}}/>
+        {(tipo.puntos||[]).length>0&&<div style={{marginBottom:8}}>{tipo.puntos.map(p=><label key={p} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:".5px solid #f0f0f0",fontSize:13,margin:0}}><input type="checkbox" disabled={!puede} checked={checks.includes(p)} onChange={()=>tog(checks,setChecks,p)} style={{width:"auto"}}/>{p}</label>)}</div>}
+        <div className="r2 pdf-area">
+          {puede?<FotoCampo val={fotoA} set={setFotoA} label="Foto antes"/>:(fotoA&&<div><label>Foto antes</label><img src={fotoA} alt="antes" style={{width:"100%",borderRadius:6}}/></div>)}
+          {puede?<FotoCampo val={fotoD} set={setFotoD} label="Foto después"/>:(fotoD&&<div><label>Foto después</label><img src={fotoD} alt="después" style={{width:"100%",borderRadius:6}}/></div>)}
+        </div>
+        <label>¿Qué se hizo? {ext?"(qué ejecutó el proveedor y qué verificaste)":""}</label>
+        <textarea value={desc} disabled={!puede&&!admin} onChange={e=>setDesc(e.target.value)} rows={3} placeholder="Describe el trabajo realizado (obligatorio para completar)"/>
+        <label>¿Hubo incidencia?</label>
+        <div className="tr">{MT_INCIDENCIAS.map(x=><button key={x} type="button" disabled={!puede} className={"trb"+(inc.includes(x)?" act":"")} onClick={()=>tog(inc,setInc,x)}>{x}</button>)}</div>
+        {(mp.faltantes||[]).length>0&&!puede&&<div style={{fontSize:12,color:C.red}}>Faltantes reportados: {mp.faltantes.join(", ")}</div>}
+      </div>
+      {(puede||admin)&&!cerrada&&<div className="card">
+        {!accion&&<>
+          {puede&&<button className="bp" disabled={busy||!desc.trim()} onClick={()=>enviar("completada")}>{ext?"Registrar supervisión":"Completar"}</button>}
+          {puede&&!desc.trim()&&<div style={{fontSize:11,color:"#888",marginTop:4,textAlign:"center"}}>Describe lo realizado para poder completar.</div>}
+          <div className="r2" style={{marginTop:8}}>
+            {puede&&mp.estatus!=="proceso"&&<button className="bs" disabled={busy} onClick={()=>enviar("proceso")}>▶ Iniciar</button>}
+            {puede&&<button className="bs" disabled={busy} onClick={()=>setAccion("pendiente")}>Dejar pendiente</button>}
+            {puede&&!admin&&<button className="bs" disabled={busy} onClick={()=>setAccion("reprogramar")}>Pedir reprogramar</button>}
+            {admin&&<button className="bs" disabled={busy} onClick={()=>setAccion("reprogramada")}>Reprogramar</button>}
+            {puede&&<button className="bd" disabled={busy} onClick={()=>setAccion("norealizada")}>No se realizó</button>}
+          </div>
+        </>}
+        {conMotivo&&<>
+          <label>{accion==="reprogramar"?"¿Por qué pides reprogramar?":accion==="reprogramada"?"Motivo de la reprogramación":"Motivo (obligatorio)"}</label>
+          <textarea value={motivo} onChange={e=>setMotivo(e.target.value)} rows={2}/>
+          {(accion==="reprogramar"||accion==="reprogramada")&&<><label>Semana nueva</label><input type="number" min={1} max={52} value={semRep} onChange={e=>setSemRep(e.target.value)}/><div style={{fontSize:11,color:"#888"}}>Vence {mtVence(mp.anio,Number(semRep)||mp.semana)} · {mtRango(mp.anio,Number(semRep)||mp.semana)}</div></>}
+          <div className="r2" style={{marginTop:8}}>
+            <button className="bs" onClick={()=>setAccion(null)}>Cancelar</button>
+            <button className="bp" style={{marginTop:0}} disabled={busy||!motivo.trim()} onClick={()=>accion==="reprogramar"?pedirReprogramar():accion==="reprogramada"?enviar("reprogramada",{reprogramadaA:Number(semRep)}):enviar(accion)}>{accion==="reprogramar"?"Enviar solicitud":accion==="reprogramada"?"Reprogramar a la semana "+semRep:"Guardar como "+MT_EST[accion]}</button>
+          </div>
+        </>}
+      </div>}
+      {admin&&cerrada&&<button className="bs" style={{width:"100%"}} disabled={busy} onClick={()=>{setMotivo("Reabierta por el administrador");enviar("programada");}}>Reabrir actividad</button>}
+      {niv!=="consulta"&&<button className="bs" style={{width:"100%",marginTop:8,border:"1px dashed "+C.red,color:C.red}} onClick={()=>onFalla(mp.codigo)}>⚠ Reportar una falla de este equipo</button>}
+      {(mp.hist||[]).length>0&&<div className="card"><div className="ct">Historial</div>{[...mp.hist].reverse().map((h,i)=><div key={i} className="dr"><span>{mtFmt(h.c)}</span><span>{h.a}{h.m?" · "+h.m:""} · {h.q}</span></div>)}</div>}
+    </div>
+  );
+}
+
+// ── Correctivo (falla fuera del plan) ─────────────────────────────────────────
+function MttoCorrectivo({datos,actPor,tipoPor,codigoPre,session,showToast,niv,onBack,onListo}){
+  const acts=Object.values(actPor).filter(a=>a.activo!==false).sort((a,b)=>String(a.sucursal).localeCompare(b.sucursal)||String(a.descripcion).localeCompare(b.descripcion));
+  const[cod,setCod]=useState(codigoPre||(acts[0]&&acts[0].codigo)||"");
+  const[falla,setFalla]=useState("");const[desc,setDesc]=useState("");const[ref,setRef]=useState("");const[resp,setResp]=useState("INTERNO");
+  const[foto,setFoto]=useState(null);const[prev,setPrev]=useState(false);const[busy,setBusy]=useState(false);
+  const act=actPor[cod]||{};const sem=datos.semanaActual;const p=Number(act.semPeriodo||0);
+  const semanas=(datos.items||[]).filter(i=>i.codigo===cod&&i.anio===datos.anioActual).map(i=>i.semana);
+  const r=mtReinicio(semanas,p,sem);
+  const guardar=async()=>{if(!cod||!falla.trim()||!desc.trim())return showToast("⚠️ Indica el equipo, qué falló y qué se hizo");setBusy(true);
+    try{const fotos=await api.subirEvidencias("mantenimiento",foto?[foto]:[]);const res=await api.mttoCorrectivo({codigo:cod,falla:falla.trim(),desc:desc.trim(),refacciones:ref.trim(),resp,conPreventivo:prev,fotos});
+      showToast("✓ Correctivo registrado"+((res.semanasRetiradas||[]).length?" · calendario reiniciado":""));await onListo();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  return(
+    <div>
+      <button className="bs" style={{marginBottom:10}} onClick={onBack}>← Cancelar</button>
+      <div className="card"><div className="ct">Reportar una falla</div>
+        <div style={{fontSize:12,color:"#666",marginBottom:8}}>Para lo que se descompuso fuera del plan. Si de paso se le hizo el servicio preventivo, sus semanas se reinician desde hoy.</div>
+        <label>¿Qué equipo?</label>
+        <select value={cod} onChange={e=>setCod(e.target.value)}>{acts.map(a=><option key={a.codigo} value={a.codigo}>{a.sucursal} · {a.descripcion} · {a.codigo}</option>)}</select>
+        {act.codigo&&<div style={{fontSize:11,color:"#888",marginTop:4}}>{act.area} · cada {String(act.periodicidad||"").toLowerCase()} · {semanas.length} vencimiento(s) este año: semanas {semanas.sort((a,b)=>a-b).join(", ")||"—"}</div>}
+      </div>
+      <div className="card">
+        <label>¿Qué falló?</label><textarea value={falla} onChange={e=>setFalla(e.target.value)} rows={2} placeholder="No enfría, gotea, no enciende…"/>
+        <label>¿Qué se hizo?</label><textarea value={desc} onChange={e=>setDesc(e.target.value)} rows={2} placeholder="Reparación realizada."/>
+        <label>Refacciones usadas</label><input type="text" value={ref} onChange={e=>setRef(e.target.value)} placeholder="Capacitor, contactor, 2 m de tubería…"/>
+        <label>¿Quién lo hizo?</label><select value={resp} onChange={e=>setResp(e.target.value)}><option value="INTERNO">Personal de GPA</option><option value="EXTERNO">Proveedor externo</option></select>
+        <FotoCampo val={foto} set={setFoto} label="Evidencia (foto)"/>
+      </div>
+      <div className="card"><div className="ct">¿Se le hizo el preventivo?</div>
+        <label style={{display:"flex",alignItems:"center",gap:8,margin:0,fontSize:13}}><input type="checkbox" checked={prev} onChange={e=>setPrev(e.target.checked)} style={{width:"auto"}}/>Sí, se aprovechó la reparación para dejarle su servicio completo</label>
+        {prev&&!p&&<div className="wb" style={{marginTop:8}}>Este activo tiene periodicidad Variable: no hay reloj que reiniciar. El correctivo se registra y la jefatura decide su próxima semana.</div>}
+        {prev&&p>0&&<div style={{marginTop:8,fontSize:12,background:"#f7f4fd",borderRadius:8,padding:10}}>
+          <div style={{fontWeight:700,color:"#6a3fb5"}}>SE REINICIA DESDE LA SEMANA {sem}</div>
+          <div className="dr"><span>Se retiran</span><span style={{color:C.red}}>{r.quitar.length?r.quitar.map(w=>"sem "+w).join(", "):"ninguna"}</span></div>
+          <div className="dr"><span>Se conservan (historia)</span><span>{r.conservar.length?r.conservar.map(w=>"sem "+w).join(", "):"ninguna"}</span></div>
+          <div className="dr"><span>Nuevas</span><span style={{color:C.green}}>{r.nuevas.length?r.nuevas.map(w=>"sem "+w).join(", "):"la siguiente cae en el año entrante"}</span></div>
+        </div>}
+      </div>
+      <button className="bp" disabled={busy||!cod||!falla.trim()||!desc.trim()} onClick={guardar}>Guardar correctivo</button>
+    </div>
+  );
+}
+
+// ── Tablero de la jefatura ────────────────────────────────────────────────────
+function MttoTablero({datos,actPor,tipoPor,asignables,onAbrir}){
+  const items=datos.items||[];const sucs=[...new Set(items.map(i=>i.sucursal).filter(Boolean))].sort();
+  const[suc,setSuc]=useState("");const[vista,setVista]=useState("resumen");
+  const univ=items.filter(i=>!suc||i.sucursal===suc);
+  const semH=datos.semanaActual,anioH=datos.anioActual;
+  const exig=univ.filter(i=>i.anio<anioH||(i.anio===anioH&&i.semana<=semH));
+  const cnt={};univ.forEach(i=>{const e=i.estatusEfectivo||"programada";cnt[e]=(cnt[e]||0)+1;});
+  const hechas=exig.filter(i=>i.estatusEfectivo==="completada").length;const pct=exig.length?Math.round(hechas/exig.length*100):0;
+  const cors=(datos.correctivos||[]).filter(c=>!suc||c.sucursal===suc);
+  const barras=(titulo,clave,nombre)=>{const g={};exig.forEach(i=>{const k=clave(i)||"—";g[k]=g[k]||[0,0];g[k][1]++;if(i.estatusEfectivo==="completada")g[k][0]++;});
+    const filas=Object.entries(g).sort((a,b)=>b[1][1]-a[1][1]);
+    return(<div className="card"><div className="ct">{titulo}</div>{filas.length===0&&<div className="empty">Nada exigible aún.</div>}{filas.map(([k,[h,t]])=>{const p=Math.round(h/t*100);return(<div key={k} style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span>{nombre?nombre(k):k}</span><span style={{color:p>=80?C.green:p>=50?C.amber:C.red,fontWeight:600}}>{p}% · {h}/{t}</span></div><div style={{height:6,background:"#eee",borderRadius:3}}><div style={{width:p+"%",height:6,background:p>=80?C.green:p>=50?C.amber:C.red,borderRadius:3}}/></div></div>);})}</div>);};
+  const tile=(k,v,s,hero)=><div className="card" style={{padding:"10px 12px",margin:0,...(hero?{background:C.blue,color:"#fff",border:"none"}:{})}}><div style={{fontSize:11,opacity:.8}}>{k}</div><div style={{fontSize:22,fontWeight:700}}>{v}</div><div style={{fontSize:10.5,opacity:.75}}>{s}</div></div>;
+  const csv=()=>csvDownload("plan_mantenimiento_"+datos.anio,["Código","Equipo","Sucursal","Área","Tipo","Periodicidad","Responsabilidad","Año","Semana","Fecha límite","Estatus","Asignada a","Técnico","Inicio","Fin","Qué se hizo","Incidencias","Faltantes","Motivo"],
+    univ.slice().sort((a,b)=>(a.semana-b.semana)||String(a.codigo).localeCompare(b.codigo)).map(i=>{const a=actPor[i.codigo]||{};return[i.codigo,a.descripcion||"",i.sucursal,a.area||"",(tipoPor[String(i.codigo).split("-")[0]]||{}).nombre||"",a.periodicidad||"",a.responsabilidad||"",i.anio,i.semana,i.fechaLimite||"",MT_EST[i.estatusEfectivo]||i.estatusEfectivo,mtNombre(i.asignado,asignables)||"",i.tecnico||"",i.inicio||"",i.fin||"",i.desc||"",(i.incidencias||[]).join("; "),(i.faltantes||[]).join("; "),i.motivo||""];}));
+  const maxW=Math.max(1,...Array.from({length:52},(_,k)=>univ.filter(i=>i.semana===k+1).length));
+  return(
+    <div>
+      <div className="card" style={{padding:"10px 12px"}}>
+        {sucs.length>1&&<><label>Sucursal</label><select value={suc} onChange={e=>setSuc(e.target.value)}><option value="">Todas las sucursales</option>{sucs.map(s=><option key={s} value={s}>{s}</option>)}</select></>}
+        <div className="tr" style={{marginTop:8,marginBottom:0}}>{[["resumen","Resumen"],["evidencias","Evidencias"],["correctivos","Correctivos ("+cors.length+")"],...(datos.actas?[["acta","Acta"]]:[])].map(([v,l])=><button key={v} className={"trb"+(vista===v?" act":"")} onClick={()=>setVista(v)}>{l}</button>)}</div>
+      </div>
+      {vista==="resumen"&&<>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          {tile("Cumplimiento",pct+"%",hechas+" de "+exig.length+" exigibles",true)}
+          {tile("Vencimientos del año",univ.length,"en el plan "+datos.anio)}
+          {tile("Completadas",cnt.completada||0,"con registro")}
+          {tile("Vencidas",cnt.vencida||0,"sin ejecución")}
+          {tile("Pendientes",(cnt.pendiente||0)+(cnt.proceso||0),"iniciadas sin cerrar")}
+          {tile("No realizadas",(cnt.norealizada||0)+(cnt.reprogramada||0),"con motivo")}
+        </div>
+        <div className="card"><div className="ct">Las 52 semanas del plan</div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:1,height:70}}>{Array.from({length:52},(_,k)=>{const w=k+1;const os=univ.filter(i=>i.semana===w);const por={};os.forEach(i=>{por[i.estatusEfectivo]=(por[i.estatusEfectivo]||0)+1;});
+            return(<div key={w} title={"Semana "+w+" · "+os.length} style={{flex:1,display:"flex",flexDirection:"column-reverse",height:"100%",borderBottom:w===semH?"3px solid #222":"1px solid #eee"}}>{["completada","proceso","pendiente","reprogramada","norealizada","vencida","programada"].filter(e=>por[e]).map(e=><div key={e} style={{height:Math.max(2,por[e]/maxW*64),background:MT_COLOR[e]}}/>)}</div>);})}</div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#999",marginTop:2}}>{[1,8,16,24,32,40,48,52].map(w=><span key={w}>{w}</span>)}</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:6,fontSize:10.5,color:"#666"}}>{Object.entries(MT_EST).map(([e,l])=><span key={e}><i style={{display:"inline-block",width:9,height:9,borderRadius:2,background:MT_COLOR[e],marginRight:3}}/>{l}</span>)}</div>
+        </div>
+        {barras("Cumplimiento por sucursal",i=>i.sucursal)}
+        {barras("Cumplimiento por área",i=>(actPor[i.codigo]||{}).area)}
+        {barras("Cumplimiento por técnico",i=>i.asignado||"Sin asignar",k=>k==="Sin asignar"?k:mtNombre(k,asignables))}
+        <button className="bs" style={{width:"100%"}} disabled={!univ.length} onClick={csv}>⬇ Descargar plan en CSV ({univ.length})</button>
+      </>}
+      {vista==="evidencias"&&<div>{univ.filter(i=>i.estatus&&i.estatus!=="programada").sort((a,b)=>String(b.fin||"").localeCompare(String(a.fin||""))).map(i=><div key={i.id} className="card" style={{cursor:"pointer",padding:"10px 12px"}} onClick={()=>onAbrir(i)}>
+        <div className="lit"><span className="lim">{(actPor[i.codigo]||{}).descripcion||i.codigo}</span><MtPill e={i.estatusEfectivo}/></div>
+        <div className="lis">{i.codigo} · {i.sucursal} · sem {i.semana} · {i.tecnico||"—"} · {mtFmt(i.fin||i.inicio)}</div>
+        {i.desc&&<div style={{fontSize:12,marginTop:4}}>{i.desc}</div>}
+        {(i.incidencias||[]).length>0&&<div style={{fontSize:11,color:C.amber,marginTop:2}}>Incidencias: {i.incidencias.join(", ")}</div>}
+        {(i.faltantes||[]).length>0&&<div style={{fontSize:11,color:C.red,marginTop:2}}>Faltantes: {i.faltantes.join(", ")}</div>}
+        {(i.fotos||[]).length>0&&<div className="pdf-area" style={{display:"flex",gap:6,marginTop:6}}>{i.fotos.map((f,k)=><img key={k} src={f} alt="" style={{width:72,height:72,objectFit:"cover",borderRadius:6}}/>)}</div>}
+      </div>)}{univ.filter(i=>i.estatus&&i.estatus!=="programada").length===0&&<div className="empty">Aún no hay capturas.</div>}</div>}
+      {vista==="correctivos"&&<div>{cors.map(c=><div key={c.id} className="card" style={{padding:"10px 12px",borderLeft:"4px solid "+C.red}}>
+        <div className="lit"><span className="lim">{c.descripcionActivo||c.codigo}</span><MtGhost>{c.resp}</MtGhost></div>
+        <div className="lis">{c.codigo} · {c.sucursal} · sem {c.semana} · {c.tecnico} · {mtFmt(c.fin)}</div>
+        <div style={{fontSize:12,marginTop:4}}><b>Falla:</b> {c.falla}<br/><b>Se hizo:</b> {c.desc}{c.refacciones?<><br/><b>Refacciones:</b> {c.refacciones}</>:null}</div>
+        {c.conPreventivo&&<div style={{fontSize:11,color:"#6a3fb5",marginTop:4}}>Con preventivo · retiró {(c.semanasRetiradas||[]).map(w=>"sem "+w).join(", ")||"nada"}{(c.semanasNuevas||[]).length?" · agregó "+c.semanasNuevas.map(w=>"sem "+w).join(", "):""}</div>}
+        {(c.fotos||[]).length>0&&<div className="pdf-area" style={{display:"flex",gap:6,marginTop:6}}>{c.fotos.map((f,k)=><img key={k} src={f} alt="" style={{width:72,height:72,objectFit:"cover",borderRadius:6}}/>)}</div>}
+      </div>)}{cors.length===0&&<div className="empty">Sin correctivos.</div>}</div>}
+      {vista==="acta"&&datos.actas&&<div>{datos.actas.length===0&&<div className="empty">Aún no se ha importado el plan.</div>}{datos.actas.map(a=><div key={a.fecha} className="card"><div className="ct">Acta de importación · {mtFmt(a.fecha)}</div>
+        <div style={{fontSize:12,color:"#666"}}>{a.archivo} · {a.activos} activos · {a.vencimientos} vencimientos · {(a.hallazgos||[]).length} hallazgos</div>
+        {(a.avisos||[]).map((x,k)=><div key={k} className="wb" style={{marginTop:6}}>{x}</div>)}
+        {(a.hallazgos||[]).map((h,k)=><div key={k} className="dr"><span>{h.codigo||"—"} · {h.sucursal||"—"}{h.semana?" · sem "+h.semana:""}</span><span>{h.hallazgo} [{h.dato}]</span></div>)}
+      </div>)}</div>}
+    </div>
+  );
+}
+
+// ── Asignación: quién ejecuta, área → titular → excepción por semana ─────────
+function MttoAsignacion({datos,actPor,asignables,showToast,onListo,recargarAsignables}){
+  const acts=Object.values(actPor).filter(a=>a.activo!==false);
+  const sucs=[...new Set(acts.map(a=>a.sucursal))].sort();
+  const[suc,setSuc]=useState(sucs[0]||"");const[busy,setBusy]=useState(false);
+  const[area,setArea]=useState("");const[tec,setTec]=useState("");const[sem,setSem]=useState(datos.semanaActual);
+  const equipo=(asignables||[]).filter(t=>!t.sucursales||t.sucursales.length===0||t.sucursales.includes(suc));
+  const actsSuc=acts.filter(a=>a.sucursal===suc).sort((a,b)=>String(a.area).localeCompare(b.area)||String(a.codigo).localeCompare(b.codigo));
+  const areas=[...new Set(actsSuc.map(a=>a.area))].sort();
+  const items=(datos.items||[]).filter(i=>i.sucursal===suc);
+  const carga=t=>items.filter(i=>String(i.asignado||"").toLowerCase()===String(t).toLowerCase()&&i.lista!=="cerradas").length;
+  const wrap=async fn=>{setBusy(true);try{await fn();await onListo();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  const titularArea=()=>{if(!area||!tec)return showToast("⚠️ Elige el área y la persona");wrap(async()=>{const r=await api.mttoAdminTitular({area,sucursal:suc,titular:tec});showToast("✓ "+r.activos.length+" activo(s) asignados");});};
+  const titularActivo=(codigo,t)=>wrap(async()=>{await api.mttoAdminTitular({codigo,titular:t||null});showToast("✓ Titular guardado");});
+  const excepcion=(mp,t)=>wrap(async()=>{await api.mttoAsignar(mp.id,t||null);showToast("✓ Semana "+mp.semana+" asignada");});
+  const selTec=(val,onCh)=><select value={val||""} onChange={e=>onCh(e.target.value)} disabled={busy}><option value="">— sin asignar —</option>{equipo.map(t=><option key={t.id} value={t.id}>{t.nombre}</option>)}</select>;
+  return(
+    <div>
+      <div className="card" style={{padding:"10px 12px"}}><label>Sucursal</label><select value={suc} onChange={e=>{setSuc(e.target.value);setArea("");}}>{sucs.map(s=><option key={s} value={s}>{s}</option>)}</select></div>
+      <div className="card"><div className="ct">Quién puede ejecutar en {suc}</div>
+        <div style={{fontSize:11.5,color:"#666",marginBottom:8}}>Son las cuentas de la app con acceso al módulo <b>Plan Mtto</b> y a esta sucursal. Se administran en Admin → Cuentas, no aquí.</div>
+        {equipo.length===0&&<div className="wb">Ninguna cuenta con acceso a este módulo tiene esta sucursal. Dales el módulo «Plan Mtto» y la sucursal en Admin → Cuentas. <button className="bs" style={{marginLeft:6}} onClick={recargarAsignables}>Actualizar</button></div>}
+        {equipo.map(t=><div key={t.id} className="dr"><span>{t.nombre}</span><span>{carga(t.id)} actividad(es) abiertas</span></div>)}
+      </div>
+      {equipo.length>0&&<>
+        <div className="card"><div className="ct">Asignar un área completa</div>
+          <div style={{fontSize:11.5,color:"#666",marginBottom:8}}>Lo más rápido: todo lo de un área a una persona (vale para todas sus semanas). Después se afinan las excepciones.</div>
+          <div className="r2"><div><label>Área</label><select value={area} onChange={e=>setArea(e.target.value)}><option value="">—</option>{areas.map(a=><option key={a} value={a}>{a} ({actsSuc.filter(x=>x.area===a).length})</option>)}</select></div><div><label>Titular</label>{selTec(tec,setTec)}</div></div>
+          <button className="bp" disabled={busy||!area||!tec} onClick={titularArea}>Asignar área</button>
+        </div>
+        <div className="card"><div className="ct">Titular por activo ({actsSuc.length})</div>
+          {actsSuc.map(a=><div key={a.codigo} style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,alignItems:"center",padding:"6px 0",borderBottom:".5px solid #f0f0f0"}}><div><div style={{fontSize:12.5,fontWeight:600}}>{a.descripcion}</div><div style={{fontSize:10.5,color:"#888"}}>{a.codigo} · {a.area}</div></div>{selTec(a.titular,v=>titularActivo(a.codigo,v))}</div>)}
+        </div>
+        <div className="card"><div className="ct">Excepción de una semana</div>
+          <div style={{fontSize:11.5,color:"#666",marginBottom:8}}>Vacaciones, carga o ausencia: cambia solo esa semana y no toca al titular.</div>
+          <label>Semana</label><input type="number" min={1} max={52} value={sem} onChange={e=>setSem(Number(e.target.value)||1)}/>
+          <div style={{fontSize:11,color:"#888",marginBottom:6}}>{mtRango(datos.anio,Number(sem)||1)}</div>
+          {items.filter(i=>i.semana===Number(sem)).map(mp=><div key={mp.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,alignItems:"center",padding:"6px 0",borderBottom:".5px solid #f0f0f0"}}><div><div style={{fontSize:12.5,fontWeight:600}}>{(actPor[mp.codigo]||{}).descripcion||mp.codigo}</div><div style={{fontSize:10.5,color:"#888"}}>{mp.codigo}{mp.asignadoA?" · excepción":(actPor[mp.codigo]||{}).titular?" · titular":" · sin asignar"}</div></div>{selTec(mp.asignadoA||"",v=>excepcion(mp,v))}</div>)}
+          {items.filter(i=>i.semana===Number(sem)).length===0&&<div className="empty">Nada programado en esa semana para {suc}.</div>}
+        </div>
+      </>}
+    </div>
+  );
+}
+
+// ── Catálogos: activos, tipos (procedimiento y kit), año siguiente ───────────
+function MttoCatalogos({datos,actPor,tipoPor,showToast,onListo}){
+  const[sub,setSub]=useState("activos");const[busy,setBusy]=useState(false);
+  const wrap=async fn=>{setBusy(true);try{await fn();await onListo();}catch(e){showToast("⚠️ "+e.message);}setBusy(false);};
+  const sucMap=datos.sucursales||{};const tipos=Object.values(tipoPor).sort((a,b)=>String(a.nombre).localeCompare(b.nombre));
+  // activos
+  const acts=Object.values(actPor).sort((a,b)=>String(a.sucursal).localeCompare(b.sucursal)||String(a.codigo).localeCompare(b.codigo));
+  const[filtro,setFiltro]=useState("");const[edA,setEdA]=useState(null);
+  const vacio={codigo:"",tipo:tipos[0]?tipos[0].pref:"",sucCodigo:Object.keys(sucMap)[0]||"",descripcion:"",modelo:"",serie:"",area:"",periodicidad:"4 MESES",responsabilidad:"INTERNO"};
+  const guardarA=()=>wrap(async()=>{const r=await api.mttoAdminActivo(edA);showToast("✓ Activo "+r.activo.codigo+" guardado");setEdA(null);});
+  const bajaA=a=>{if(!window.confirm("¿Dar de baja "+a.codigo+"? Sus vencimientos dejan de contar; no se borra nada."))return;wrap(async()=>{await api.mttoAdminActivo({codigo:a.codigo,eliminar:true});showToast("✓ Baja registrada");});};
+  // tipos
+  const[edT,setEdT]=useState(null);const lineas=v=>(v||[]).join("\n");const aLista=s=>String(s||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const guardarT=()=>wrap(async()=>{await api.mttoAdminTipo({...edT,puntos:aLista(edT._puntos),materiales:aLista(edT._materiales),herramienta:aLista(edT._herramienta)});showToast("✓ Tipo "+edT.pref+" guardado");setEdT(null);});
+  // año siguiente
+  const[gen,setGen]=useState(null);const anioSig=datos.anioActual+1;
+  const simular=()=>wrap(async()=>{setGen(await api.mttoAdminGenerar(anioSig,false));});
+  const aplicar=()=>{if(!window.confirm("Se crearán "+(gen?gen.total:0)+" vencimientos de "+anioSig+" como PROPUESTA (los técnicos no la ven hasta publicar). ¿Continuar?"))return;wrap(async()=>{const r=await api.mttoAdminGenerar(anioSig,true);setGen(r);showToast("✓ "+r.creados+" vencimientos creados como propuesta");});};
+  const publicar=()=>{if(!window.confirm("¿Publicar el plan "+anioSig+"? A partir de ahí los técnicos lo ven en Próximas."))return;wrap(async()=>{const r=await api.mttoAdminPublicar(anioSig);showToast("✓ "+r.publicados+" publicados");setGen(null);});};
+  return(
+    <div>
+      <div className="tr">{[["activos","Activos ("+acts.length+")"],["tipos","Tipos ("+tipos.length+")"],["anio","Año "+anioSig],["admins","Administradores"]].map(([v,l])=><button key={v} className={"trb"+(sub===v?" act":"")} onClick={()=>setSub(v)}>{l}</button>)}</div>
+      {sub==="activos"&&!edA&&<>
+        <div className="card" style={{padding:"10px 12px"}}><input type="text" value={filtro} onChange={e=>setFiltro(e.target.value)} placeholder="Buscar por código, equipo, área o sucursal"/><button className="bp" disabled={busy} onClick={()=>setEdA({...vacio,_nuevo:true})}>+ Nuevo activo</button></div>
+        {acts.filter(a=>!filtro||JSON.stringify([a.codigo,a.descripcion,a.area,a.sucursal]).toLowerCase().includes(filtro.toLowerCase())).slice(0,300).map(a=><div key={a.codigo} className="li" style={{cursor:"default"}}>
+          <div className="lit"><span className="lim" style={a.activo===false?{textDecoration:"line-through",color:"#999"}:{}}>{a.descripcion}</span><span style={{fontSize:11,fontFamily:"monospace",color:"#888"}}>{a.codigo}</span></div>
+          <div className="lis">{a.sucursal} · {a.area} · {a.periodicidad} · {a.responsabilidad}{a.titular?" · titular: "+String(a.titular).split("@")[0]:""}{a.enExcel===false?" · NO está en el Excel vigente":""}{a.origen==="modulo"?" · alta en el módulo":""}</div>
+          {a.activo!==false&&<div style={{display:"flex",gap:6,marginTop:4}}><button className="bs" disabled={busy} onClick={()=>setEdA({...a})}>Editar</button><button className="bd" disabled={busy} onClick={()=>bajaA(a)}>Baja</button></div>}
+        </div>)}
+      </>}
+      {sub==="activos"&&edA&&<div className="card"><div className="ct">{edA._nuevo?"Nuevo activo":"Editar "+edA.codigo}</div>
+        <div className="r2"><div><label>Tipo</label><select value={edA.tipo} disabled={!edA._nuevo} onChange={e=>setEdA({...edA,tipo:e.target.value})}>{tipos.map(t=><option key={t.pref} value={t.pref}>{t.pref} · {t.nombre}</option>)}</select></div><div><label>Sucursal</label><select value={edA.sucCodigo} disabled={!edA._nuevo} onChange={e=>setEdA({...edA,sucCodigo:e.target.value,sucursal:sucMap[e.target.value]})}>{Object.entries(sucMap).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}</select></div></div>
+        {edA._nuevo&&<div style={{fontSize:11,color:"#888"}}>El código se propone solo: {edA.tipo}-{edA.sucCodigo}-## (siguiente consecutivo).</div>}
+        <label>Equipo / descripción</label><input type="text" value={edA.descripcion||""} placeholder="Ej. GERENCIA VENTAS" onChange={e=>setEdA({...edA,descripcion:e.target.value})}/>
+        <div className="r2"><div><label>Modelo</label><input type="text" value={edA.modelo||""} onChange={e=>setEdA({...edA,modelo:e.target.value})}/></div><div><label>Serie</label><input type="text" value={edA.serie||""} onChange={e=>setEdA({...edA,serie:e.target.value})}/></div></div>
+        <label>Área</label><input type="text" value={edA.area||""} onChange={e=>setEdA({...edA,area:e.target.value})} list="mtto-areas"/><datalist id="mtto-areas">{[...new Set(acts.map(a=>a.area))].sort().map(a=><option key={a} value={a}/>)}</datalist>
+        <div className="r2"><div><label>Periodicidad</label><select value={edA.periodicidad} onChange={e=>setEdA({...edA,periodicidad:e.target.value})}>{Object.entries(datos.periodicidades||{}).sort((a,b)=>a[1]-b[1]).map(([t,s])=><option key={t} value={t}>{t}{s?" ("+s+" sem)":" (no se calcula)"}</option>)}</select></div><div><label>Responsabilidad</label><select value={edA.responsabilidad} onChange={e=>setEdA({...edA,responsabilidad:e.target.value})}><option>INTERNO</option><option>EXTERNO</option></select></div></div>
+        <div className="r2" style={{marginTop:8}}><button className="bs" onClick={()=>setEdA(null)}>Cancelar</button><button className="bp" style={{marginTop:0}} disabled={busy||!edA.descripcion} onClick={guardarA}>Guardar</button></div>
+        <div style={{fontSize:11,color:"#888",marginTop:6}}>Dar de alta un activo no crea sus vencimientos: se agregan al generar el año siguiente o reprogramando desde la agenda.</div>
+      </div>}
+      {sub==="tipos"&&!edT&&tipos.map(t=><div key={t.pref} className="li" style={{cursor:"default"}}>
+        <div className="lit"><span className="lim">{t.pref} · {t.nombre}</span>{t.esPropuesta?<span className="bdg dpe">Propuesta</span>:t.procedimiento?<span className="bdg dok">Con procedimiento</span>:<span className="bdg drj">Sin procedimiento</span>}</div>
+        <div className="lis">{(t.puntos||[]).length} puntos · {(t.materiales||[]).length} materiales · {(t.herramienta||[]).length} herramientas · {acts.filter(a=>a.tipo===t.pref).length} activos</div>
+        <button className="bs" style={{marginTop:4}} disabled={busy} onClick={()=>setEdT({...t,_puntos:lineas(t.puntos),_materiales:lineas(t.materiales),_herramienta:lineas(t.herramienta)})}>Editar</button>
+      </div>)}
+      {sub==="tipos"&&edT&&<div className="card"><div className="ct">{edT.pref} · {edT.nombre}</div>
+        <label>Nombre</label><input type="text" value={edT.nombre||""} onChange={e=>setEdT({...edT,nombre:e.target.value})}/>
+        <label>Procedimiento (lo heredan todos los equipos de este tipo)</label><textarea rows={6} value={edT.procedimiento||""} onChange={e=>setEdT({...edT,procedimiento:e.target.value})}/>
+        <label>Puntos de revisión (uno por línea)</label><textarea rows={5} value={edT._puntos} onChange={e=>setEdT({...edT,_puntos:e.target.value})}/>
+        <div className="r2"><div><label>Material (uno por línea)</label><textarea rows={4} value={edT._materiales} onChange={e=>setEdT({...edT,_materiales:e.target.value})}/></div><div><label>Herramienta (una por línea)</label><textarea rows={4} value={edT._herramienta} onChange={e=>setEdT({...edT,_herramienta:e.target.value})}/></div></div>
+        <label>Qué supervisar cuando lo ejecuta un proveedor (EXTERNO)</label><textarea rows={3} value={edT.supervision||""} onChange={e=>setEdT({...edT,supervision:e.target.value})}/>
+        <label style={{display:"flex",alignItems:"center",gap:6}}><input type="checkbox" checked={!!edT.esPropuesta} onChange={e=>setEdT({...edT,esPropuesta:e.target.checked})} style={{width:"auto"}}/>Sigue siendo propuesta (por validar con Mantenimiento)</label>
+        <div className="r2" style={{marginTop:8}}><button className="bs" onClick={()=>setEdT(null)}>Cancelar</button><button className="bp" style={{marginTop:0}} disabled={busy} onClick={guardarT}>Guardar tipo</button></div>
+      </div>}
+      {sub==="anio"&&<div className="card"><div className="ct">Armar el plan {anioSig}</div>
+        <div style={{fontSize:12,color:"#666",lineHeight:1.5,marginBottom:8}}>Cada activo parte de su última semana <b>completada</b> más su periodicidad; si nunca se ejecutó conserva las semanas de este año; los de periodicidad Variable se listan aparte. Nace como <b>propuesta</b>: ningún técnico lo ve hasta que lo publiques.</div>
+        {datos.hayPropuesta&&<div className="wb">Ya existe una propuesta de {anioSig} sin publicar.</div>}
+        <div className="r2"><button className="bs" disabled={busy} onClick={simular}>Simular</button>{gen&&gen.simulacion&&<button className="bp" style={{marginTop:0}} disabled={busy||!gen.total} onClick={aplicar}>Crear propuesta ({gen.total})</button>}</div>
+        {gen&&<div style={{marginTop:10}}>
+          <div className="dr"><span>Vencimientos</span><span>{gen.total}{gen.yaExisten?" · ya existen "+gen.yaExisten:""}</span></div>
+          <div className="dr"><span>Variables (semana a mano)</span><span>{(gen.variables||[]).join(", ")||"—"}</span></div>
+          <div className="dr"><span>Sin programar</span><span>{(gen.sinProgramar||[]).join(", ")||"—"}</span></div>
+          {(gen.picos||[]).length>0&&<div className="wb" style={{marginTop:6}}>Semanas muy cargadas: {gen.picos.map(p=>"sem "+p.semana+" ("+p.carga+", alternativas "+p.alternativas.join("/")+")").join(" · ")}. El sistema no mueve nada: reprograma desde la agenda lo que quieras repartir.</div>}
+          {gen.creados!=null&&<div style={{fontSize:12,color:C.green,marginTop:6}}>Creados {gen.creados} como propuesta.</div>}
+        </div>}
+        {(datos.hayPropuesta||(gen&&gen.creados!=null))&&<button className="bp" disabled={busy} onClick={publicar}>Publicar el plan {anioSig}</button>}
+      </div>}
+      {sub==="admins"&&<div className="card"><div className="ct">Administradores del módulo</div>
+        <div style={{fontSize:12,color:"#666",lineHeight:1.5}}>Administran el plan (asignan, editan catálogos, generan el año) sin ser administradores de la app. La lista la edita el administrador de la app en <b>Admin → Módulos → Plan Mtto</b>.</div>
+        {(datos.administradores||[]).map(a=><div key={a} className="dr"><span>👤</span><span>{a}</span></div>)}
+        {(datos.administradores||[]).length===0&&<div className="wb" style={{marginTop:6}}>Nadie más que el administrador de la app administra hoy el módulo.</div>}
+      </div>}
+    </div>
+  );
+}
+
+// Editor de administradores del módulo (vive en Admin → Módulos; solo rol admin).
+function MttoAdminsEditor({mo,busy,onSave}){
+  const[txt,setTxt]=useState((mo.administradores||[]).join(", "));
+  const lista=txt.split(/[,;\s]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+  return(<div style={{marginTop:8,padding:8,background:"#f7f7f7",borderRadius:6}}>
+    <label>Administradores del Plan Mtto (correos, separados por coma)</label>
+    <input type="text" value={txt} onChange={e=>setTxt(e.target.value)} placeholder="mantenimiento@gpa.com.mx"/>
+    <div style={{fontSize:11,color:"#888",margin:"4px 0"}}>Administran el plan sin ser admin de la app. Un supervisor de sucursal no se vuelve administrador por tener el módulo.</div>
+    <button className="bs" disabled={busy} onClick={()=>onSave(lista)}>Guardar administradores</button>
+  </div>);
 }
 
 // ═══ MOTOR DE FORMULARIOS DINÁMICOS ══════════════════════════════════
@@ -3263,11 +3716,14 @@ function ModAdmin({cat,refrescarCat,showToast}){
   // ── Motor de formularios: módulos y plantillas (Excel + vista previa) ──
   const[modDraft,setModDraft]=useState({clave:"",nombre:"",orden:100});
   const slug=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
-  const saveModulo=()=>{const clave=slug(modDraft.clave||modDraft.nombre);if(!clave)return showToast("⚠️ Falta la clave/nombre del módulo");if(["combustible","mtto","seguridad","admin"].includes(clave))return showToast("⚠️ Esa clave está reservada");wrap(async()=>{await api.adminModulo({clave,nombre:modDraft.nombre||clave,orden:Number(modDraft.orden)||100,activo:true});setModDraft({clave:"",nombre:"",orden:100});showToast("✓ Módulo guardado");});};
+  const saveModulo=()=>{const clave=slug(modDraft.clave||modDraft.nombre);if(!clave)return showToast("⚠️ Falta la clave/nombre del módulo");if(["combustible","mtto","seguridad","epp","admin"].includes(clave))return showToast("⚠️ Esa clave está reservada");if(clave==="mantenimiento"&&(cat?.modulos||[]).some(mo=>mo.clave==="mantenimiento"))return showToast("⚠️ El módulo Plan Mtto ya existe");wrap(async()=>{await api.adminModulo({clave,nombre:modDraft.nombre||clave,orden:Number(modDraft.orden)||100,activo:true});setModDraft({clave:"",nombre:"",orden:100});showToast("✓ Módulo guardado");});};
   const toggleModulo=mo=>wrap(()=>api.adminModulo({...mo,activo:!(mo.activo!==false)}));
   const plantillasDeAdmin=clave=>(cat?.plantillas||[]).filter(p=>p.modulo===clave);
   // Formularios (plantillas)
-  const moduloOpts=[{clave:"seguridad",nombre:"Seguridad Industrial"},{clave:"sucursales",nombre:"Sucursales (Mtto)"},...((cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin","sucursales"].includes(mo.clave)))];
+  const moduloOpts=[{clave:"seguridad",nombre:"Seguridad Industrial"},{clave:"sucursales",nombre:"Sucursales (Mtto)"},...((cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","admin","sucursales","mantenimiento"].includes(mo.clave)))];
+  // Plan Mtto: el módulo se puede crear desde aquí (sin desplegar) y sus administradores se editan en la lista.
+  const crearPlanMtto=()=>wrap(async()=>{await api.adminModulo({clave:"mantenimiento",nombre:"Plan Mtto",orden:35,activo:true,administradores:[]});showToast("✓ Módulo Plan Mtto creado. Ahora dale el módulo a las cuentas y pon a sus administradores.");});
+  const guardarAdminsMtto=(mo,lista)=>wrap(async()=>{await api.adminModulo({...mo,administradores:lista});showToast("✓ Administradores del Plan Mtto guardados");});
   const[fMod,setFMod]=useState(moduloOpts[0]?.clave||"seguridad");
   const[fClave,setFClave]=useState("");const[fNombre,setFNombre]=useState("");
   const[fFirma,setFFirma]=useState(true);const[fAut,setFAut]=useState(false);
@@ -3472,7 +3928,7 @@ function ModAdmin({cat,refrescarCat,showToast}){
   const toggleA=a=>wrap(async()=>{await api.adminCuenta({email:a.email,nombre:a.nombre,rol:a.rol,sucursales:a.sucursales,modulos:a.modulos,activo:!a.activo});await cargarCuentas();showToast("Estado actualizado");});
   const VForm=({v,onClose})=>{const[d,setD]=useState({...v});const isN=!!v._isNew;const RO=k=>!isN&&["id","placas","subMarca","sucursal","tanque"].includes(k);return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo vehículo":"Editar vehículo"}</div>{!isN&&<div className="wb">El ID interno NO se edita (consecutivo). Editable: número económico, área responsable, combustible, precio, producto, categoría, sucursal (para reasignaciones) y tanque (L).</div>}{[["id","ID interno (consecutivo, no se reutiliza)"],["economico","Número económico (GPA)"],["placas","Placas"],["subMarca","Sub-marca"],["responsable","Área responsable"],["producto","Producto"]].map(([k,l])=><div key={k}><label>{l}</label><input type="text" value={d[k]||""} disabled={RO(k)} style={RO(k)?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,[k]:e.target.value})}/></div>)}<div className="r2"><div><label>Tanque (L)</label><input type="number" value={d.tanque} onChange={e=>setD({...d,tanque:e.target.value})}/></div><div><label>Precio/L</label><input type="number" value={d.precio} onChange={e=>setD({...d,precio:e.target.value})}/></div></div><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}><option value="">— Selecciona —</option>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><label>Combustible</label><select value={d.combustible} onChange={e=>setD({...d,combustible:e.target.value})}>{["Gasolina","Diesel","Gas LP","Electrico"].map(c=><option key={c}>{c}</option>)}</select><label>Categoría (módulo)</label><select value={d.categoria||catVeh(d)} onChange={e=>setD({...d,categoria:e.target.value})}>{[["reparto","Reparto"],["montacargas","Montacargas"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveV(d)}>Guardar</button></div></div></div>);};
   const UForm=({u,onClose})=>{const[d,setD]=useState({...u});const isN=!!u._isNew;return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nuevo responsable":"Editar responsable"}</div>{!isN&&<div className="wb">Solo editable: nombre, correo y sucursal.</div>}<label>ID</label><input type="text" value={d.id||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} onChange={e=>setD({...d,id:e.target.value})}/><label>Nombre</label><input type="text" value={d.nombre} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Correo</label><input type="text" value={d.mail} onChange={e=>setD({...d,mail:e.target.value})}/><label>Sucursal</label><select value={d.sucursal} onChange={e=>setD({...d,sucursal:e.target.value})}>{cat.sucursales.map(s=><option key={s}>{s}</option>)}</select><div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveU(d)}>Guardar</button></div></div></div>);};
-  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (consulta + autoriza, no captura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto"],["seguridad","Seguridad Industrial"],["epp","EPP"],...(cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","epp","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div><label style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}><input type="checkbox" checked={!!d.expedienteMedico} onChange={e=>setD({...d,expedienteMedico:e.target.checked})} style={{width:"auto"}}/>Acceso al <b>expediente médico</b> (examen periódico: médico laboral y RH)</label><div style={{fontSize:11,color:"#999",marginTop:2}}>Datos personales sensibles. Sin esta marca ni un administrador ve los exámenes.</div><label>Responsable de alertas de cumplimiento</label><select value={d.responsableAlerta||"ninguno"} onChange={e=>setD({...d,responsableAlerta:e.target.value})}>{[["ninguno","Ninguno (no recibe alertas)"],["sucursal","De sucursal (solo sus sucursales)"],["corporativo","Corporativo (todos los módulos y sucursales)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{fontSize:11,color:"#999",marginTop:4}}>Los responsables reciben aviso de los formularios pendientes o vencidos de su alcance (Tablero de Seguimiento).</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
+  const AForm=({a,onClose})=>{const[d,setD]=useState({...a});const isN=!!a._isNew;const tog=(arr,v)=>(arr||[]).includes(v)?(arr).filter(x=>x!==v):[...(arr||[]),v];return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:50,display:"flex",alignItems:"flex-end"}} onClick={onClose}><div style={{background:"#fff",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:430,margin:"0 auto",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:14}}>{isN?"Nueva cuenta de acceso":"Editar cuenta"}</div><label>Correo (usuario)</label><input type="text" value={d.email||""} disabled={!isN} style={!isN?{background:"#f5f5f5",color:"#aaa"}:{}} autoCapitalize="off" onChange={e=>setD({...d,email:e.target.value.trim().toLowerCase()})}/><label>Nombre</label><input type="text" value={d.nombre||""} onChange={e=>setD({...d,nombre:e.target.value})}/><label>Rol (nivel de permiso)</label><select value={d.rol} onChange={e=>setD({...d,rol:e.target.value})}>{[["operador","Operador (captura)"],["supervisor","Supervisor (captura + autoriza)"],["analista","Analista (consulta + autoriza, no captura)"],["admin","Administrador (todo)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><label>Módulos con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todos)</span></label><div className="tr">{[["combustible","Combustible"],["mtto","Mtto (checklists)"],["seguridad","Seguridad Industrial"],["epp","EPP"],["mantenimiento","Plan Mtto"],...(cat?.modulos||[]).filter(mo=>!["combustible","mtto","seguridad","epp","mantenimiento","admin"].includes(mo.clave)).map(mo=>[mo.clave,mo.nombre||mo.clave]),["admin","Admin"]].map(([v,l])=><button key={v} type="button" className={"trb"+((d.modulos||[]).includes(v)?" act":"")} onClick={()=>setD({...d,modulos:tog(d.modulos,v)})}>{l}</button>)}</div><label>Sucursales con acceso <span style={{color:"#aaa",fontWeight:400}}>(vacío = todas)</span></label><div className="tr">{cat.sucursales.map(s=><button key={s} type="button" className={"trb"+((d.sucursales||[]).includes(s)?" act":"")} onClick={()=>setD({...d,sucursales:tog(d.sucursales,s)})}>{s}</button>)}</div><label style={{display:"flex",alignItems:"center",gap:6,marginTop:8}}><input type="checkbox" checked={!!d.expedienteMedico} onChange={e=>setD({...d,expedienteMedico:e.target.checked})} style={{width:"auto"}}/>Acceso al <b>expediente médico</b> (examen periódico: médico laboral y RH)</label><div style={{fontSize:11,color:"#999",marginTop:2}}>Datos personales sensibles. Sin esta marca ni un administrador ve los exámenes.</div><label>Responsable de alertas de cumplimiento</label><select value={d.responsableAlerta||"ninguno"} onChange={e=>setD({...d,responsableAlerta:e.target.value})}>{[["ninguno","Ninguno (no recibe alertas)"],["sucursal","De sucursal (solo sus sucursales)"],["corporativo","Corporativo (todos los módulos y sucursales)"]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><div style={{fontSize:11,color:"#999",marginTop:4}}>Los responsables reciben aviso de los formularios pendientes o vencidos de su alcance (Tablero de Seguimiento).</div>{isN?<div className="wb" style={{marginTop:10}}>Se generará una contraseña temporal y se enviará al correo del usuario. En su primer ingreso deberá crear la suya.</div>:<><label>Nueva contraseña (dejar vacío para no cambiar)</label><input type="text" value={d.password||""} placeholder="••••••" onChange={e=>setD({...d,password:e.target.value})}/></>}<div style={{display:"flex",gap:8,marginTop:14}}><button className="bs" style={{flex:1}} onClick={onClose}>Cancelar</button><button className="bp" style={{flex:2,marginTop:0}} disabled={busy} onClick={()=>saveA(d)}>Guardar</button></div></div></div>);};
   return(
     <div>
       {editV&&<VForm v={editV} onClose={()=>setEditV(null)}/>}
@@ -3530,9 +3986,13 @@ function ModAdmin({cat,refrescarCat,showToast}){
           <div className="r2"><div><label>Clave (sin espacios)</label><input type="text" value={modDraft.clave} onChange={e=>setModDraft({...modDraft,clave:slug(e.target.value)})} placeholder="Ej. seguridad"/></div><div><label>Orden</label><input type="number" value={modDraft.orden} onChange={e=>setModDraft({...modDraft,orden:e.target.value})}/></div></div>
           <button className="bp" disabled={busy} onClick={saveModulo}>+ Guardar módulo</button>
         </div>
+        {!(cat?.modulos||[]).some(mo=>mo.clave==="mantenimiento")&&<div className="card"><div className="ct">Plan de Mantenimiento</div>
+          <div style={{fontSize:11,color:"#666",marginBottom:8,lineHeight:1.5}}>La pestaña <b>Plan Mtto</b> (plan anual de mantenimiento por semanas) aparece cuando existe este módulo. El plan se carga después con el importador (docs/mantenimiento).</div>
+          <button className="bp" disabled={busy} onClick={crearPlanMtto}>Crear módulo Plan Mtto</button>
+        </div>}
         <div className="card"><div className="ct">Módulos ({(cat?.modulos||[]).length})</div>
           {(!cat.modulos||cat.modulos.length===0)&&<div className="empty">Aún no hay módulos. El módulo «Seguridad Industrial» ya existe como integrado.</div>}
-          {(cat?.modulos||[]).map(mo=><div key={mo.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{mo.nombre||mo.clave}</span><span className={"bdg "+(mo.activo!==false?"dok":"drj")}>{mo.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">clave: {mo.clave} · orden {mo.orden??100} · {plantillasDeAdmin(mo.clave).length} formulario(s)</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bd" disabled={busy} onClick={()=>toggleModulo(mo)}>{mo.activo!==false?"Desactivar":"Activar"}</button></div></div>)}
+          {(cat?.modulos||[]).map(mo=><div key={mo.clave} className="li" style={{cursor:"default"}}><div className="lit"><span className="lim">{mo.nombre||mo.clave}</span><span className={"bdg "+(mo.activo!==false?"dok":"drj")}>{mo.activo!==false?"Activo":"Inactivo"}</span></div><div className="lis">clave: {mo.clave} · orden {mo.orden??100} · {plantillasDeAdmin(mo.clave).length} formulario(s)</div><div style={{display:"flex",gap:6,marginTop:6}}><button className="bd" disabled={busy} onClick={()=>toggleModulo(mo)}>{mo.activo!==false?"Desactivar":"Activar"}</button></div>{mo.clave==="mantenimiento"&&<MttoAdminsEditor mo={mo} busy={busy} onSave={lista=>guardarAdminsMtto(mo,lista)}/>}</div>)}
         </div>
       </>}
       {sec==="formularios"&&<>

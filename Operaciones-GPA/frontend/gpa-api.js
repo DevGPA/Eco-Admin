@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 const TIPO_PATH = { combustible: "combustible", checklist: "checklist", montacargas: "montacargas", epp: "epp", examen: "examen" };
-const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM", epp: "EPP", examen: "EXM" };
+const TIPO_EVID = { combustible: "SOL", checklist: "CL", montacargas: "MC", formulario: "FRM", epp: "EPP", examen: "EXM", mantenimiento: "MP" };
 const SES_KEY = "gpa_ops_session";
 const MAX_SUBIDAS = 4;   // evidencias subiendo a la vez (cola; evita ráfagas → throttle)
 
@@ -237,6 +237,20 @@ class GpaApi {
   // Examen médico periódico (solo cuentas con marca «Expediente médico»)
   async examenListar(campana) { return (await this._fetch("GET", "/examen" + (campana ? "?campana=" + encodeURIComponent(campana) : ""))).items || []; }
   async examenCampanas()      { return (await this._fetch("GET", "/examen/campanas")).items || []; }
+
+  // ── Plan de Mantenimiento (pestaña «Plan Mtto», módulo `mantenimiento`) ──
+  // El identificador de un vencimiento lleva «#» (codigo#anio#semana): va codificado en la ruta.
+  mttoAgenda(anio)                 { return this._fetch("GET", "/mantenimiento" + (anio ? "?anio=" + encodeURIComponent(anio) : "")); }
+  mttoActivos()                    { return this._fetch("GET", "/mantenimiento/activos"); }
+  async mttoAsignables()           { return (await this._fetch("GET", "/mantenimiento/asignables")).items || []; }
+  mttoEstado(rid, datos)           { return this._fetch("POST", `/mantenimiento/${encodeURIComponent(rid)}/estado`, datos); }
+  mttoAsignar(rid, cuenta)         { return this._fetch("POST", `/mantenimiento/${encodeURIComponent(rid)}/asignar`, { cuenta: cuenta || null }); }
+  mttoCorrectivo(datos)            { return this._fetch("POST", "/mantenimiento/correctivo", datos); }
+  mttoAdminActivo(a)               { return this._fetch("POST", "/mantenimiento/admin/activo", a); }
+  mttoAdminTipo(t)                 { return this._fetch("POST", "/mantenimiento/admin/tipo", t); }
+  mttoAdminTitular(d)              { return this._fetch("POST", "/mantenimiento/admin/titular", d); }
+  mttoAdminGenerar(anio, aplicar)  { return this._fetch("POST", "/mantenimiento/admin/generar", { anio, aplicar: !!aplicar }); }
+  mttoAdminPublicar(anio)          { return this._fetch("POST", "/mantenimiento/admin/publicar", { anio }); }
   examenConcluir(id, datos)   { return this._fetch("POST", `/examen/${id}/concluir`, datos); }
   adminExamenCampana(c)       { return this._fetch("POST", "/admin/examen-campana", c); }
   adminExpedienteMedico(email, activo) { return this._fetch("POST", "/admin/expediente-medico", { email, activo }); }

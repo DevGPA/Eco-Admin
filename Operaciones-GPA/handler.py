@@ -40,6 +40,7 @@ from db.queries import (listar_registros, get_registro, cargar_catalogos, cargar
                         listar_examenes, examen_de)
 from s3.evidencias import url_subida, url_lectura, guardar_dataurl, _EXT as _EXT_EVID
 from auth_cognito import listar_cuentas, guardar_cuenta
+from mantenimiento import rutas as mtto_rutas      # Plan de Mantenimiento (aditivo)
 
 try:
     import boto3
@@ -61,7 +62,7 @@ EMAIL_RIESGO = os.environ.get("EMAIL_RIESGOS", "")
 # (EPP, examen médico...) se agrega AQUÍ, y el test `test_evidencias_tipos`
 # cruza esta lista contra TIPO_EVID de frontend/gpa-api.js: si el cliente manda
 # un tipo que el servidor no acepta, el módulo entero queda sin fotos.
-_TIPOS_EVID = (m.SOL, m.CL, m.MC, "FRM", m.EPP, m.EXM)
+_TIPOS_EVID = (m.SOL, m.CL, m.MC, "FRM", m.EPP, m.EXM, m.MP)
 # Patrón de una clave de evidencia en S3 (para resolver a URL prefirmada al leer).
 # Las extensiones salen de s3.evidencias._EXT (jpg, png, webp y pdf de facturas).
 _KEY_RE = re.compile(r"^(" + "|".join(re.escape(t) for t in _TIPOS_EVID) + r")/[0-9a-f]{32}\.("
@@ -130,7 +131,11 @@ def _csv(x):
 MODULO = {m.SOL: ("combustible",),
           m.CL:  ("mtto", "checklist"),
           m.MC:  ("mtto", "montacargas"),
-          m.EPP: ("epp",)}
+          m.EPP: ("epp",),
+          # Plan de Mantenimiento: clave `mantenimiento` (OJO: `mtto` ya significa
+          # los checklists de reparto/montacargas, no el plan).
+          m.MP:  ("mantenimiento",),
+          m.MPC: ("mantenimiento",)}
 
 
 def _claims(event) -> dict:
@@ -198,6 +203,12 @@ def _resolver_urls(obj):
     if isinstance(obj, list):
         return [_resolver_urls(v) for v in obj]
     return obj
+
+
+# Ayudantes que el módulo de mantenimiento recibe del handler (evita el import
+# circular: mantenimiento/rutas.py no importa handler).
+_CTX_MTTO = {"resp": _resp, "resp_gz": _resp_gz, "err": _err, "body": _body,
+             "modulo_ok": _modulo_ok, "resolver_urls": _resolver_urls}
 
 
 # ── Notificaciones ───────────────────────────────────────────────
@@ -428,6 +439,12 @@ def lambda_handler(event, context):
             if tipo not in _TIPOS_EVID:
                 return _err("tipo inválido")
             return _resp(url_subida(tipo, b.get("contentType", "image/jpeg")))
+
+        # ── Plan de Mantenimiento (todas sus rutas viven en mantenimiento/rutas.py) ──
+        if route.startswith("GET /mantenimiento") or route.startswith("POST /mantenimiento"):
+            r = mtto_rutas.manejar(route, event, cl, _CTX_MTTO)
+            if r is not None:
+                return r
 
         # ── Admin (solo rol admin) ──
         if route.startswith("POST /admin/") or route == "GET /admin/cuentas":
