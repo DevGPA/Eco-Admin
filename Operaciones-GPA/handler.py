@@ -38,7 +38,7 @@ from db.queries import (listar_registros, get_registro, cargar_catalogos, cargar
                         estados_checklist_reparto, saldos_epp, responsables_alerta,
                         epp_prerregistros, campanas_examen, campana_examen, expediente_medico,
                         listar_examenes, examen_de)
-from s3.evidencias import url_subida, url_lectura, guardar_dataurl
+from s3.evidencias import url_subida, url_lectura, guardar_dataurl, _EXT as _EXT_EVID
 from auth_cognito import listar_cuentas, guardar_cuenta
 
 try:
@@ -55,8 +55,17 @@ SNS_ARN      = os.environ.get("SNS_NOTIF_ARN", "")
 EMAIL_LOGIS  = os.environ.get("EMAIL_LOGISTICA", "")
 EMAIL_RIESGO = os.environ.get("EMAIL_RIESGOS", "")
 
-# Patrón de una clave de evidencia en S3 (para resolver a URL prefirmada al leer)
-_KEY_RE = re.compile(r"^(SOL|CL|MC|FRM)/[0-9a-f]{32}\.(jpg|png|webp)$")
+# Tipos (prefijos de llave en S3) que aceptan evidencias. UNA sola lista para
+# las dos puertas: la whitelist de `POST /evidencias/url-subida` y el patrón que
+# resuelve la llave a URL firmada al leer. Cuando un módulo nuevo sube fotos
+# (EPP, examen médico...) se agrega AQUÍ, y el test `test_evidencias_tipos`
+# cruza esta lista contra TIPO_EVID de frontend/gpa-api.js: si el cliente manda
+# un tipo que el servidor no acepta, el módulo entero queda sin fotos.
+_TIPOS_EVID = (m.SOL, m.CL, m.MC, "FRM", m.EPP, m.EXM)
+# Patrón de una clave de evidencia en S3 (para resolver a URL prefirmada al leer).
+# Las extensiones salen de s3.evidencias._EXT (jpg, png, webp y pdf de facturas).
+_KEY_RE = re.compile(r"^(" + "|".join(re.escape(t) for t in _TIPOS_EVID) + r")/[0-9a-f]{32}\.("
+                     + "|".join(sorted(set(_EXT_EVID.values()))) + r")$")
 
 # Ventana por defecto de los listados: solo los últimos N días salvo que se pida
 # un rango explícito (?desde=&hasta=) o todo (?todo=1). A escala evita respuestas
@@ -408,7 +417,7 @@ def lambda_handler(event, context):
         if route == "POST /evidencias/url-subida":
             b = _body(event)
             tipo = b.get("tipo", "SOL")
-            if tipo not in (m.SOL, m.CL, m.MC, "FRM"):
+            if tipo not in _TIPOS_EVID:
                 return _err("tipo inválido")
             return _resp(url_subida(tipo, b.get("contentType", "image/jpeg")))
 
