@@ -25,6 +25,7 @@ import urllib.request
 
 from db.modelos import iso_mx, legible_mx
 from .criterios import arma_criterios, veredicto, normaliza
+from .resumen import redacta
 from catalogos import GIRO_DIRECTO
 
 from .amazon import Amazon
@@ -180,6 +181,12 @@ def arma_ficha(caso: dict) -> dict:
 
     ficha["criterios"] = arma_criterios(ficha, caso)
     ficha["conteo"] = veredicto(ficha["criterios"])
+
+    # El párrafo va al final, cuando ya están los cinco criterios: el modelo
+    # redacta sobre lo medido, no sobre datos a medias.
+    ficha["resumen"], mas = redacta(ficha, caso)
+    ficha["avisos"].extend(mas)
+    ficha["resumenEsBorrador"] = True
     return ficha
 
 

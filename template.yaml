@@ -46,6 +46,8 @@ Globals:
         USER_POOL_ID:   !Ref CognitoUserPool
         ENV:            !Ref Env
         PORTAL_URL:     !Ref PortalUrl
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        GOOGLE_MAPS_KEY:  !Ref GoogleMapsKey
 
 Parameters:
 
@@ -54,6 +56,23 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Default:       dev
     Description:   Ambiente de despliegue
+
+  BedrockModelId:
+    Type:    String
+    Default: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+    Description: >
+      Modelo de Claude en Bedrock que redacta el resumen de viabilidad del
+      prospecto. Se usa el mismo que Eco-Admin ya tiene habilitado en la cuenta,
+      para no pedir acceso a otro modelo. Cuesta ~0.006 USD por expediente.
+
+  GoogleMapsKey:
+    Type:    String
+    Default: ''
+    NoEcho:  true
+    Description: >
+      ETAPA 2. Mientras esté vacío, la ficha comercial la arma Amazon Location
+      y los criterios que dependen de fotos salen como "pendiente". Al poner la
+      llave se encienden las fotos del local y la fachada fechada de Street View.
 
   AllowedOrigin:
     Type:    String
@@ -208,6 +227,27 @@ Resources:
                 - cognito-idp:AdminRemoveUserFromGroup
                 - cognito-idp:AdminListGroupsForUser
               Resource: !GetAtt CognitoUserPool.Arn
+
+        # Ficha comercial del prospecto (docs/ESPECIFICACION-inteligencia-comercial.md).
+        # Amazon Location ubica el negocio, cuenta la competencia alrededor y
+        # dibuja el mapa. Estas acciones no admiten recurso específico.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - geo-places:SearchText
+                - geo-places:SearchNearby
+                - geo-places:Geocode
+                - geo-places:ReverseGeocode
+                - geo-maps:GetStaticMap
+              Resource: '*'
+
+        # Bedrock redacta el párrafo de viabilidad. Es lo único de la ficha que
+        # consume tokens: unos 790 de entrada y 250 de salida por expediente.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: '*'
 
       Tags:
         Proyecto: GPA-AltaClientes

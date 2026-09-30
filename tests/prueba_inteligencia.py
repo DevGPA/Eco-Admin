@@ -90,6 +90,8 @@ A._mapas = lambda: MAPAS
 I.lee_web = lambda url: {"url": url, "ok": True, "titulo": "Albercas del Valle",
                          "descripcion": "Venta de bombas y químicos para alberca",
                          "menciona": ["alberca", "bomba de agua", "cloro"]}
+# Bedrock se prueba aparte, en la seccion 9: aqui no se llama.
+I.redacta = lambda ficha, caso_: ("", [])
 
 
 def caso(**extra):
@@ -319,6 +321,73 @@ ok(I.url_foto_de(ficha_falsa, -1) == "", "uno negativo tampoco")
 ok(I.url_foto_de({}, 0) == "", "y una ficha sin fotos, menos")
 
 os.environ.pop("GOOGLE_MAPS_KEY", None)
+# ═══════════════════════════════════════════════════════════════
+print("\n9. El resumen que redacta Bedrock")
+# ═══════════════════════════════════════════════════════════════
+import inteligencia.resumen as R                              # noqa: E402
+
+PARRAFO = ("Albercas y Piscinas del Valle es un distribuidor del giro, ubicado en "
+           "Av. Vallarta 1234. Su sitio menciona alberca, bomba de agua y cloro. "
+           "Tiene un competidor a menos de 150 m. Quedan pendientes los criterios "
+           "de exhibición de producto y letrero, que requieren fotos del local.")
+
+
+class BedrockFalso:
+    def __init__(self, texto=PARRAFO, revienta=False):
+        self.texto, self.revienta, self.llamadas = texto, revienta, []
+
+    def converse(self, modelId=None, messages=None, inferenceConfig=None):
+        if self.revienta:
+            raise RuntimeError("Bedrock no contestó")
+        self.llamadas.append({"modelo": modelId, "msgs": messages,
+                              "config": inferenceConfig})
+        return {"output": {"message": {"content": [{"text": self.texto}]}}}
+
+
+bed = BedrockFalso()
+ficha_r = I.arma_ficha(caso())          # se arma sin resumen (I.redacta parcheado)
+texto, avisos = R.redacta(ficha_r, caso(), cliente=bed)
+ok(texto == PARRAFO, "devuelve el párrafo que redactó el modelo")
+ok(avisos == [], "sin avisos cuando el modelo se porta bien")
+ok(bed.llamadas[0]["modelo"] == R.MODELO, "usa el modelo configurado")
+ok("sonnet" in R.MODELO, "que es Sonnet, el que ya tiene habilitado la cuenta")
+ok(bed.llamadas[0]["config"]["temperature"] <= 0.2,
+   "con temperatura baja: es un expediente, no un texto creativo")
+
+print("\n   Solo se le manda lo medido:")
+carga = bed.llamadas[0]["msgs"][0]["content"][0]["text"]
+ok("Vende lo que vendemos" in carga, "van los cinco criterios con su estado")
+ok("pendiente" in carga, "y se le dice cuáles quedaron pendientes")
+ok("claveHash" not in carga and "adjuntos" not in carga,
+   "NO van los adjuntos ni nada del expediente que no sea del negocio")
+ok("NO recomiendes autorizar" in carga, "la instrucción le prohíbe recomendar")
+ok("REVENDEN" in carga, "y le explica que GPA vende B2B, a quien revende")
+
+print("\n   Si Bedrock no contesta, el expediente sigue su curso:")
+texto2, avisos2 = R.redacta(ficha_r, caso(), cliente=BedrockFalso(revienta=True))
+ok(texto2 == "", "no hay párrafo")
+ok(len(avisos2) == 1 and "No se pudo redactar" in avisos2[0], "y se dice por qué")
+ok("criterios están completos" in avisos2[0],
+   "aclarando que los cinco criterios sí quedaron: lo que falta es el párrafo")
+
+print("\n   Y si el modelo se sale de su papel, se avisa:")
+_, avisos3 = R.redacta(ficha_r, caso(),
+                       cliente=BedrockFalso("El prospecto es afín. Recomiendo autorizar "
+                                            "una línea de 250,000 pesos."))
+ok(len(avisos3) == 1 and "recomendación" in avisos3[0],
+   "se detecta que recomendó autorizar")
+ok("decisión es del comité" in avisos3[0], "y se le recuerda a quien lo lee de quién es la decisión")
+
+print("\n   El párrafo va marcado como borrador:")
+guardado = I.redacta
+I.redacta = lambda ficha, caso_: (PARRAFO, [])
+f_con = I.arma_ficha(caso())
+I.redacta = guardado
+ok(f_con["resumen"] == PARRAFO, "la ficha trae el párrafo")
+ok(f_con["resumenEsBorrador"] is True, "marcado como borrador, no como veredicto")
+ok(len(f_con["criterios"]) == 5, "y los cinco criterios siguen al lado, con sus fuentes")
+
+
 
 
 

@@ -2,7 +2,7 @@
 
 > **Estado:** propuesta. Decidido el proveedor (dos etapas, §7) y quién redacta el
 > resumen (§7-BIS). Lista para construir la etapa 1.
-> **Versión:** 0.4 · 30-sep-2026
+> **Versión:** 0.5 · 30-sep-2026
 > **Proyecto:** GPA Alta de Clientes, rama `alta-clientes` de `DevGPA/Eco-Admin`.
 
 ## 1. Qué se pidió
@@ -195,10 +195,12 @@ Se midió armando la carga real que se le mandaría al modelo, no a ojo:
 Precios de lista de Anthropic. Bedrock puede variar, y su endpoint regional
 cobra 10 % más que el global.
 
-**Se recomienda Haiku 4.5**: la tarea es redactar un párrafo a partir de datos
-ya medidos, no razonar. Sonnet no lo haría mejor y cuesta el triple. Puede
-requerir habilitar el acceso a ese modelo en Bedrock, que hoy solo tiene
-prendido Sonnet 4.5 por el OCR de Eco-Admin.
+**Decidido: Sonnet 4.5** (30-sep-2026). Es el modelo que Eco-Admin ya tiene
+habilitado en la cuenta, así que no hay que pedir acceso a otro en Bedrock.
+Cuesta el triple que Haiku, y aun así son $0.24 USD al mes a 40 casos.
+
+El modelo se configura con el parámetro `BedrockModelId` del `template.yaml`:
+cambiarlo a Haiku más adelante no requiere tocar código, solo redesplegar.
 
 **Cuándo se gasta.** Una vez por expediente enviado. Si el expediente se
 devuelve al cliente y lo vuelve a mandar, la ficha se rearma y se paga otra
@@ -292,6 +294,7 @@ condiciones que no se negocian:
 | Versión | Fecha | Qué cambió |
 |---|---|---|
 | 0.1 | 29-sep-2026 | Primera versión. Verificados contra la documentación de Google los tres puntos dudosos: fotos no almacenables, fotos sin fecha, redes no leíbles. Pendientes las dos decisiones de §7. |
+| 0.5 | 30-sep-2026 | Construido el resumen con Bedrock, configurado con Sonnet 4.5 por decisión del usuario. Con tres candados: solo redacta lo medido, va marcado como borrador, y si aun así recomienda autorizar o rechazar, se detecta y se avisa. Permisos de IAM de Amazon Location y Bedrock en el template. |
 | 0.4 | 30-sep-2026 | Medido el consumo de tokens del resumen: ~790 de entrada y ~250 de salida por caso, o sea $0.002 USD con Haiku 4.5. Es lo único de la ficha que gasta tokens. |
 | 0.3 | 29-sep-2026 | Corregido el enfoque: GPA vende B2B, a distribuidores. La afinidad ahora distingue distribuidor / usuario final / indirecto, y un hotel con alberca deja de contar como afín. El criterio de competencia deja de declarar «malo» tener un rival cerca: en B2B eso también puede significar demanda. |
 | 0.2 | 29-sep-2026 | Comparados los cuatro proveedores. Amazon Location está en la cuenta de AWS que ya se usa (verificado en boto3: `geo-places.search_nearby`, `geo-maps.get_static_map`) y cuesta centavos, pero no tiene fotos. Se decide construir en dos etapas con el proveedor intercambiable, arrancando sin Google. El resumen lo redacta Bedrock, marcado como borrador y sin recomendar autorizar. |
