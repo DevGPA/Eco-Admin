@@ -2,7 +2,7 @@
 
 > **Estado:** propuesta. Decidido el proveedor (dos etapas, §7) y quién redacta el
 > resumen (§7-BIS). Lista para construir la etapa 1.
-> **Versión:** 0.3 · 29-sep-2026
+> **Versión:** 0.4 · 30-sep-2026
 > **Proyecto:** GPA Alta de Clientes, rama `alta-clientes` de `DevGPA/Eco-Admin`.
 
 ## 1. Qué se pidió
@@ -175,6 +175,40 @@ servicio). **Al volumen de altas de GPA, esto cae dentro del tope gratis**, es d
 costo cero en la práctica. Aun así hay que poner límite de gasto en la cuenta para que
 un error en el código no se convierta en una factura.
 
+## 6-BIS. Lo que cuesta el resumen redactado
+
+Es lo ÚNICO de la ficha que consume tokens. El mapa, la competencia, el sitio
+web y los cinco criterios son llamadas normales a una API: cero tokens.
+
+Se midió armando la carga real que se le mandaría al modelo, no a ojo:
+
+| | Medido |
+|---|---|
+| Tokens de entrada (la ficha completa + la instrucción) | ~790 |
+| Tokens de salida (un párrafo de 4 a 6 líneas) | ~250 |
+
+| Modelo | Por caso | 40 casos/mes | 500 casos/mes |
+|---|---|---|---|
+| **Haiku 4.5** | $0.0020 USD | $0.08 | $1.02 |
+| Sonnet 4.5 *(el que ya usa Eco-Admin para OCR)* | $0.0061 USD | $0.24 | $3.06 |
+
+Precios de lista de Anthropic. Bedrock puede variar, y su endpoint regional
+cobra 10 % más que el global.
+
+**Se recomienda Haiku 4.5**: la tarea es redactar un párrafo a partir de datos
+ya medidos, no razonar. Sonnet no lo haría mejor y cuesta el triple. Puede
+requerir habilitar el acceso a ese modelo en Bedrock, que hoy solo tiene
+prendido Sonnet 4.5 por el OCR de Eco-Admin.
+
+**Cuándo se gasta.** Una vez por expediente enviado. Si el expediente se
+devuelve al cliente y lo vuelve a mandar, la ficha se rearma y se paga otra
+vez: en la vida de un caso, cuente 2 o 3 llamadas, no una.
+
+Si aun así se quiere gasto cero por omisión, el resumen puede generarse
+**cuando alguien abra la ficha** en vez de al enviarse. Solo se pagaría por los
+expedientes que de verdad se analizan, a cambio de 3 a 5 segundos de espera la
+primera vez.
+
 ## 7. Alternativas a Google, y por qué se construye en dos etapas
 
 Google exige **cuenta de facturación activa** para dar una llave de API: *"you must set
@@ -258,5 +292,6 @@ condiciones que no se negocian:
 | Versión | Fecha | Qué cambió |
 |---|---|---|
 | 0.1 | 29-sep-2026 | Primera versión. Verificados contra la documentación de Google los tres puntos dudosos: fotos no almacenables, fotos sin fecha, redes no leíbles. Pendientes las dos decisiones de §7. |
+| 0.4 | 30-sep-2026 | Medido el consumo de tokens del resumen: ~790 de entrada y ~250 de salida por caso, o sea $0.002 USD con Haiku 4.5. Es lo único de la ficha que gasta tokens. |
 | 0.3 | 29-sep-2026 | Corregido el enfoque: GPA vende B2B, a distribuidores. La afinidad ahora distingue distribuidor / usuario final / indirecto, y un hotel con alberca deja de contar como afín. El criterio de competencia deja de declarar «malo» tener un rival cerca: en B2B eso también puede significar demanda. |
 | 0.2 | 29-sep-2026 | Comparados los cuatro proveedores. Amazon Location está en la cuenta de AWS que ya se usa (verificado en boto3: `geo-places.search_nearby`, `geo-maps.get_static_map`) y cuesta centavos, pero no tiene fotos. Se decide construir en dos etapas con el proveedor intercambiable, arrancando sin Google. El resumen lo redacta Bedrock, marcado como borrador y sin recomendar autorizar. |
