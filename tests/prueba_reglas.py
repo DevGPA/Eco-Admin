@@ -77,7 +77,9 @@ def nueva(tipo="alta", regimen="601", rfc="ASV180412H23", docs=None, modulos=Non
 
 
 EJEMPLOS_POR_TIPO = {"tel": "33 1234 5678", "email": "cliente@ejemplo.mx", "cp": "44110",
-                     "hora": "08:00", "monto": "250000"}
+                     "hora": "08:00", "monto": "250000",
+                     "mapa": "https://maps.app.goo.gl/ejemplo123",
+                     "mes": "2021-03"}
 
 
 def llena_todo(token, clave):

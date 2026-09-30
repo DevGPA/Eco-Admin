@@ -118,7 +118,7 @@ def crear_caso(datos: dict, usuario: dict) -> tuple[dict, str]:
         }
 
     # Los módulos y documentos NO se eligen: cada tipo de solicitud trae los suyos
-    # completos. Un alta pide sus 5 documentos y un crédito sus 13, siempre.
+    # completos. Un alta pide sus 5 documentos y un crédito sus 8, siempre.
     # Lo único que se descuenta es lo que solo aplica a persona moral, y eso lo
     # decide el régimen fiscal, no quien captura. Se ignora lo que mande la pantalla.
     modulos = {mid: True for mid in tipo["modulos"]}

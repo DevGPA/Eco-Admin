@@ -158,6 +158,26 @@ MODULOS = [
         ],
     },
     {
+        # De aquí sale la ficha comercial del prospecto (ver
+        # docs/ESPECIFICACION-inteligencia-comercial.md). Este módulo se agregó
+        # después, y por eso solo aparece en los expedientes nuevos: cada caso
+        # guarda su lista de módulos al crearse, así que los de antes no se rompen.
+        "id": "negocio",
+        "nombre": "Su negocio",
+        "desc": "Dónde está y desde cuándo opera. Nos sirve para conocerlo antes de visitarlo.",
+        "campos": [
+            {"k": "mapa_url", "l": "Ubicación de su negocio en Google Maps", "w": "full",
+             "req": True, "tipo": "mapa",
+             "ph": "Pegue aquí la liga de Google Maps, o escriba la dirección del local",
+             "ayuda": "En Google Maps busque su negocio, toque «Compartir» y pegue la liga. "
+                      "Si no lo encuentra, escriba la dirección tal como llegaría un repartidor."},
+            {"k": "inicio_ops", "l": "¿Desde cuándo opera en esa dirección?", "w": "third",
+             "req": True, "tipo": "mes", "ph": "2021-03"},
+            {"k": "facebook", "l": "Facebook", "w": "third", "ph": "facebook.com/sunegocio"},
+            {"k": "instagram", "l": "Instagram", "w": "third", "ph": "@sunegocio"},
+        ],
+    },
+    {
         "id": "entrega",
         "nombre": "Entrega y horarios",
         "desc": "Dónde, a qué hora y con quién se entrega la mercancía.",
@@ -309,7 +329,7 @@ TIPOS = {
         "corto": "ALTA",
         "formato": "PNO-VE01-F3",
         "desc": "Datos maestros del cliente para facturarle y entregarle.",
-        "modulos": ["fiscal", "entrega", "contactos"],
+        "modulos": ["fiscal", "negocio", "entrega", "contactos"],
         "docs": ["alta_hacienda", "ine_rep", "comp_dom", "fotos_negocio", "publicidad"],
         "autoriza": "simple",      # 1 firma del Comité de Crédito
     },
@@ -319,7 +339,7 @@ TIPOS = {
         "corto": "CRÉDITO",
         "formato": "CYC-FT-001 Rev.03",
         "desc": "Línea de crédito: referencias, bancos, avales y buró.",
-        "modulos": ["fiscal", "credito", "buro"],
+        "modulos": ["fiscal", "negocio", "credito", "buro"],
         # Los 8 del expediente de crédito, en el orden en que los pide GPA.
         "docs": ["csf", "comp_dom", "acta_const", "ine_rep", "ine_aval",
                  "comp_dom_dueno", "comp_dom_aval", "edos_cuenta"],
@@ -340,6 +360,59 @@ ESTADOS = {
     "autorizada":    {"t": "Autorizada",   "c": "p-autorizada"},
     "rechazada":     {"t": "Rechazada",    "c": "p-rechazada"},
 }
+# ── El mercado de GPA ────────────────────────────────────────────
+# Con esto se mide qué tan afín es un prospecto y quién es competencia suya.
+# Vive aquí, no enterrado en el código, para poder afinarlo con lo que se
+# aprenda de los primeros prospectos reales.
+#
+# DIRECTO   = el negocio ES de lo nuestro. Cuenta completo.
+# INDIRECTO = vende lo nuestro entre otras cosas (una ferretería, un plomero).
+#             Cuenta, pero menos: hay muchas ferreterías que nunca venderán una bomba.
+GIRO_DIRECTO = [
+    "piscina", "piscinas", "alberca", "albercas", "pool", "spa", "jacuzzi",
+    "hidroneumatico", "hidroneumaticos", "bomba de agua", "bombas de agua", "bombeo",
+    "purificadora", "purificacion", "purificadoras",
+    "tratamiento de agua", "agua residual", "aguas residuales", "potabilizacion",
+    "filtro de agua", "filtros de agua", "filtracion", "osmosis",
+    "quimicos para alberca", "cloro", "clorador",
+    "cisterna", "cisternas", "tinaco", "tinacos",
+    "riego", "hidraulica", "hidraulico", "equipos de bombeo",
+]
+GIRO_INDIRECTO = [
+    "ferreteria", "ferreterias", "plomeria", "plomero", "materiales para construccion",
+    "tlapaleria", "plasticos", "tuberia", "tuberias", "plombing",
+]
+
+# Negocios que NOMBRAN nuestro mercado pero no venden lo que vendemos: un hotel
+# con alberca, un gimnasio con spa, un balneario. Salen en cualquier búsqueda de
+# «albercas» e inflarían el conteo de competencia hasta volverlo inservible.
+#
+# OJO: esto descarta COMPETENCIA, no clientes. Un balneario no nos compite, pero
+# sí nos podría comprar cloro; por eso no entra en el cálculo de afinidad del
+# prospecto, solo en el conteo de quién le compite alrededor.
+GIRO_NO_COMPETENCIA = [
+    "hotel", "motel", "hostal", "posada", "hospedaje", "airbnb",
+    "gimnasio", "gym", "fitness", "crossfit", "club deportivo", "deportivo",
+    "balneario", "parque acuatico", "aguas termales",
+    "restaurante", "bar", "salon de eventos", "quinta", "jardin de eventos",
+    "hospital", "clinica", "escuela", "colegio", "universidad",
+    "fraccionamiento", "condominio", "inmobiliaria", "bienes raices",
+    "estetica", "salon de belleza", "masajes",
+]
+
+# Qué se busca alrededor del prospecto para contar competencia. Son frases de
+# búsqueda, no categorías fijas: el proveedor de mapas las resuelve como texto.
+BUSQUEDAS_COMPETENCIA = [
+    "albercas y piscinas",
+    "purificadora de agua",
+    "bombas de agua",
+    "tratamiento de agua",
+]
+
+# Los dos radios del punto 4. El chico dice «lo tiene enfrente»; el grande, «está
+# en una zona con mercado». Los dos importan y por eso se reportan por separado.
+RADIOS_COMPETENCIA_M = [150, 500]
+
 ESTADOS_CERRADOS = {"autorizada", "rechazada"}
 # El cliente solo puede escribir cuando el caso está en uno de estos estados.
 ESTADOS_ABIERTOS_AL_CLIENTE = {"enviada", "captura", "devuelta"}
@@ -415,8 +488,17 @@ def catalogos_publicos() -> dict:
 # ── Validacion de lo que captura el cliente ──────────────────────
 # Vive aqui, junto a la definicion de los campos, para que no se separen.
 import re as _re
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 
 _RE_CORREO = _re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+
+# Hora de México sin horario de verano, igual que db/modelos.py. Se repite aquí
+# a propósito: catalogos no puede importar de db sin volver circular el import.
+_TZ_MX = _tz(_td(hours=-6))
+
+
+def _mes_actual_mx() -> str:
+    return _dt.now(_TZ_MX).strftime("%Y-%m")
 
 
 def solo_digitos(valor) -> str:
@@ -456,6 +538,22 @@ def revisa_campo(f: dict, valor) -> str:
     elif tipo == "monto":
         if not solo_digitos(texto):
             return "El monto va en números."
+    elif tipo == "mapa":
+        # Vale la liga de Google Maps o la dirección escrita: al cliente no se le
+        # exige que sepa cuál es cuál, y el servidor resuelve las dos.
+        if texto.lower().startswith(("http://", "https://")):
+            if not _re.match(r"^https?://[^\s]+\.[^\s]+", texto):
+                return "Esa liga está incompleta. Cópiela otra vez desde Google Maps."
+        elif len(texto) < 12:
+            return ("Escriba la dirección completa, con calle y número, o pegue la liga "
+                    "de Google Maps.")
+    elif tipo == "mes":
+        if not _re.match(r"^\d{4}-(0[1-9]|1[0-2])$", texto):
+            return "Va el mes y el año, así: 2021-03."
+        if texto > _mes_actual_mx():
+            return "Esa fecha todavía no llega. Revise el mes y el año."
+        if texto < "1900-01":
+            return "Revise el año."
     return ""
 
 
