@@ -2,7 +2,7 @@
 
 > **Estado:** propuesta. Decidido el proveedor (dos etapas, §7) y quién redacta el
 > resumen (§7-BIS). Lista para construir la etapa 1.
-> **Versión:** 0.2 · 29-sep-2026
+> **Versión:** 0.3 · 29-sep-2026
 > **Proyecto:** GPA Alta de Clientes, rama `alta-clientes` de `DevGPA/Eco-Admin`.
 
 ## 1. Qué se pidió
@@ -131,11 +131,11 @@ sugerencia, para que decida una persona.
 
 | Criterio | Cómo se mide | Fuente |
 |---|---|---|
-| **Afinidad de giro** | El tipo de negocio y su nombre contra el diccionario de nuestro mercado (piscinas, albercas, tratamiento de agua, bombeo, hidroneumáticos, purificación) | Places |
+| **Vende lo que vendemos** | GPA vende de negocio a negocio: el formato es «Alta Cliente **Distribuidor**». No basta con que el prospecto tenga que ver con albercas; importa si REVENDE o si solo consume. Un hotel con alberca nombra todas nuestras palabras y no es distribuidor: se marca como **usuario final** | Places |
 | **Exhibe producto** | Hay fotos de interior del local | Places |
 | **Letrero afuera** *(deseable)* | Fachada visible en Street View, con su fecha | Street View |
 | **Presencia digital** | El sitio web responde y habla del giro; las redes existen | Sitio web declarado |
-| **Competencia alrededor** | Cuántos negocios del giro hay a 150 m y a 500 m | Places |
+| **Mercado y competencia alrededor** | Cuántos **distribuidores** del giro hay a 150 m y a 500 m. En B2B esto NO se lee como «entre menos, mejor»: que haya distribuidores en la zona significa que ahí hay demanda, y una zona vacía puede ser territorio virgen o puede no tener mercado. Se reportan las dos lecturas y decide quien conoce la plaza | Places |
 
 Cada criterio dice también **qué no se pudo comprobar**: «el negocio no aparece en Google
 Maps», «no hay Street View en esa calle», «el sitio web no respondió». Un dato faltante
@@ -258,4 +258,5 @@ condiciones que no se negocian:
 | Versión | Fecha | Qué cambió |
 |---|---|---|
 | 0.1 | 29-sep-2026 | Primera versión. Verificados contra la documentación de Google los tres puntos dudosos: fotos no almacenables, fotos sin fecha, redes no leíbles. Pendientes las dos decisiones de §7. |
+| 0.3 | 29-sep-2026 | Corregido el enfoque: GPA vende B2B, a distribuidores. La afinidad ahora distingue distribuidor / usuario final / indirecto, y un hotel con alberca deja de contar como afín. El criterio de competencia deja de declarar «malo» tener un rival cerca: en B2B eso también puede significar demanda. |
 | 0.2 | 29-sep-2026 | Comparados los cuatro proveedores. Amazon Location está en la cuenta de AWS que ya se usa (verificado en boto3: `geo-places.search_nearby`, `geo-maps.get_static_map`) y cuesta centavos, pero no tiene fotos. Se decide construir en dos etapas con el proveedor intercambiable, arrancando sin Google. El resumen lo redacta Bedrock, marcado como borrador y sin recomendar autorizar. |

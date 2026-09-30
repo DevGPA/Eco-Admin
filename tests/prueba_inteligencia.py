@@ -107,16 +107,27 @@ def caso(**extra):
 # ═══════════════════════════════════════════════════════════════
 print("\n1. Afinidad: quién es de nuestro mercado")
 # ═══════════════════════════════════════════════════════════════
-ok(afinidad("Albercas y Piscinas del Valle")["nivel"] == "directo", "«Albercas» es directo")
-ok(afinidad("Purificadora El Manantial")["nivel"] == "directo", "una purificadora también")
-ok(afinidad("Bombas y Equipos Hidráulicos")["nivel"] == "directo", "y las bombas de agua")
-ok(afinidad("Ferretería La Central")["nivel"] == "indirecto",
-   "una ferretería es afinidad INDIRECTA: vende lo nuestro entre otras cosas")
-ok(afinidad("Tacos El Güero")["nivel"] == "ninguno", "una taquería no es de lo nuestro")
-ok(afinidad("PISCINAS JALISCO")["nivel"] == "directo", "en mayúsculas igual")
-ok(afinidad("Purificación de agua")["nivel"] == "directo", "y con acentos igual")
-ok(afinidad("Distribuidora del Centro", ["Pool supply store"], "albercas")["nivel"] == "directo",
+ok(afinidad("Albercas y Piscinas del Valle")["tipo"] == "distribuidor",
+   "una tienda de albercas es distribuidor: el cliente que buscamos")
+ok(afinidad("Purificadora El Manantial")["tipo"] == "distribuidor", "una purificadora también")
+ok(afinidad("Bombas y Equipos Hidráulicos")["tipo"] == "distribuidor", "y las bombas de agua")
+ok(afinidad("Ferretería La Central")["tipo"] == "indirecto",
+   "una ferretería vende lo nuestro entre otras cosas: afinidad indirecta")
+ok(afinidad("Tacos El Güero")["tipo"] == "ninguno", "una taquería no es de lo nuestro")
+ok(afinidad("PISCINAS JALISCO")["tipo"] == "distribuidor", "en mayúsculas igual")
+ok(afinidad("Purificación de agua")["tipo"] == "distribuidor", "y con acentos igual")
+ok(afinidad("Distribuidora del Centro", ["Pool supply store"], "albercas")["tipo"] == "distribuidor",
    "si el nombre no lo dice, lo delata el giro que declaró el cliente")
+
+print("\n   B2B: vendemos a quien REVENDE, no a quien consume")
+ok(afinidad("Hotel Real con Alberca", ["Hotel"])["tipo"] == "usuario_final",
+   "un hotel con alberca es usuario final, no distribuidor")
+ok(afinidad("Balneario Los Manantiales")["tipo"] == "usuario_final", "un balneario tampoco revende")
+ok(afinidad("Gimnasio Aqua Fitness", ["Gym"])["tipo"] == "usuario_final", "ni un gimnasio con spa")
+ok(afinidad("Condominio Vista Azul")["tipo"] == "usuario_final",
+   "ni un condominio, aunque tenga alberca")
+ok(afinidad("Albercas del Hotel Center")["tipo"] == "usuario_final",
+   "la palabra «hotel» manda aunque el nombre empiece con «Albercas»")
 
 print("\n   Y las trampas del buscador:")
 ok(not es_competencia({"nombre": "Hotel Real con Alberca", "categorias": [{"Name": "Hotel"}]}),
@@ -151,16 +162,19 @@ print("\n3. Los cinco criterios")
 # ═══════════════════════════════════════════════════════════════
 por_id = {c["id"]: c for c in f["criterios"]}
 ok(len(f["criterios"]) == 5, "son cinco, los del punto 5 de la especificación")
-ok(por_id["afinidad"]["estado"] == "si", "afinidad de giro: sí")
-ok(por_id["competencia"]["estado"] == "no", "competencia alrededor: tiene una pegada")
+ok(por_id["afinidad"]["estado"] == "si", "vende lo que vendemos: sí")
+ok(por_id["competencia"]["estado"] == "pendiente",
+   "mercado y competencia: con un rival pegado NO se declara malo solo,")
+ok("demanda concentrada" in por_id["competencia"]["detalle"],
+   "   porque en B2B un competidor cerca también puede significar que ahí hay demanda")
 ok(por_id["digital"]["estado"] == "si", "presencia digital: su sitio habla del giro")
 
 print("\n   Lo que Amazon no puede ver queda PENDIENTE, nunca «no»:")
 ok(por_id["exhibe"]["estado"] == "pendiente", "exhibe producto: pendiente")
 ok("Google" in por_id["exhibe"]["detalle"], "y dice que se resuelve conectando Google")
 ok(por_id["letrero"]["estado"] == "pendiente", "letrero afuera: pendiente")
-ok(f["conteo"] == {"favorables": 2, "contrarios": 1, "pendientes": 2, "total": 5},
-   "el conteo cuadra: 2 a favor, 1 en contra, 2 pendientes")
+ok(f["conteo"] == {"favorables": 2, "contrarios": 0, "pendientes": 3, "total": 5},
+   "el conteo cuadra: 2 a favor, 0 en contra, 3 pendientes")
 ok(sum(v for k, v in f["conteo"].items() if k != "total") == f["conteo"]["total"],
    "y las partes suman el total, sin contar ningun criterio dos veces")
 

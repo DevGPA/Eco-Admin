@@ -383,14 +383,19 @@ GIRO_INDIRECTO = [
     "tlapaleria", "plasticos", "tuberia", "tuberias", "plombing",
 ]
 
-# Negocios que NOMBRAN nuestro mercado pero no venden lo que vendemos: un hotel
-# con alberca, un gimnasio con spa, un balneario. Salen en cualquier búsqueda de
-# «albercas» e inflarían el conteo de competencia hasta volverlo inservible.
+# GPA vende de negocio a negocio: el formato es «Alta Cliente Distribuidor».
+# El cliente que buscamos REVENDE lo nuestro; no lo consume.
 #
-# OJO: esto descarta COMPETENCIA, no clientes. Un balneario no nos compite, pero
-# sí nos podría comprar cloro; por eso no entra en el cálculo de afinidad del
-# prospecto, solo en el conteo de quién le compite alrededor.
-GIRO_NO_COMPETENCIA = [
+# Estos giros TIENEN albercas o sistemas de agua, así que nombran nuestro
+# mercado y salen en cualquier búsqueda de «albercas», pero son usuarios
+# finales: ni revenden ni le compiten a un distribuidor. Sirven para dos cosas:
+#
+#   1. Que no se cuenten como competencia del prospecto (inflarían el número
+#      hasta volverlo inservible para decidir).
+#   2. Que si el prospecto MISMO es uno de estos, se marque como usuario final
+#      y no como distribuidor. Un hotel puede comprarnos cloro, pero darlo de
+#      alta como distribuidor es otra conversación, y quien autoriza debe verlo.
+GIRO_USUARIO_FINAL = [
     "hotel", "motel", "hostal", "posada", "hospedaje", "airbnb",
     "gimnasio", "gym", "fitness", "crossfit", "club deportivo", "deportivo",
     "balneario", "parque acuatico", "aguas termales",

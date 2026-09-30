@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from catalogos import GIRO_DIRECTO, GIRO_INDIRECTO, GIRO_NO_COMPETENCIA
+from catalogos import GIRO_DIRECTO, GIRO_INDIRECTO, GIRO_USUARIO_FINAL
 
 SI, NO, PENDIENTE = "si", "no", "pendiente"
 
@@ -26,22 +26,39 @@ def normaliza(texto: str) -> str:
 
 
 def afinidad(nombre: str, categorias: list | None = None, extra: str = "") -> dict:
-    """¿Este negocio es de lo nuestro?
+    """¿Este negocio es de lo nuestro, y en qué papel?
 
-    Se miran el nombre del lugar, sus categorías según el mapa y lo que el
-    cliente declaró de su propio giro. Cualquiera de los tres delata a un
-    negocio de albercas; pedir que coincidan los tres dejaría fuera a la mitad.
+    GPA vende de negocio a negocio, así que no basta con que el prospecto tenga
+    que ver con albercas: importa si REVENDE o si solo consume. Un hotel con
+    alberca menciona todas nuestras palabras y no es un distribuidor.
+
+    Se miran el nombre, las categorías del mapa y el giro que declaró el
+    cliente. Cualquiera de los tres delata al negocio; pedir que coincidan los
+    tres dejaría fuera a la mitad.
+
+    Devuelve «tipo»:
+      distribuidor  — vende lo nuestro. Es el cliente que buscamos.
+      usuario_final — lo usa pero no lo revende (hotel, gimnasio, balneario).
+      indirecto     — puede venderlo entre otras cosas (ferretería, plomería).
+      ninguno       — nada que ver.
     """
     texto = normaliza(" ".join([nombre or "", " ".join(categorias or []), extra or ""]))
     directas = sorted({p for p in GIRO_DIRECTO if normaliza(p) in texto})
     indirectas = sorted({p for p in GIRO_INDIRECTO if normaliza(p) in texto})
-    if directas:
-        nivel = "directo"
+    finales = sorted({p for p in GIRO_USUARIO_FINAL if normaliza(p) in texto})
+
+    if finales:
+        # Manda sobre lo demás: «Hotel Real con Alberca» nombra nuestro mercado,
+        # pero sigue siendo un hotel.
+        tipo = "usuario_final"
+    elif directas:
+        tipo = "distribuidor"
     elif indirectas:
-        nivel = "indirecto"
+        tipo = "indirecto"
     else:
-        nivel = "ninguno"
-    return {"nivel": nivel, "directas": directas, "indirectas": indirectas}
+        tipo = "ninguno"
+    return {"tipo": tipo, "directas": directas, "indirectas": indirectas,
+            "finales": finales}
 
 
 def nombres_categoria(categorias) -> list:
@@ -61,17 +78,14 @@ def nombres_categoria(categorias) -> list:
 
 
 def es_competencia(lugar: dict) -> bool:
-    """Un resultado del mapa solo cuenta como competencia si VENDE lo que vendemos.
+    """Solo cuenta como competencia del prospecto quien VENDE lo que él vendería.
 
     Buscar «albercas» devuelve también hoteles con alberca, gimnasios con spa y
-    balnearios. Nombran nuestro mercado pero no nos compiten: si se cuentan, el
-    número deja de servir para decidir. Se descartan por su giro, no por su nombre.
+    balnearios. Nombran nuestro mercado pero no le compiten a un distribuidor:
+    si se cuentan, el número deja de servir para decidir.
     """
     cats = nombres_categoria(lugar.get("categorias"))
-    texto = normaliza(" ".join([lugar.get("nombre", ""), " ".join(cats)]))
-    if any(normaliza(p) in texto for p in GIRO_NO_COMPETENCIA):
-        return False
-    return afinidad(lugar.get("nombre", ""), cats)["nivel"] == "directo"
+    return afinidad(lugar.get("nombre", ""), cats)["tipo"] == "distribuidor"
 
 
 # ── Los cinco criterios ──────────────────────────────────────────
@@ -87,29 +101,38 @@ def arma_criterios(ficha: dict, caso: dict) -> list:
     crit = []
 
     # 1 · Afinidad de giro
+    fuente_lugar = f"Nombre y categorías del lugar ({proveedor})"
     if lugar:
         af = afinidad(lugar.get("nombre", ""), nombres_categoria(lugar.get("categorias")),
                       caso.get("giro", ""))
-        if af["nivel"] == "directo":
+        if af["tipo"] == "distribuidor":
             crit.append(_criterio(
-                "afinidad", "Afinidad de giro", SI,
+                "afinidad", "Vende lo que vendemos", SI,
                 "Es de nuestro mercado: " + ", ".join(af["directas"][:4]),
-                f"Nombre y categorías del lugar ({proveedor})"))
-        elif af["nivel"] == "indirecto":
+                fuente_lugar))
+        elif af["tipo"] == "usuario_final":
             crit.append(_criterio(
-                "afinidad", "Afinidad de giro", PENDIENTE,
-                "Afinidad indirecta (" + ", ".join(af["indirectas"][:3]) +
-                "). Puede vender lo nuestro entre otras cosas; hay que preguntarle.",
-                f"Nombre y categorías del lugar ({proveedor})"))
+                "afinidad", "Vende lo que vendemos", NO,
+                f"Parece usuario final, no distribuidor ({', '.join(af['finales'][:3])}). "
+                "Tiene alberca o sistema de agua, pero no revende. Puede comprarnos para "
+                "su propio uso; darlo de alta como distribuidor es otra conversación.",
+                fuente_lugar))
+        elif af["tipo"] == "indirecto":
+            crit.append(_criterio(
+                "afinidad", "Vende lo que vendemos", PENDIENTE,
+                "Vende de lo nuestro entre otras cosas (" +
+                ", ".join(af["indirectas"][:3]) + "). Hay que preguntarle qué tanto "
+                "peso tiene nuestra línea en su venta.",
+                fuente_lugar))
         else:
             crit.append(_criterio(
-                "afinidad", "Afinidad de giro", NO,
+                "afinidad", "Vende lo que vendemos", NO,
                 f"Ni el nombre ni el giro del negocio («{lugar.get('nombre', '')}») "
                 "mencionan nada de nuestro mercado.",
-                f"Nombre y categorías del lugar ({proveedor})"))
+                fuente_lugar))
     else:
         crit.append(_criterio(
-            "afinidad", "Afinidad de giro", PENDIENTE,
+            "afinidad", "Vende lo que vendemos", PENDIENTE,
             "No se pudo ubicar el negocio en el mapa, así que no hay giro que revisar.",
             "—"))
 
@@ -118,7 +141,8 @@ def arma_criterios(ficha: dict, caso: dict) -> list:
     if fotos:
         crit.append(_criterio(
             "exhibe", "Exhibe producto en el local", SI,
-            f"{len(fotos)} foto(s) del local publicadas en el mapa.",
+            f"{len(fotos)} foto(s) del local publicadas en el mapa. Ábralas y vea si "
+            "tiene mostrador o exhibición: un distribuidor que exhibe, vende.",
             f"Fotos del lugar ({proveedor})"))
     elif ficha.get("fotosDisponibles") is False:
         crit.append(_criterio(
@@ -175,22 +199,41 @@ def arma_criterios(ficha: dict, caso: dict) -> list:
             (f" Su sitio no respondió: {web.get('error')}" if web.get("error") else ""),
             "Formulario del cliente"))
 
-    # 5 · Competencia alrededor
+    # 5 · Mercado alrededor
+    #
+    # En B2B esto NO se lee como «entre menos competencia, mejor». Que haya
+    # distribuidores de nuestro giro en la zona significa que ahí hay demanda;
+    # una zona vacía puede ser territorio virgen o puede no tener mercado. Por
+    # eso se reporta el número con sus dos lecturas y no se declara ganador:
+    # quien conoce la plaza decide, no el sistema.
     comp = ficha.get("competencia") or {}
     if comp:
-        partes = [f"{comp[r]['total']} a {r} m" for r in sorted(comp, key=int)]
-        cercanos = comp.get(str(min(int(r) for r in comp)), {}).get("total", 0)
+        radios = sorted(comp, key=int)
+        cerca, lejos = radios[0], radios[-1]
+        n_cerca = comp[cerca]["total"]
+        n_lejos = comp[lejos]["total"]
+        cuenta = " · ".join(f"{comp[r]['total']} a {r} m" for r in radios)
+        if n_lejos == 0:
+            estado = PENDIENTE
+            lectura = ("No hay un solo distribuidor de nuestro giro en la zona. "
+                       "Puede ser territorio virgen o puede ser que ahí no haya mercado; "
+                       "eso lo sabe quien conoce la plaza.")
+        elif n_cerca == 0:
+            estado = SI
+            lectura = ("Hay mercado en la zona y ningún competidor pegado al local.")
+        else:
+            estado = PENDIENTE
+            lectura = (f"Tiene {n_cerca} competidor(es) a menos de {cerca} m. "
+                       "Puede significar demanda concentrada o plaza disputada; "
+                       "conviene revisarlo con el vendedor de la zona.")
         crit.append(_criterio(
-            "competencia", "Competencia alrededor",
-            NO if cercanos else SI,
-            "Negocios de nuestro giro cerca: " + " · ".join(partes) + ". " +
-            ("Tiene competencia pegada." if cercanos else
-             "No hay competencia inmediata."),
+            "competencia", "Mercado y competencia alrededor", estado,
+            f"Distribuidores de nuestro giro cerca: {cuenta}. {lectura}",
             f"Búsqueda por giro en el radio ({proveedor})"))
     else:
         crit.append(_criterio(
-            "competencia", "Competencia alrededor", PENDIENTE,
-            "No se pudo medir la competencia: falta ubicar el negocio en el mapa.",
+            "competencia", "Mercado y competencia alrededor", PENDIENTE,
+            "No se pudo medir: falta ubicar el negocio en el mapa.",
             "—"))
 
     return crit
